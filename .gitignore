@@ -4,6 +4,12 @@
 !.env.example
 !.env.sample
 
+# launchSettings.json guarda configuração da máquina de cada dev — e é onde
+# credencial de desenvolvimento vaza sem querer (client ID, connection string).
+# Copie de launchSettings.example.json.
+**/Properties/launchSettings.json
+!**/Properties/launchSettings.example.json
+
 # ── Claude Code — configurações locais do usuário ──────────────────────────
 # settings.local.json contém permissões pessoais e sobrescritas locais.
 # Cada dev tem as suas. Nunca commitar.

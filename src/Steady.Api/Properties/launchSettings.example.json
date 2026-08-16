@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "_comment": [
+    "Copie para `launchSettings.json` e preencha. O arquivo real é ignorado pelo git:",
+    "ele carrega configuração da máquina de cada dev e é onde credencial vaza sem querer.",
+    "",
+    "Google:ClientId — Client ID do tipo Web (Google Cloud > Credenciais). Precisa ser",
+    "idêntico ao EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID do app: é a audiência que a API exige",
+    "no token (ADR-002). Divergiram, todo login vira 401. A API se recusa a subir sem ele.",
+    "",
+    "applicationUrl usa 0.0.0.0 e não localhost porque o celular precisa alcançar a API",
+    "pela rede local — em localhost ela só escuta na própria máquina."
+  ],
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://0.0.0.0:5050",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Google__ClientId": "SEU-CLIENT-ID.apps.googleusercontent.com",
+        "ConnectionStrings__SteadyDb": "Host=localhost;Port=5432;Database=steady;Username=steady;Password=SUA-SENHA-LOCAL"
+      }
+    },
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:7123;http://localhost:5050",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Google__ClientId": "SEU-CLIENT-ID.apps.googleusercontent.com",
+        "ConnectionStrings__SteadyDb": "Host=localhost;Port=5432;Database=steady;Username=steady;Password=SUA-SENHA-LOCAL"
+      }
+    }
+  }
+}

@@ -22,11 +22,16 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // UseSetting, e não ConfigureAppConfiguration: o Program.cs lê o client ID no
+        // startup, antes de as fontes de configuração do teste serem aplicadas.
+        // O valor é irrelevante — o FakeGoogleTokenValidator substitui a validação real.
+        builder.UseSetting("Google:ClientId", "client-id-de-teste.apps.googleusercontent.com");
+
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:SteadyDb"] = _postgres.GetConnectionString()
+                ["ConnectionStrings:SteadyDb"] = _postgres.GetConnectionString(),
             });
         });
 

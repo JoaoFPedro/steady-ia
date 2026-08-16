@@ -29,6 +29,10 @@ Escolhemos **Opção A** — a API valida o ID token do Google (via `Google.Apis
 
 **Provisionamento automático**: se não existir um Corredor com o `sub` do token, um novo é criado antes de processar a requisição (upsert), sem tela de cadastro separada.
 
+**Restrição de audiência** (adicionado em 2026-08-16, durante a STORY-003): a validação informa `ValidationSettings.Audience` com o client ID do Steady. Sem isso a biblioteca do Google **não verifica o claim `aud`** e aceita qualquer ID token válido do Google — inclusive um emitido para outro aplicativo, o que permitiria autenticar como um corredor usando um token obtido fora do Steady, violando o mandato inviolável de não expor dados de saúde entre usuários. A implementação original omitia esse ajuste; a omissão era invisível em runtime, porque tokens legítimos continuavam funcionando.
+
+O client ID vem de `Google:ClientId` na configuração e a API **se recusa a subir** sem ele (`Program.cs`). Falhar fechado é deliberado: um default silencioso reintroduziria a falha sem sinal algum.
+
 ## Consequências
 
 ### Positivas
