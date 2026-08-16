@@ -5,7 +5,11 @@ namespace Steady.Infrastructure.Repositories;
 
 public interface IRunningSessionRepository
 {
-    Task<RunningSessionEntity> AddAsync(Guid corredorId, RunningSession session, CancellationToken cancellationToken);
+    Task<SaveResult<RunningSessionEntity>> AddAsync(
+        Guid corredorId,
+        RunningSession session,
+        Guid idempotencyKey,
+        CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RunningSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken);
 

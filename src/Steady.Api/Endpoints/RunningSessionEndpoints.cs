@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Steady.Api.Auth;
 using Steady.Api.Common;
 using Steady.Api.Contracts;
@@ -12,10 +13,14 @@ public static class RunningSessionEndpoints
     {
         group.MapPost("/running-sessions", async (
             RunningSessionRequest request,
+            [FromHeader(Name = Idempotency.HeaderName)] Guid? idempotencyKey,
             IRunningSessionRepository repository,
             CurrentCorredor currentCorredor,
             CancellationToken cancellationToken) =>
         {
+            if (idempotencyKey is null)
+                return Idempotency.MissingKey();
+
             if (!DomainFactory.TryCreate(() => RunningSession.Create(
                     request.Date,
                     request.DistanceKm,
@@ -25,7 +30,8 @@ public static class RunningSessionEndpoints
                 out var session, out var error))
                 return error!;
 
-            var entity = await repository.AddAsync(currentCorredor.Id, session!, cancellationToken);
+            var (entity, created) = await repository.AddAsync(
+                currentCorredor.Id, session!, idempotencyKey.Value, cancellationToken);
 
             var response = new RunningSessionResponse(
                 entity.Id,
@@ -35,7 +41,9 @@ public static class RunningSessionEndpoints
                 entity.AveragePaceMinPerKm,
                 entity.PerceivedEffort);
 
-            return Results.Created($"/api/training-sessions/{entity.Id}", response);
+            return created
+                ? Results.Created($"/api/training-sessions/{entity.Id}", response)
+                : Results.Ok(response);
         });
 
         return group;

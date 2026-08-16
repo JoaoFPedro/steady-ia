@@ -6,12 +6,23 @@ namespace Steady.Infrastructure.Repositories;
 
 public sealed class StrengthSessionRepository(SteadyDbContext dbContext) : IStrengthSessionRepository
 {
-    public async Task<StrengthSessionEntity> AddAsync(Guid corredorId, StrengthSession session, CancellationToken cancellationToken)
+    public async Task<SaveResult<StrengthSessionEntity>> AddAsync(
+        Guid corredorId,
+        StrengthSession session,
+        Guid idempotencyKey,
+        CancellationToken cancellationToken)
     {
+        var existing = await dbContext.StrengthSessions
+            .FindByIdempotencyKeyAsync(corredorId, idempotencyKey, cancellationToken);
+
+        if (existing is not null)
+            return new SaveResult<StrengthSessionEntity>(existing, Created: false);
+
         var entity = new StrengthSessionEntity
         {
             Id = Guid.NewGuid(),
             CorredorId = corredorId,
+            IdempotencyKey = idempotencyKey,
             Date = session.Date,
             MuscleGroup = session.MuscleGroup,
             Intensity = session.Intensity,
@@ -21,7 +32,7 @@ public sealed class StrengthSessionRepository(SteadyDbContext dbContext) : IStre
         dbContext.StrengthSessions.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return entity;
+        return new SaveResult<StrengthSessionEntity>(entity, Created: true);
     }
 
     public async Task<IReadOnlyList<StrengthSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken) =>

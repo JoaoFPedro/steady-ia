@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Steady.Api.Auth;
 using Steady.Api.Common;
 using Steady.Api.Contracts;
@@ -12,10 +13,14 @@ public static class StrengthSessionEndpoints
     {
         group.MapPost("/strength-sessions", async (
             StrengthSessionRequest request,
+            [FromHeader(Name = Idempotency.HeaderName)] Guid? idempotencyKey,
             IStrengthSessionRepository repository,
             CurrentCorredor currentCorredor,
             CancellationToken cancellationToken) =>
         {
+            if (idempotencyKey is null)
+                return Idempotency.MissingKey();
+
             if (!DomainFactory.TryCreate(() => StrengthSession.Create(
                     request.Date,
                     request.MuscleGroup,
@@ -24,7 +29,8 @@ public static class StrengthSessionEndpoints
                 out var session, out var error))
                 return error!;
 
-            var entity = await repository.AddAsync(currentCorredor.Id, session!, cancellationToken);
+            var (entity, created) = await repository.AddAsync(
+                currentCorredor.Id, session!, idempotencyKey.Value, cancellationToken);
 
             var response = new StrengthSessionResponse(
                 entity.Id,
@@ -33,7 +39,9 @@ public static class StrengthSessionEndpoints
                 entity.Intensity,
                 entity.DurationMinutes);
 
-            return Results.Created($"/api/training-sessions/{entity.Id}", response);
+            return created
+                ? Results.Created($"/api/training-sessions/{entity.Id}", response)
+                : Results.Ok(response);
         });
 
         return group;

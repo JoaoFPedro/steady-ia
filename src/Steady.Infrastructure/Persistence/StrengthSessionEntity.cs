@@ -2,10 +2,11 @@ using Steady.Domain.Training;
 
 namespace Steady.Infrastructure.Persistence;
 
-public sealed class StrengthSessionEntity
+public sealed class StrengthSessionEntity : IIdempotentRecord
 {
     public Guid Id { get; set; }
     public Guid CorredorId { get; set; }
+    public Guid IdempotencyKey { get; set; }
     public DateOnly Date { get; set; }
     public MuscleGroup MuscleGroup { get; set; }
     public Intensity Intensity { get; set; }

@@ -6,12 +6,23 @@ namespace Steady.Infrastructure.Repositories;
 
 public sealed class RunningSessionRepository(SteadyDbContext dbContext) : IRunningSessionRepository
 {
-    public async Task<RunningSessionEntity> AddAsync(Guid corredorId, RunningSession session, CancellationToken cancellationToken)
+    public async Task<SaveResult<RunningSessionEntity>> AddAsync(
+        Guid corredorId,
+        RunningSession session,
+        Guid idempotencyKey,
+        CancellationToken cancellationToken)
     {
+        var existing = await dbContext.RunningSessions
+            .FindByIdempotencyKeyAsync(corredorId, idempotencyKey, cancellationToken);
+
+        if (existing is not null)
+            return new SaveResult<RunningSessionEntity>(existing, Created: false);
+
         var entity = new RunningSessionEntity
         {
             Id = Guid.NewGuid(),
             CorredorId = corredorId,
+            IdempotencyKey = idempotencyKey,
             Date = session.Date,
             DistanceKm = session.DistanceKm,
             DurationMinutes = session.DurationMinutes,
@@ -22,7 +33,7 @@ public sealed class RunningSessionRepository(SteadyDbContext dbContext) : IRunni
         dbContext.RunningSessions.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return entity;
+        return new SaveResult<RunningSessionEntity>(entity, Created: true);
     }
 
     public async Task<IReadOnlyList<RunningSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken) =>

@@ -17,7 +17,7 @@ public sealed class PainLogEndpointTests(CustomWebApplicationFactory factory)
             Date: DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-2),
             Region: "Canela");
 
-        var response = await client.PostAsJsonAsync("/api/pain-logs", request);
+        var response = await client.PostRegistroAsync("/api/pain-logs", request);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await response.Content.ReadFromJsonAsync<PainLogResponse>();

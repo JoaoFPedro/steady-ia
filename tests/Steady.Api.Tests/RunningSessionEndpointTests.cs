@@ -20,7 +20,7 @@ public sealed class RunningSessionEndpointTests(CustomWebApplicationFactory fact
             AveragePaceMinPerKm: 5.2,
             PerceivedEffort: 6);
 
-        var response = await client.PostAsJsonAsync("/api/running-sessions", request);
+        var response = await client.PostRegistroAsync("/api/running-sessions", request);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await response.Content.ReadFromJsonAsync<RunningSessionResponse>();
@@ -41,7 +41,7 @@ public sealed class RunningSessionEndpointTests(CustomWebApplicationFactory fact
             AveragePaceMinPerKm: 5.0,
             PerceivedEffort: 5);
 
-        var response = await client.PostAsJsonAsync("/api/running-sessions", request);
+        var response = await client.PostRegistroAsync("/api/running-sessions", request);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }

@@ -51,6 +51,46 @@ public class OverloadDetectionTests
         Assert.Null(assessment.Suggestion);
     }
 
+    // ADR-004: "ainda reunindo dados" e "avaliei e não há risco" são estados diferentes
+    // para quem lê. Sem esta distinção o app diria "sem risco" na primeira semana —
+    // uma garantia que o ADR-001 nunca deu.
+    [Fact]
+    public void Sinaliza_historico_insuficiente_quando_ha_menos_de_14_dias()
+    {
+        var runningSessions = new List<RunningSession>
+        {
+            RunningSession.Create(new DateOnly(2026, 8, 1), distanceKm: 6, durationMinutes: 30, averagePaceMinPerKm: 5.0, perceivedEffort: 5),
+            RunningSession.Create(new DateOnly(2026, 8, 9), distanceKm: 8, durationMinutes: 40, averagePaceMinPerKm: 5.0, perceivedEffort: 8),
+        };
+
+        var assessment = OverloadDetectionService.Evaluate(runningSessions, [], Today);
+
+        Assert.False(assessment.HasSufficientHistory);
+    }
+
+    [Fact]
+    public void Sinaliza_historico_insuficiente_quando_nao_ha_nenhum_treino()
+    {
+        var assessment = OverloadDetectionService.Evaluate([], [], Today);
+
+        Assert.False(assessment.HasSufficientHistory);
+    }
+
+    [Fact]
+    public void Sinaliza_historico_suficiente_a_partir_de_14_dias_mesmo_sem_risco()
+    {
+        var runningSessions = new List<RunningSession>
+        {
+            RunningSession.Create(new DateOnly(2026, 7, 28), distanceKm: 6, durationMinutes: 30, averagePaceMinPerKm: 5.0, perceivedEffort: 5),
+            RunningSession.Create(new DateOnly(2026, 8, 9), distanceKm: 6, durationMinutes: 30, averagePaceMinPerKm: 5.0, perceivedEffort: 5),
+        };
+
+        var assessment = OverloadDetectionService.Evaluate(runningSessions, [], Today);
+
+        Assert.True(assessment.HasSufficientHistory);
+        Assert.False(assessment.HasRisk);
+    }
+
     [Fact]
     public void Nao_sugere_ajuste_quando_perna_e_leve_ou_moderada_mesmo_com_aumento_de_carga_de_corrida()
     {

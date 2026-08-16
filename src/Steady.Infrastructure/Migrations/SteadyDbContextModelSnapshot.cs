@@ -59,6 +59,10 @@ namespace Steady.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("date");
 
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
                     b.Property<string>("Region")
                         .IsRequired()
                         .HasColumnType("text")
@@ -67,6 +71,9 @@ namespace Steady.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CorredorId");
+
+                    b.HasIndex("CorredorId", "IdempotencyKey")
+                        .IsUnique();
 
                     b.ToTable("pain_logs", (string)null);
                 });
@@ -97,6 +104,10 @@ namespace Steady.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("duration_minutes");
 
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
                     b.Property<int>("PerceivedEffort")
                         .HasColumnType("integer")
                         .HasColumnName("perceived_effort");
@@ -104,6 +115,9 @@ namespace Steady.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CorredorId");
+
+                    b.HasIndex("CorredorId", "IdempotencyKey")
+                        .IsUnique();
 
                     b.ToTable("running_sessions", (string)null);
                 });
@@ -126,6 +140,10 @@ namespace Steady.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("duration_minutes");
 
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
                     b.Property<string>("Intensity")
                         .IsRequired()
                         .HasColumnType("text")
@@ -139,6 +157,9 @@ namespace Steady.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CorredorId");
+
+                    b.HasIndex("CorredorId", "IdempotencyKey")
+                        .IsUnique();
 
                     b.ToTable("strength_sessions", (string)null);
                 });

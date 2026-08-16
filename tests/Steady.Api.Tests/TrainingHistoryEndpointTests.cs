@@ -26,13 +26,13 @@ public sealed class TrainingHistoryEndpointTests(CustomWebApplicationFactory fac
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var clientA = factory.CreateClient().AsCorredor($"sub-{Guid.NewGuid()}");
-        await clientA.PostAsJsonAsync("/api/running-sessions", new RunningSessionRequest(
+        await clientA.PostRegistroAsync("/api/running-sessions", new RunningSessionRequest(
             today, DistanceKm: 5, DurationMinutes: 30, AveragePaceMinPerKm: 6.0, PerceivedEffort: 4));
-        await clientA.PostAsJsonAsync("/api/strength-sessions", new StrengthSessionRequest(
+        await clientA.PostRegistroAsync("/api/strength-sessions", new StrengthSessionRequest(
             today, MuscleGroup.Ombro, Intensity.Leve, DurationMinutes: 20));
 
         var clientB = factory.CreateClient().AsCorredor($"sub-{Guid.NewGuid()}");
-        await clientB.PostAsJsonAsync("/api/running-sessions", new RunningSessionRequest(
+        await clientB.PostRegistroAsync("/api/running-sessions", new RunningSessionRequest(
             today, DistanceKm: 20, DurationMinutes: 120, AveragePaceMinPerKm: 6.0, PerceivedEffort: 7));
 
         var sessions = await clientA.GetFromJsonAsync<List<TrainingSessionResponse>>("/api/training-sessions");

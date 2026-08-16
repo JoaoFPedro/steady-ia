@@ -13,7 +13,7 @@ public sealed class AuthorizationTests(CustomWebApplicationFactory factory)
     public async Task AcessoADadoDeOutroCorredor_Retorna404()
     {
         var owner = factory.CreateClient().AsCorredor($"sub-{Guid.NewGuid()}");
-        var createResponse = await owner.PostAsJsonAsync("/api/running-sessions", new RunningSessionRequest(
+        var createResponse = await owner.PostRegistroAsync("/api/running-sessions", new RunningSessionRequest(
             DateOnly.FromDateTime(DateTime.UtcNow), DistanceKm: 5, DurationMinutes: 25, AveragePaceMinPerKm: 5.0, PerceivedEffort: 5));
         var created = await createResponse.Content.ReadFromJsonAsync<RunningSessionResponse>();
 

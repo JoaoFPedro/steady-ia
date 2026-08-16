@@ -30,7 +30,8 @@ public static class OverloadAssessmentEndpoints
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             var assessment = OverloadDetectionService.Evaluate(runningSessions, strengthSessions, today);
 
-            return Results.Ok(new OverloadAssessmentResponse(assessment.HasRisk, assessment.Suggestion));
+            return Results.Ok(new OverloadAssessmentResponse(
+                assessment.HasRisk, assessment.Suggestion, assessment.HasSufficientHistory));
         });
 
         return group;

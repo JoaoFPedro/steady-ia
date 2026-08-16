@@ -23,7 +23,7 @@ public static class OverloadDetectionService
         DateOnly today)
     {
         if (!HasSufficientHistory(runningSessions, strengthSessions, today))
-            return OverloadAssessment.NoRisk();
+            return OverloadAssessment.InsufficientHistory();
 
         var recentWindow = (Start: today.AddDays(-6), End: today);
         var previousWindow = (Start: today.AddDays(-13), End: today.AddDays(-7));
