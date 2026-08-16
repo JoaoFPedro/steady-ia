@@ -19,6 +19,15 @@
 **Naming convention**: `DISC-{NNN}-{slug-descritivo}`
 Exemplos: `DISC-001-login-social`, `DISC-002-notificacoes-push`, `DISC-003-relatorio-financeiro`
 
+### `referencias/`
+
+Material de apoio que ainda não pertence a nenhum discovery — fontes de treino,
+estudos, planos de referência. Fica aqui até um `/discover` consumi-lo.
+
+A Lei do Domínio #4 exige que toda regra de progressão implementada seja
+rastreável a uma fonte reconhecida. É desta pasta que essas fontes saem: sem
+elas, a regra vira julgamento ad-hoc de quem escreve o código.
+
 ---
 
 ## Status de um discovery
