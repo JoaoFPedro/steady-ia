@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Card, Kicker, Muted, NoticeStrip, SecondaryButton } from '../src/ui/Nocturne';
 import { color, space, type } from '../src/theme/nocturne';
 import { googleSession, recordQueue, syncEngine } from '../src/services';
+import { goToLogin } from '../src/auth/goToLogin';
 import { attemptSignOut, discardAndSignOut, type SignOutOutcome } from '../src/account/signOutAccount';
 
 /**
@@ -70,10 +71,7 @@ export default function AccountScreen() {
       return;
     }
 
-    // `replace` sozinho trocaria só esta tela, deixando a home alcançável pelo
-    // botão voltar do aparelho. Voltar ao topo primeiro esvazia a pilha.
-    if (router.canDismiss()) router.dismissAll();
-    router.replace('/login');
+    goToLogin(router);
   }
 
   return (

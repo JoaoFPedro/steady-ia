@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { recordQueue, syncEngine } from '../services';
+import { goToLogin } from '../auth/goToLogin';
 import { logRecord } from './logRecord';
 import type { RecordKind } from '../sync/types';
 
@@ -27,7 +28,7 @@ export function useRecordLogger(kind: RecordKind) {
 
       // A fila continua intacta; ela é retomada assim que o login for refeito.
       if (outcome.status === 'sessionLost') {
-        router.replace('/login');
+        goToLogin(router);
         return;
       }
 

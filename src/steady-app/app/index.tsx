@@ -12,6 +12,7 @@ import {
 } from '../src/ui/Nocturne';
 import { color, space, type } from '../src/theme/nocturne';
 import { queryApi, recordQueue } from '../src/services';
+import { goToLogin } from '../src/auth/goToLogin';
 import { loadHomeState, type HomeState } from '../src/home/homeState';
 
 /**
@@ -32,7 +33,7 @@ export default function HomeScreen() {
 
       loadHomeState(recordQueue, queryApi).then((loaded) => {
         if (!active) return;
-        if (loaded.sessionLost) return router.replace('/login');
+        if (loaded.sessionLost) return goToLogin(router);
         setState(loaded);
       });
 

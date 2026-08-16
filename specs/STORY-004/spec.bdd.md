@@ -199,6 +199,7 @@ Cobertura além dos cenários, fixando comportamento que o ADR-005 depende:
 
 | Comportamento | Arquivo de Teste | Status |
 |---------------|-----------------|--------|
+| Pilha de navegação é esvaziada antes de trocar pelo login | `auth/__tests__/goToLogin.test.ts` | 🟢 Green |
 | Fila é descartada **antes** de a sessão ser encerrada (ordem) | `account/__tests__/discardOnSignOut.test.ts` | 🟢 Green |
 | Falha inesperada na sincronização de saída não impede a saída | `account/__tests__/signOutAccount.test.ts` | 🟢 Green |
 | Consulta da conta que falha no aparelho não quebra a tela | `auth/__tests__/googleSignInSession.test.ts` | 🟢 Green |
@@ -207,7 +208,7 @@ Cobertura além dos cenários, fixando comportamento que o ADR-005 depende:
 
 | Cenário | Por quê |
 |---------|---------|
-| Não retorna a telas autenticadas pelo histórico | `router.dismissAll()` + `replace` — navegação do `expo-router` e gesto nativo |
+| Não retorna a telas autenticadas pelo histórico | A regra (`goToLogin`) está coberta; o que resta sem teste é o gesto nativo de voltar reagir à pilha esvaziada |
 | App não reautentica sozinho depois da saída | Depende do cache de credencial do módulo nativo, ausente no Jest |
 | Volta a entrar com a mesma conta sem pedir autorização | Comportamento do Google Sign-In no aparelho |
 | Saída aciona um único encerramento | Guarda de estado da tela (`saindo`), igual ao `entrando` do `login.tsx` e ao `saving` do `useRecordLogger` — nenhum dos dois é testável sem `@testing-library/react-native` |
