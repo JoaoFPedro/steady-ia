@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Steady",
+    "slug": "steady",
+    "scheme": "steady",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#161826",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.steady.app"
+    },
+    "android": {
+      "package": "com.steady.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#161826",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8fc7b8cf-fe86-4770-bd98-2ed6a613ae52"
+      }
+    },
+    "owner": "jaozimdotis-team"
+  }
+}

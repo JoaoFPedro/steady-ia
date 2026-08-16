@@ -28,6 +28,22 @@ Steady ajuda corredores amadores que já correm 21km (meia maratona) a treinar c
 | Registro de Desempenho | Dados reais de uma Sessão de Treino realizada (ritmo, distância, rota GPS) — imutável após criado |
 | Regra dos 10% | Princípio de treino: volume semanal não deve aumentar mais que 10% em relação à semana anterior, para prevenir lesão por overtraining |
 
+## Estado Atual — 2026-08-16
+
+**STORY-003 implementada e verde**: 74 testes Jest + 42 .NET (116). Todos os 17 cenários da spec marcados 🟢 e os 9 critérios de aceite fechados. ADR-004 (estado de histórico insuficiente no contrato da avaliação) criado nesta rodada.
+
+Ambiente de execução local (WSL2, port proxy, dev build) documentado em `CLAUDE.md` → *Ambiente Local*; setup do Google em `docs/SETUP-LOGIN-GOOGLE.md`.
+
+### Pendências
+
+| # | Pendência | Por quê importa |
+|---|-----------|-----------------|
+| 1 | **Commit da STORY-003** — implementação, ADR-004, docs, `docker-compose.yml`, `CLAUDE.md` seguem no working tree | O repo tem 1 commit só (scaffold); todo o trabalho está sem histórico |
+| 2 | **Validar login do Google no aparelho** | Nunca foi executado ponta a ponta. Build, client IDs e port proxy prontos; falta abrir o app |
+| 3 | **Testar a fila offline no aparelho** (registrar → Wi-Fi off → registrar → Wi-Fi on) | Único caminho sem cobertura automatizada e o maior risco da story — a suposição crítica #2 do DISC-001 depende dela |
+| 4 | **Telas sem teste de renderização** | `@testing-library/react-native` não instala: exige `react-dom@19.2.8`, incompatível com o `react@19.2.3` do Expo SDK 57. Revisitar quando o SDK avançar |
+| 5 | **Divergência herdada de `PainLog`** — dor não vinculada a Sessão de Treino, contra o AC da STORY-001 | Decisão do `/spec` foi manter independente; cabe ao `/sync` alinhar o AC da STORY-001 ao modelo real |
+
 ## Links
 
 - Repositório: 
