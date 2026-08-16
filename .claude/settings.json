@@ -1,0 +1,43 @@
+{
+  "enableAllProjectMcpServers": true,
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-tracker.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/context-bootstrap.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/process-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/model-advisor.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-healthcheck.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/retro-logger.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

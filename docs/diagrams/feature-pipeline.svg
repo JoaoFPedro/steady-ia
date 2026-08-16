@@ -1,0 +1,83 @@
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <text x="360" y="28" text-anchor="middle" font-size="16" font-weight="500" fill="#2C2C2A">Feature pipeline — Discovery First</text>
+
+  <!-- Discovery -->
+  <rect x="20" y="55" width="120" height="50" rx="8" fill="#FFFBEB" stroke="#D97706" stroke-width="0.5"/>
+  <text x="80" y="76" text-anchor="middle" font-size="12" font-weight="500" fill="#854F0B">Discovery</text>
+  <text x="80" y="92" text-anchor="middle" font-size="10" fill="#D97706">/discover</text>
+
+  <line x1="140" y1="80" x2="165" y2="80" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Gate 1: decision -->
+  <rect x="167" y="55" width="80" height="50" rx="25" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="207" y="76" text-anchor="middle" font-size="11" font-weight="500" fill="#633806">Gate 1</text>
+  <text x="207" y="92" text-anchor="middle" font-size="9" fill="#854F0B">Construir?</text>
+
+  <line x1="247" y1="80" x2="272" y2="80" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Story -->
+  <rect x="274" y="55" width="120" height="50" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="334" y="76" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">Story</text>
+  <text x="334" y="92" text-anchor="middle" font-size="10" fill="#534AB7">story.md</text>
+
+  <line x1="394" y1="80" x2="419" y2="80" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Spec BDD -->
+  <rect x="421" y="55" width="120" height="50" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="481" y="76" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">Spec BDD</text>
+  <text x="481" y="92" text-anchor="middle" font-size="10" fill="#534AB7">/spec → Three Amigos</text>
+
+  <line x1="541" y1="80" x2="566" y2="80" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Gate 2: spec OK -->
+  <rect x="568" y="55" width="80" height="50" rx="25" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="608" y="76" text-anchor="middle" font-size="11" font-weight="500" fill="#633806">Gate 2</text>
+  <text x="608" y="92" text-anchor="middle" font-size="9" fill="#854F0B">spec OK?</text>
+
+  <!-- Arrow down from Gate 2 -->
+  <line x1="608" y1="105" x2="608" y2="135" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Blueprint + ADR (optional) -->
+  <rect x="538" y="137" width="140" height="50" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="608" y="158" text-anchor="middle" font-size="12" font-weight="500" fill="#085041">Blueprint + ADR</text>
+  <text x="608" y="174" text-anchor="middle" font-size="10" fill="#0F6E56">se fluxo > 2 passos</text>
+
+  <!-- Arrow down to TDD -->
+  <line x1="608" y1="187" x2="608" y2="217" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- TDD Box -->
+  <rect x="40" y="219" width="640" height="100" rx="12" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="360" y="244" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">Ciclo TDD — Engineer &amp; QA — para cada cenário BDD</text>
+
+  <!-- RED -->
+  <rect x="70" y="262" width="150" height="40" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.5"/>
+  <text x="145" y="280" text-anchor="middle" font-size="13" font-weight="500" fill="#791F1F">RED</text>
+  <text x="145" y="294" text-anchor="middle" font-size="10" fill="#A32D2D">teste falha</text>
+
+  <line x1="220" y1="282" x2="260" y2="282" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- GREEN -->
+  <rect x="262" y="262" width="150" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="337" y="280" text-anchor="middle" font-size="13" font-weight="500" fill="#27500A">GREEN — KISS</text>
+  <text x="337" y="294" text-anchor="middle" font-size="10" fill="#3B6D11">mínimo para passar</text>
+
+  <line x1="412" y1="282" x2="452" y2="282" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- REFACTOR -->
+  <rect x="454" y="262" width="200" height="40" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="554" y="280" text-anchor="middle" font-size="13" font-weight="500" fill="#0C447C">REFACTOR — SOLID+DRY</text>
+  <text x="554" y="294" text-anchor="middle" font-size="10" fill="#185FA5">mantendo verde</text>
+
+  <!-- Loop arrow -->
+  <path d="M554 302 L554 320 L145 320 L145 302" fill="none" stroke="#888780" stroke-width="1" stroke-dasharray="4 3" marker-start="url(#a)"/>
+  <text x="350" y="335" text-anchor="middle" font-size="11" fill="#888780">próximo cenário</text>
+
+  <!-- Bottom note -->
+  <text x="360" y="370" text-anchor="middle" font-size="11" fill="#5F5E5A">Spec aprovada pelo Produto &amp; Design é o gate que libera a implementação pelo Engineer &amp; QA</text>
+</svg>

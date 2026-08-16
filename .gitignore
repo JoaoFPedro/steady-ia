@@ -1,0 +1,80 @@
+# ── Secrets e ambiente ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# ── Claude Code — configurações locais do usuário ──────────────────────────
+# settings.local.json contém permissões pessoais e sobrescritas locais.
+# Cada dev tem as suas. Nunca commitar.
+.claude/settings.local.json
+
+# ── SDD Kit — estado temporário ────────────────────────────────────────────
+.sdd/.pending-sync
+.sdd/.session-id
+.sdd/.session-commands
+.sdd/.turn-start
+
+# ── SDD Kit — métricas de execução (por desenvolvedor, não commitado) ────────
+.sdd/metrics/
+
+# ── Build e dependências ───────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+out/
+.next/
+.nuxt/
+__pycache__/
+*.pyc
+*.pyo
+
+# ── .NET ────────────────────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+.venv/
+venv/
+.cache/
+.parcel-cache/
+*.egg-info/
+.eggs/
+
+# ── Cobertura e relatórios ─────────────────────────────────────────────────
+coverage/
+.coverage
+*.lcov
+.nyc_output/
+htmlcov/
+
+# ── Sistema operacional ────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# ── IDEs e editores ────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# ──────────────────────────────────────────────────────────────────────────
+# O QUE COMMITAR (parte do projeto de todos):
+#
+#   .sdd/                   → CONSTITUTION, PLAYBOOK, templates, memory/
+#   .claude/commands/       → slash commands compartilhados
+#   .claude/hooks/          → automação de processo
+#   .claude/settings.json   → config de hooks compartilhada (não o .local)
+#   .github/                → Copilot instructions
+#   specs/                  → stories + specs BDD
+#   docs/adr/               → decisões arquiteturais
+#   sdd                     → CLI do framework
+# ──────────────────────────────────────────────────────────────────────────
+
+# Claude Code worktrees (não commitar)
+.claude/worktrees/

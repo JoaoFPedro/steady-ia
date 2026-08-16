@@ -1,0 +1,65 @@
+<svg viewBox="0 0 720 480" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <text x="360" y="28" text-anchor="middle" font-size="16" font-weight="500" fill="#2C2C2A">Arquitetura do framework</text>
+
+  <!-- .sdd core box -->
+  <rect x="120" y="50" width="480" height="200" rx="20" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="360" y="78" text-anchor="middle" font-size="14" font-weight="500" fill="#3C3489">.sdd/ — core agnóstico de IDE</text>
+  <text x="360" y="96" text-anchor="middle" font-size="12" fill="#534AB7">Fonte de verdade do projeto (Guides + Sensors)</text>
+
+  <!-- Inner boxes -->
+  <rect x="145" y="115" width="200" height="50" rx="8" fill="white" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="245" y="137" text-anchor="middle" font-size="13" font-weight="500" fill="#3C3489">CONSTITUTION.md</text>
+  <text x="245" y="153" text-anchor="middle" font-size="11" fill="#534AB7">Regras invioláveis</text>
+
+  <rect x="365" y="115" width="200" height="50" rx="8" fill="white" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="465" y="137" text-anchor="middle" font-size="13" font-weight="500" fill="#3C3489">memory/</text>
+  <text x="465" y="153" text-anchor="middle" font-size="11" fill="#534AB7">PROJECT + DOMAIN + DECISIONS</text>
+
+  <rect x="145" y="180" width="200" height="50" rx="8" fill="white" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="245" y="202" text-anchor="middle" font-size="13" font-weight="500" fill="#3C3489">templates/</text>
+  <text x="245" y="218" text-anchor="middle" font-size="11" fill="#534AB7">story, spec, adr, discovery...</text>
+
+  <rect x="365" y="180" width="200" height="50" rx="8" fill="white" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="465" y="202" text-anchor="middle" font-size="13" font-weight="500" fill="#3C3489">PLAYBOOK.md</text>
+  <text x="465" y="218" text-anchor="middle" font-size="11" fill="#534AB7">Patterns, anti-patterns, segurança</text>
+
+  <!-- Arrows down -->
+  <text x="360" y="268" text-anchor="middle" font-size="12" fill="#888780">lê e segue</text>
+  <line x1="180" y1="250" x2="180" y2="310" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="360" y1="250" x2="360" y2="310" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="540" y1="250" x2="540" y2="310" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Cursor adapter -->
+  <rect x="30" y="315" width="210" height="100" rx="16" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="135" y="340" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">Cursor</text>
+
+  <rect x="45" y="355" width="180" height="40" rx="8" fill="white" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="135" y="372" text-anchor="middle" font-size="11" font-weight="500" fill="#085041">.cursor/rules/*.mdc</text>
+  <text x="135" y="387" text-anchor="middle" font-size="10" fill="#0F6E56">Aponta para .sdd/</text>
+
+  <!-- Claude Code adapter -->
+  <rect x="255" y="315" width="210" height="100" rx="16" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="360" y="340" text-anchor="middle" font-size="14" font-weight="500" fill="#712B13">Claude Code</text>
+
+  <rect x="270" y="355" width="180" height="40" rx="8" fill="white" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="360" y="372" text-anchor="middle" font-size="11" font-weight="500" fill="#712B13">CLAUDE.md + .claude/commands/</text>
+  <text x="360" y="387" text-anchor="middle" font-size="10" fill="#993C1D">Aponta para .sdd/</text>
+
+  <!-- GitHub Copilot adapter -->
+  <rect x="480" y="315" width="210" height="100" rx="16" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="585" y="340" text-anchor="middle" font-size="14" font-weight="500" fill="#0C447C">GitHub Copilot</text>
+
+  <rect x="495" y="355" width="180" height="40" rx="8" fill="white" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="585" y="372" text-anchor="middle" font-size="11" font-weight="500" fill="#0C447C">.github/ + instructions/</text>
+  <text x="585" y="387" text-anchor="middle" font-size="10" fill="#185FA5">Aponta para .sdd/</text>
+
+  <!-- Bottom rule -->
+  <rect x="30" y="435" width="660" height="36" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="360" y="458" text-anchor="middle" font-size="11" fill="#5F5E5A">Agent = Model + Harness (Guides feedforward + Sensors feedback)</text>
+</svg>

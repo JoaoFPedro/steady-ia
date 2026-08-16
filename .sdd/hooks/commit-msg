@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# SDD Kit — commit-msg hook
+# Validates Conventional Commits format before every commit.
+# Install: ln -sf "$(pwd)/.sdd/hooks/commit-msg" .git/hooks/commit-msg && chmod +x .sdd/hooks/commit-msg
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Strip comments and trailing whitespace
+FIRST_LINE=$(echo "$COMMIT_MSG" | grep -v '^#' | head -1 | sed 's/[[:space:]]*$//')
+
+# Skip empty (amended commits, merge commits with -m)
+if [ -z "$FIRST_LINE" ]; then
+  exit 0
+fi
+
+# Conventional Commits pattern:
+#   type(scope)!: description
+#   type!: description
+#   type: description
+TYPES="feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert"
+PATTERN="^(${TYPES})(\([^)]+\))?(!)?: .{1,100}$"
+
+R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' N='\033[0m' BD='\033[1m'
+
+if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
+  echo ""
+  echo -e "  ${R}✗ Commit rejeitado — não segue Conventional Commits${N}"
+  echo ""
+  echo -e "  ${BD}Formato:${N}  <type>(<scope>): <descrição em minúsculo>"
+  echo ""
+  echo -e "  ${BD}Tipos válidos:${N}"
+  echo -e "    ${C}feat${N}      Nova funcionalidade"
+  echo -e "    ${C}fix${N}       Correção de bug"
+  echo -e "    ${C}test${N}      Adicionar ou corrigir testes"
+  echo -e "    ${C}refactor${N}  Refatoração sem mudança de comportamento"
+  echo -e "    ${C}docs${N}      Documentação"
+  echo -e "    ${C}chore${N}     Build, CI, configuração"
+  echo -e "    ${C}perf${N}      Melhoria de performance"
+  echo -e "    ${C}style${N}     Formatação (sem lógica)"
+  echo -e "    ${C}ci${N}        Pipelines de CI/CD"
+  echo -e "    ${C}build${N}     Sistema de build"
+  echo -e "    ${C}revert${N}    Reverter commit anterior"
+  echo ""
+  echo -e "  ${BD}Exemplos:${N}"
+  echo -e "    ${G}feat(auth): add JWT refresh token rotation${N}"
+  echo -e "    ${G}fix(api): handle null response from payment gateway${N}"
+  echo -e "    ${G}test(order): add edge case for zero-value cart${N}"
+  echo -e "    ${G}feat!: redesign authentication flow (breaking change)${N}"
+  echo ""
+  echo -e "  ${Y}Recebido:${N} ${FIRST_LINE}"
+  echo ""
+  exit 1
+fi
+
+# Warn if description starts with uppercase (convention: lowercase)
+DESC=$(echo "$FIRST_LINE" | sed -E "s/^(${TYPES})(\([^)]+\))?(!)?: //")
+FIRST_CHAR=$(echo "$DESC" | cut -c1)
+if echo "$FIRST_CHAR" | grep -qE '[A-Z]'; then
+  echo -e "  ${Y}⚠ Convenção: descrição em minúsculo${N} — ex: 'feat: add user login'"
+fi
+
+# Warn if description ends with period
+if echo "$DESC" | grep -q '\.$'; then
+  echo -e "  ${Y}⚠ Convenção: não termine a descrição com ponto final${N}"
+fi
+
+echo -e "  ${G}✓ Commit válido${N}"
+exit 0

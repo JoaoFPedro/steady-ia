@@ -1,0 +1,105 @@
+# Blueprint: STORY-002 — Expor a lógica de treino via API e persistir dados
+
+> **Story**: [story.md](./story.md)
+> **Tipo**: Sequência + Modelo de Dados
+> **Autor**: Jefferson
+
+## Descrição
+
+Mostra o fluxo de uma requisição autenticada de ponta a ponta (registro de sessão e consulta de avaliação de sobrecarga), e o modelo de dados persistido em PostgreSQL, incluindo o isolamento por `CorredorId` definido no ADR-002.
+
+## Diagrama — Fluxo de registro de sessão
+
+```mermaid
+sequenceDiagram
+    participant App as Cliente (futuro app mobile)
+    participant Auth as Middleware de Autenticação
+    participant Google as Google (validação do ID token)
+    participant API as Steady.Api (endpoint)
+    participant Domain as Steady.Domain (guard clauses)
+    participant Repo as Repository (EF Core)
+    participant DB as PostgreSQL
+
+    App->>Auth: POST /api/running-sessions (Bearer ID token)
+    Auth->>Google: Validar ID token (chave pública cacheada)
+    Google-->>Auth: token válido (claim "sub")
+    Auth->>Repo: Buscar Corredor por sub
+    alt Corredor não existe
+        Repo->>DB: INSERT Corredor (sub)
+    end
+    Auth-->>API: CorredorId resolvido
+    API->>Domain: RunningSession.Create(...)
+    alt Dados inválidos
+        Domain-->>API: exceção de domínio (ArgumentException)
+        API-->>App: 400 + mensagem
+    else Dados válidos
+        Domain-->>API: RunningSession
+        API->>Repo: Salvar sessão (CorredorId)
+        Repo->>DB: INSERT RunningSession
+        API-->>App: 201 + sessão criada
+    end
+```
+
+## Diagrama — Fluxo de avaliação de sobrecarga
+
+```mermaid
+sequenceDiagram
+    participant App as Cliente (futuro app mobile)
+    participant API as Steady.Api (endpoint)
+    participant Repo as Repository (EF Core)
+    participant DB as PostgreSQL
+    participant Domain as OverloadDetectionService
+
+    App->>API: GET /api/overload-assessment (Bearer ID token)
+    API->>Repo: Buscar sessões dos últimos 14+ dias (filtro CorredorId)
+    Repo->>DB: SELECT ... WHERE corredor_id = @id
+    DB-->>Repo: Sessões do corredor
+    Repo-->>API: RunningSession[], StrengthSession[]
+    API->>Domain: Evaluate(sessions, today)
+    Domain-->>API: OverloadAssessment (HasRisk, Suggestion)
+    API-->>App: 200 + avaliação
+```
+
+## Diagrama — Modelo de Dados
+
+```mermaid
+erDiagram
+    CORREDOR ||--o{ RUNNING_SESSION : "registra"
+    CORREDOR ||--o{ STRENGTH_SESSION : "registra"
+    CORREDOR ||--o{ PAIN_LOG : "registra"
+
+    CORREDOR {
+        uuid id PK
+        string google_sub UK
+        datetime created_at
+    }
+    RUNNING_SESSION {
+        uuid id PK
+        uuid corredor_id FK
+        date date
+        float distance_km
+        int duration_minutes
+        float average_pace_min_per_km
+        int perceived_effort
+    }
+    STRENGTH_SESSION {
+        uuid id PK
+        uuid corredor_id FK
+        date date
+        string muscle_group
+        string intensity
+        int duration_minutes
+    }
+    PAIN_LOG {
+        uuid id PK
+        uuid corredor_id FK
+        date date
+        string region
+    }
+```
+
+## Notas
+
+- `google_sub` é `UNIQUE` — garante que o upsert de Corredor no primeiro login nunca duplica.
+- Toda tabela de treino carrega `corredor_id` como FK obrigatória — a query de isolamento (ADR-002, regra de negócio #3) filtra por essa coluna em toda leitura.
+- O diagrama de avaliação de sobrecarga não persiste o resultado — é calculado on-demand a partir dos dados brutos, mantendo `Steady.Domain` como única fonte da regra (ADR-001).

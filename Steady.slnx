@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Steady.Domain/Steady.Domain.csproj" />
+    <Project Path="src/Steady.Infrastructure/Steady.Infrastructure.csproj" />
+    <Project Path="src/Steady.Api/Steady.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Steady.Domain.Tests/Steady.Domain.Tests.csproj" />
+    <Project Path="tests/Steady.Api.Tests/Steady.Api.Tests.csproj" />
+  </Folder>
+</Solution>

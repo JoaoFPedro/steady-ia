@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# SDD Kit — pre-commit hook
+# Validates branch naming convention and warns when spec is missing for feature branches.
+# Install: ln -sf "$(pwd)/.sdd/hooks/pre-commit" .git/hooks/pre-commit && chmod +x .sdd/hooks/pre-commit
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+
+R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' N='\033[0m' BD='\033[1m'
+
+# ─── Skip if not on a named branch (detached HEAD, empty) ────────────────────
+if [ -z "$BRANCH" ]; then
+  exit 0
+fi
+
+# ─── Skip protected branches ─────────────────────────────────────────────────
+PROTECTED="main master develop staging release"
+for b in $PROTECTED; do
+  if [ "$BRANCH" = "$b" ]; then
+    exit 0
+  fi
+done
+
+# ─── Branch naming convention ─────────────────────────────────────────────────
+# Expected: {type}/{story-id}-{descricao} or {type}/{descricao}
+# Types: feature, fix, docs, refactor, test, chore, hotfix
+BRANCH_PATTERN="^(feature|fix|docs|refactor|test|chore|hotfix)/.+"
+
+if ! echo "$BRANCH" | grep -qE "$BRANCH_PATTERN"; then
+  echo ""
+  echo -e "  ${R}✗ Branch fora da convenção SDD Kit${N}"
+  echo ""
+  echo -e "  ${BD}Formato:${N}  <type>/<story-id>-<descricao>"
+  echo ""
+  echo -e "  ${BD}Exemplos:${N}"
+  echo -e "    ${G}feature/STORY-001-user-login${N}"
+  echo -e "    ${G}fix/STORY-042-null-payment-response${N}"
+  echo -e "    ${G}refactor/STORY-010-extract-auth-middleware${N}"
+  echo -e "    ${G}docs/update-api-readme${N}"
+  echo -e "    ${G}chore/update-dependencies${N}"
+  echo ""
+  echo -e "  ${Y}Branch atual:${N} ${BRANCH}"
+  echo -e "  ${Y}Dica:${N} renomeie com  git branch -m <novo-nome>"
+  echo ""
+  exit 1
+fi
+
+# ─── Spec check for feature branches ─────────────────────────────────────────
+# Extract story-id if branch follows feature/STORY-NNN-* pattern
+STORY_ID=$(echo "$BRANCH" | grep -oE 'STORY-[0-9]+' | head -1)
+
+if [ -n "$STORY_ID" ] && [ -d "specs" ]; then
+  SPEC_FILE="specs/$STORY_ID/spec.bdd.md"
+  if [ ! -f "$SPEC_FILE" ]; then
+    echo ""
+    echo -e "  ${Y}⚠ Spec não encontrada para ${STORY_ID}${N}"
+    echo -e "    Esperado: ${BD}${SPEC_FILE}${N}"
+    echo -e "    Use ${C}/spec${N} no Claude Code para criar a story e a spec BDD"
+    echo ""
+    # warn only, do not block — spec may be in progress
+  elif ! grep -q "Scenario:" "$SPEC_FILE" 2>/dev/null; then
+    echo ""
+    echo -e "  ${Y}⚠ Spec existe mas não tem cenários BDD (Scenario:)${N}"
+    echo -e "    ${BD}${SPEC_FILE}${N}"
+    echo -e "    Use ${C}/spec${N} para gerar os cenários antes de implementar"
+    echo ""
+    # warn only, do not block
+  else
+    echo -e "  ${G}✓ Spec encontrada: ${SPEC_FILE}${N}"
+  fi
+fi
+
+echo -e "  ${G}✓ Branch válida: ${BRANCH}${N}"
+
+# ─── Security: .env files staged ─────────────────────────────────────────────
+ENV_STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '^\.env$|^\.env\.' | grep -v '\.example$' | grep -v '\.sample$' || true)
+if [ -n "$ENV_STAGED" ]; then
+  echo ""
+  echo -e "  ${R}⛔ SECURITY — A01/A05: arquivo .env sendo commitado${N}"
+  echo ""
+  for f in $ENV_STAGED; do
+    echo -e "    ${BD}$f${N}"
+  done
+  echo ""
+  echo -e "  Corrija com:"
+  echo -e "    ${C}git restore --staged $ENV_STAGED${N}"
+  echo -e "    ${C}echo '$ENV_STAGED' >> .gitignore${N}"
+  echo ""
+  exit 1
+fi
+
+# ─── Security: secrets hardcoded nos arquivos staged ─────────────────────────
+STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -vE '\.(png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|pdf|zip|lock|sum)$' || true)
+
+if [ -n "$STAGED" ]; then
+  # Padrões de secrets — case-insensitive, detecta atribuições e valores literais
+  SECRET_PATTERNS=(
+    # Atribuições genéricas com valor literal
+    '(password|passwd|pwd)\s*[=:]\s*["\x27][^"\x27\$\{]{6,}'
+    '(secret|api_secret|client_secret)\s*[=:]\s*["\x27][^"\x27\$\{]{8,}'
+    '(api_key|apikey|api-key)\s*[=:]\s*["\x27][^"\x27\$\{]{8,}'
+    '(token|auth_token|access_token)\s*[=:]\s*["\x27][^"\x27\$\{]{8,}'
+    '(private_key|privatekey)\s*[=:]\s*["\x27][^"\x27\$\{]{8,}'
+    '(connection_string|conn_str|database_url)\s*[=:]\s*["\x27][^"\x27\$\{]{12,}'
+    # Tokens de provedores conhecidos
+    'AKIA[0-9A-Z]{16}'
+    'AIza[0-9A-Za-z_-]{35}'
+    'sk-[a-zA-Z0-9]{48}'
+    'sk-proj-[a-zA-Z0-9_-]{80,}'
+    'ghp_[a-zA-Z0-9]{36}'
+    'ghs_[a-zA-Z0-9]{36}'
+    'xoxb-[0-9]+-[0-9]+-[a-zA-Z0-9]+'
+    'SG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}'
+    '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
+  )
+
+  SECRETS_FOUND=""
+  for file in $STAGED; do
+    file_content=$(git show ":$file" 2>/dev/null) || continue
+    for pattern in "${SECRET_PATTERNS[@]}"; do
+      if echo "$file_content" | grep -iqE "$pattern"; then
+        SECRETS_FOUND="${SECRETS_FOUND}\n    ${BD}$file${N} — padrão: $(echo "$pattern" | cut -c1-40)..."
+        break
+      fi
+    done
+  done
+
+  if [ -n "$SECRETS_FOUND" ]; then
+    echo ""
+    echo -e "  ${R}⛔ SECURITY — A02: possíveis secrets detectados${N}"
+    echo -e "$SECRETS_FOUND"
+    echo ""
+    echo -e "  Secrets nunca pertencem ao repositório."
+    echo -e "  Use variáveis de ambiente: ${C}process.env.SECRET${N} / ${C}os.environ['SECRET']${N}"
+    echo -e "  Ou secret manager: Vault, AWS Secrets Manager, Doppler."
+    echo ""
+    echo -e "  Se for falso positivo, adicione ao arquivo uma linha de exceção:"
+    echo -e "    ${C}# noqa: secret${N}  ou  ${C}// nosec${N}"
+    echo ""
+    exit 1
+  fi
+
+  # ─── Security: padrões OWASP perigosos (aviso, não bloqueia) ───────────────
+  DANGEROUS_PATTERNS=(
+    'innerHTML\s*='
+    'dangerouslySetInnerHTML'
+    'document\.write\s*\('
+    'eval\s*\('
+    'exec\s*\(.*\+.*\)'
+    'subprocess\.call.*shell\s*=\s*True'
+    'pickle\.loads\s*\('
+    'yaml\.load\s*\([^,)]*\)'
+    'cursor\.execute\s*\(.*%.*%'
+    'cursor\.execute\s*\(.*\+.*\)'
+    'db\.query\s*\(`[^`]*\$\{'
+  )
+
+  DANGEROUS_FOUND=""
+  for file in $STAGED; do
+    file_content=$(git show ":$file" 2>/dev/null) || continue
+    for pattern in "${DANGEROUS_PATTERNS[@]}"; do
+      if echo "$file_content" | grep -qE "$pattern"; then
+        line=$(echo "$file_content" | grep -nE "$pattern" | head -1 | cut -d: -f1)
+        DANGEROUS_FOUND="${DANGEROUS_FOUND}\n    ${BD}$file${N}:${line} — ${Y}$pattern${N}"
+      fi
+    done
+  done
+
+  if [ -n "$DANGEROUS_FOUND" ]; then
+    echo ""
+    echo -e "  ${Y}⚠ SECURITY — OWASP A03: padrões potencialmente perigosos detectados${N}"
+    echo -e "$DANGEROUS_FOUND"
+    echo ""
+    echo -e "  Revise antes de avançar. Consulte ${BD}.sdd/PLAYBOOK.md${N} seção 6 (A03)."
+    echo -e "  Se intencional e seguro, documente o motivo com um comentário."
+    echo ""
+    # Avisa mas não bloqueia — pode ser uso legítimo
+  fi
+fi
+
+exit 0

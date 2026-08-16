@@ -1,0 +1,104 @@
+---
+description: SDD Kit - constitution builder for new projects. Triggers when creating PROJECT-CONSTITUTION.md or when user asks to initialize/set up a new project from scratch.
+globs: ".sdd/PROJECT-CONSTITUTION.md,.sdd/memory/PROJECT.md"
+alwaysApply: false
+---
+
+# Init — Constituição do Projeto
+
+Você está iniciando um projeto do zero. Conduza a entrevista estruturada e gere a Constituição do projeto antes de qualquer código.
+
+> Para projetos com código existente, use `/onboard`.
+> Para Claude Code: use o slash command `/init`.
+
+---
+
+## Contexto necessário
+
+Antes de iniciar, verifique:
+1. `.sdd/CONSTITUTION.md` — lei universal do SDD Kit (não modifique)
+2. `.sdd/PLAYBOOK.md` — patterns disponíveis para selecionar
+3. `.sdd/STACK.md` — se existir; se não, oriente: `./sdd scan`
+
+---
+
+## Processo de Init
+
+### Passo 1 — Entrevista (uma pergunta por vez)
+
+Faça cada pergunta separadamente. Aguarde a resposta antes de avançar.
+
+**P1 — Identidade**: "Qual o nome do projeto e qual problema ele resolve? Em uma ou duas frases, na voz de quem vai usá-lo."
+
+**P2 — Usuários e escala**: "Quem são os usuários principais? Descreva a persona e a escala esperada."
+
+**P3 — Domínio**: "Quais são as 3 a 5 entidades centrais do domínio? Os conceitos de negócio, não as telas ou endpoints."
+
+**P4 — Tipo e horizonte**: "MVP, produto em crescimento, ferramenta interna, API pública ou migração? E qual o horizonte de entrega?"
+
+**P5 — Riscos e restrições**: "Maiores riscos ou restrições: segurança de dados, compliance, performance crítica, time-to-market, legado?"
+
+**P6 — Integrações**: "Integrações externas previstas: pagamentos, auth, ERP, filas, storage?"
+
+**P7 — Time**: "Tamanho e perfil da equipe? Experiência no domínio?"
+
+---
+
+### Passo 2 — Confirmação de stack
+
+Leia `.sdd/STACK.md` e confirme com o usuário. Se incorreto, atualize `.sdd/config.json`.
+
+---
+
+### Passo 3 — Geração dos artefatos
+
+Crie os seguintes arquivos com base nas respostas:
+
+#### `.sdd/PROJECT-CONSTITUTION.md`
+
+Use o template em `.sdd/templates/project-constitution.md`. Regras de derivação:
+
+- **Princípios de domínio**: específicos o suficiente para orientar uma decisão de implementação concreta.
+  - Bom: "Um pedido nunca é deletado — apenas cancelado com razão registrada (auditoria fiscal)"
+  - Ruim: "Dados devem ser consistentes" (genérico)
+
+- **Mandatos de qualidade**: derivados dos riscos declarados. Priorize — nem tudo é Prioridade 1.
+
+- **Técnicas prioritárias**: selecione do PLAYBOOK por tipo de produto:
+  - MVP → KISS, Early Return, Guard Clause
+  - Produto maduro → SOLID, Repository, Strategy
+  - API pública → DTO, Contract Testing
+  - Fintech/compliance → Error tipado, Audit Trail, Fail Fast
+
+#### `.sdd/memory/PROJECT.md`
+Preencha com: contexto (3-5 frases), convenções, glossário de termos do domínio.
+
+#### `.sdd/memory/DOMAIN.md`
+Liste entidades mencionadas com relacionamentos óbvios. Fluxos como `[a definir em feature]`.
+
+#### `docs/adr/ADR-000-foundation.md`
+ADR de fundação: stack + padrões + decisões iniciais.
+
+---
+
+### Passo 4 — Handshake
+
+```
+Fundação criada.
+
+✅ .sdd/PROJECT-CONSTITUTION.md  — lei do projeto
+✅ .sdd/memory/PROJECT.md        — contexto e glossário
+✅ .sdd/memory/DOMAIN.md         — entidades e fronteiras
+✅ docs/adr/ADR-000-foundation.md
+
+Próximo: ./sdd new STORY-001
+```
+
+---
+
+## Regras
+
+- Uma pergunta por vez. Não dispare a lista completa.
+- Não invente entidades ou restrições que não foram mencionadas.
+- A Constituição deve caber em uma tela — princípios, não manual.
+- Se conflito com `.sdd/CONSTITUTION.md`: a lei universal prevalece.

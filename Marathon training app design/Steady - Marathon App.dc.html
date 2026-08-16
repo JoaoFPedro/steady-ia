@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/nocturne-5c3745fb-552c-4776-ba53-bbf20c0701bb/styles.css">
+<script src="_ds/nocturne-5c3745fb-552c-4776-ba53-bbf20c0701bb/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+body{margin:0;background:var(--color-bg);font-family:Inter,system-ui,sans-serif}
+.dv-turn{padding:44px 48px 36px;border-bottom:1px solid rgba(233,233,237,.08)}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:var(--color-text);color:var(--color-bg);border-radius:4px;text-decoration:none}
+.dv-tname{font:500 13px/1.2 Inter,system-ui,sans-serif;color:var(--color-text)}
+.dv-opts{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(233,233,237,.12);color:var(--color-text);border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 Inter,system-ui,sans-serif;color:rgba(233,233,237,.55)}
+.dv-opt:target .dv-oid{background:var(--color-accent);color:var(--color-bg)}
+.dv-next{margin:26px 0 0;font:12px/1.6 Inter,system-ui,sans-serif;color:rgba(233,233,237,.5)}
+.ph{width:360px;height:760px;background:var(--color-bg);border-radius:30px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 0 0 9px var(--color-surface),0 0 0 10px var(--color-divider),0 22px 50px rgba(0,0,0,.6)}
+.sb{height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;letter-spacing:.02em;color:rgba(233,233,237,.75)}
+.gp{height:22px;flex:none;display:flex;align-items:center;justify-content:center}
+.gp::after{content:"";width:112px;height:4px;border-radius:2px;background:rgba(233,233,237,.28)}
+.sc{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.kick{font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:rgba(233,233,237,.45)}
+.tapp{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.tapp:active{opacity:.75}
+</style></helmet>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Steady — first-marathon coach. Core flow, then three live-run directions.</span></div>
+
+<div style="max-width:760px;margin:0 0 28px;font:13px/1.65 Inter,system-ui,sans-serif;color:rgba(233,233,237,.62)">
+<p style="margin:0 0 8px"><span style="color:var(--color-text)">What I assumed.</span> One user, four entry points (never run / casual / half-marathon / returning) — onboarding branches on that answer and everything downstream is the same plan engine. Race is Sun 22 Nov, 15 weeks out; the demo user is in week 6 of 20 and missed a run last Tuesday, so the adaptive rewrite is visible rather than described.</p>
+<p style="margin:0 0 8px"><span style="color:var(--color-text)">The two ideas, made concrete.</span> <em>Adaptive</em> shows up as a "plan updated" strip that names what changed and why. <em>Confidence</em> shows up as a single readiness line the app never hides — on the home screen, in the plan, and on the race screen — so the answer to "will I finish?" is always one glance away.</p>
+<p style="margin:0"><span style="color:var(--color-text)">System notes.</span> Nocturne dark ground, accent used as line and glow only, outlined primaries, no saturated floods. Maps are placeholder routes — drop in real map tiles and photography when you have them.</p>
+</div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Onboarding — three questions, then the plan</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ⌁ 84%</span></div><div class="sc" style="padding:0 20px 16px">
+  <div style="display:flex;gap:5px;margin:6px 0 26px">
+    <div style="height:2px;flex:1;border-radius:1px;background:{{ ob.b1 }}"></div>
+    <div style="height:2px;flex:1;border-radius:1px;background:{{ ob.b2 }}"></div>
+    <div style="height:2px;flex:1;border-radius:1px;background:{{ ob.b3 }}"></div>
+  </div>
+  <sc-if value="{{ ob.s0 }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;display:flex;flex-direction:column">
+      <div class="kick">Step 1 of 3</div>
+      <h2 style="font-size:27px;margin:10px 0 6px;line-height:1.15;color:var(--color-text)">Where are you<br>starting from?</h2>
+      <p style="font-size:13px;line-height:1.5;color:rgba(233,233,237,.5);margin:0 0 22px">Be honest. The plan is built backwards from this, not from the race.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ baseOpts }}" as="o" hint-placeholder-count="4">
+          <div class="tapp" onClick="{{ o.pick }}" style="{{ o.style }}">
+            <div style="font-size:14px;color:var(--color-text)">{{ o.title }}</div>
+            <div style="font-size:11.5px;color:rgba(233,233,237,.45);margin-top:3px">{{ o.sub }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ ob.s1 }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;display:flex;flex-direction:column">
+      <div class="kick">Step 2 of 3</div>
+      <h2 style="font-size:27px;margin:10px 0 6px;line-height:1.15;color:var(--color-text)">When is race day?</h2>
+      <p style="font-size:13px;line-height:1.5;color:rgba(233,233,237,.5);margin:0 0 22px">Pick a date and we'll tell you honestly whether there's enough runway.</p>
+      <div style="border-radius:14px;background:var(--color-surface);padding:18px;box-shadow:var(--shadow-sm)">
+        <div class="kick">Selected race</div>
+        <div style="font-size:20px;color:var(--color-text);margin:8px 0 2px">Sun 22 November</div>
+        <div style="font-size:12.5px;color:rgba(233,233,237,.5)">Lakeside Marathon · 15 weeks away</div>
+        <div style="height:1px;margin:16px 0;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 40px,rgba(233,233,237,.16) calc(100% - 40px),transparent)"></div>
+        <div style="display:flex;gap:9px;align-items:flex-start">
+          <div style="width:6px;height:6px;border-radius:3px;background:var(--color-accent);margin-top:6px;flex:none"></div>
+          <div style="font-size:12.5px;line-height:1.5;color:rgba(233,233,237,.72)">15 weeks is enough from {{ baseShort }} — as long as we build slowly. Your plan will run 20 weeks and you're joining it at week 6.</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;font-size:11.5px;color:rgba(233,233,237,.4);line-height:1.5">No race yet? We'll pick a date that fits your build and you can move it later.</div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ ob.s2 }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;display:flex;flex-direction:column">
+      <div class="kick">Your plan</div>
+      <h2 style="font-size:27px;margin:10px 0 6px;line-height:1.15;color:var(--color-text)">20 weeks.<br>Four runs a week.</h2>
+      <p style="font-size:13px;line-height:1.5;color:rgba(233,233,237,.5);margin:0 0 20px">Three easy, one long. Nothing hard until week 9.</p>
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <sc-for list="{{ phases }}" as="p" hint-placeholder-count="4">
+          <div style="display:flex;gap:14px;align-items:baseline;padding:11px 0;border-bottom:1px solid rgba(233,233,237,.08)">
+            <div style="width:52px;flex:none;font:500 11px ui-monospace,Menlo,monospace;color:{{ p.tone }}">{{ p.wk }}</div>
+            <div style="flex:1"><div style="font-size:13.5px;color:var(--color-text)">{{ p.name }}</div>
+            <div style="font-size:11.5px;color:rgba(233,233,237,.42);margin-top:2px">{{ p.note }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:18px;padding:14px;border-radius:12px;background:var(--color-accent-900)">
+        <div style="font-size:13px;color:var(--color-accent-300);line-height:1.5">Miss a run and nothing breaks. The plan rewrites itself the next morning and tells you what it changed.</div>
+      </div>
+    </div>
+  </sc-if>
+  <div style="display:flex;gap:10px;align-items:center;padding-top:16px">
+    <button class="btn btn-secondary tapp" onClick="{{ ob.back }}" style="flex:none">Back</button>
+    <button class="btn btn-primary tapp" onClick="{{ ob.next }}" style="flex:1">{{ ob.cta }}</button>
+  </div>
+</div><div class="gp"></div></div></div>
+
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Today → run → summary (tap through it)</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ⌁ 84%</span></div><div class="sc">
+  <sc-if value="{{ flow.today }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;overflow:hidden;padding:0 20px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;padding:8px 0 18px">
+        <div><div style="font-size:19px;color:var(--color-text)">Sunday, 9 August</div>
+        <div class="kick" style="margin-top:3px">Week 6 of 20</div></div>
+        <div class="tag tag-accent">15 weeks out</div>
+      </div>
+      <div style="border-radius:16px;background:linear-gradient(160deg,var(--color-accent-900),var(--color-surface) 70%);padding:20px;box-shadow:var(--shadow-sm)">
+        <div class="kick" style="color:var(--color-accent-400)">Today</div>
+        <div style="font-size:32px;line-height:1.1;color:var(--color-text);margin:8px 0 4px">Easy 6 km</div>
+        <div style="font-size:13.5px;color:rgba(233,233,237,.6);line-height:1.5">Conversational the whole way. If you can't talk, slow down — walking breaks are part of the plan.</div>
+        <div style="display:flex;gap:20px;margin:18px 0 4px">
+          <div><div class="kick">Target effort</div><div style="font-size:15px;color:var(--color-text);margin-top:4px">2 / 10</div></div>
+          <div><div class="kick">Guide pace</div><div style="font-size:15px;color:var(--color-text);margin-top:4px">7:10–7:50</div></div>
+          <div><div class="kick">Time</div><div style="font-size:15px;color:var(--color-text);margin-top:4px">~45 min</div></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin:20px 2px 4px">
+        <sc-for list="{{ week }}" as="d" hint-placeholder-count="7">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:7px;width:34px">
+            <div style="font-size:10.5px;color:rgba(233,233,237,.42)">{{ d.d }}</div>
+            <div style="{{ d.dot }}"></div>
+            <div style="font-size:9.5px;color:rgba(233,233,237,.35)">{{ d.km }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:20px;padding:14px 16px;border-radius:12px;background:var(--color-surface);box-shadow:var(--shadow-sm)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <div style="font-size:13.5px;color:var(--color-text)">On track to finish</div>
+          <div style="font-size:13.5px;color:var(--color-accent-400)">4:41–5:05</div>
+        </div>
+        <div style="height:4px;border-radius:2px;background:var(--color-divider);margin:12px 0 9px;overflow:hidden">
+          <div style="width:62%;height:100%;background:linear-gradient(to right,var(--color-accent-700),var(--color-accent))"></div>
+        </div>
+        <div style="font-size:11.5px;color:rgba(233,233,237,.45);line-height:1.5">You've done 62% of the running this plan asks for by week 6. That's enough.</div>
+      </div>
+      <div style="margin-top:14px;padding:13px 15px;border-radius:12px;background:var(--color-surface);box-shadow:0 0 0 1px var(--color-accent-700)">
+        <div style="font-size:12.5px;color:var(--color-accent-400);line-height:1.5"><span style="color:var(--color-text)">Plan updated.</span> You missed Tuesday, so Thursday's 8 km moved to 7 km and the long run stays at 16. Nothing lost.</div>
+      </div>
+    </div>
+    <div style="padding:14px 20px 8px">
+      <button class="btn btn-primary btn-block tapp" onClick="{{ flow.start }}" style="height:48px;font-size:15px;margin:0">Start easy run</button>
+    </div>
+  </sc-if>
+  <sc-if value="{{ flow.live }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;position:relative;background:#10111c">
+      <svg viewBox="0 0 360 420" style="position:absolute;inset:0;width:100%;height:56%" font-family="Inter, system-ui, sans-serif">
+        <rect width="360" height="420" fill="#171926"></rect>
+        <path d="M232 0h128v168c-46 6-92-22-128-6Z" fill="#14202a"></path>
+        <path d="M0 250h96c22 30 18 74-6 106H0Z" fill="#16221c"></path>
+        <path d="M108 44h84v66h-84Z" fill="#1b1d2b"></path>
+        <g fill="#1c1e2c">
+          <rect x="16" y="128" width="62" height="46" rx="2"></rect><rect x="98" y="128" width="52" height="46" rx="2"></rect>
+          <rect x="176" y="196" width="58" height="52" rx="2"></rect><rect x="258" y="264" width="70" height="48" rx="2"></rect>
+          <rect x="128" y="300" width="56" height="44" rx="2"></rect><rect x="34" y="18" width="48" height="52" rx="2"></rect>
+        </g>
+        <g fill="none" stroke="#0f1018" stroke-width="15" stroke-linecap="round">
+          <path d="M-10 190H370M90 -10V430M-10 356H370M262 -10V430"></path>
+        </g>
+        <g fill="none" stroke="#2b2e3d" stroke-width="12" stroke-linecap="round">
+          <path d="M-10 190H370M90 -10V430M-10 356H370M262 -10V430"></path>
+        </g>
+        <g fill="none" stroke="#23263300" stroke-width="7"></g>
+        <g fill="none" stroke="#232633" stroke-width="7" stroke-linecap="round">
+          <path d="M-10 112H370M-10 272H370M170 -10V430M330 -10V430M20 -10V430"></path>
+          <path d="M90 272 262 112"></path>
+        </g>
+        <g fill="none" stroke="#1e2130" stroke-width="4">
+          <path d="M-10 60H370M-10 322H370M132 112V190M212 190V356M46 190V356"></path>
+        </g>
+        <g fill="#6b7186" font-size="7.5" letter-spacing=".04em">
+          <text x="14" y="186">RIVERSIDE AVE</text>
+          <text x="196" y="352">CANAL ST</text>
+          <text x="96" y="30" transform="rotate(90 96 30)">MILL RD</text>
+          <text x="268" y="212" transform="rotate(90 268 212)">PARK WAY</text>
+        </g>
+        <g fill="#4e5b52" font-size="8.5"><text x="16" y="304">Southbank Green</text></g>
+        <g fill="#41596b" font-size="8.5"><text x="278" y="70">Still Water</text></g>
+        <path d="M46 372C46 300 92 286 120 254c34-39 12-84 52-104 44-22 92 8 118-22" fill="none" stroke="var(--color-accent-700)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".45"></path>
+        <path d="M46 372C46 300 92 286 120 254c26-30 20-64 40-88" fill="none" stroke="var(--color-accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path>
+        <circle cx="46" cy="372" r="5" fill="#171926" stroke="var(--color-text)" stroke-width="2.5" opacity=".8"></circle>
+        <circle cx="160" cy="166" r="17" fill="var(--color-accent)" opacity=".2"></circle>
+        <circle cx="160" cy="166" r="8" fill="var(--color-accent)" stroke="#171926" stroke-width="2.5"></circle>
+        <g transform="translate(322 22)" fill="#8a90a3" font-size="7">
+          <path d="M6 0 11 13 6 10 1 13Z" fill="#9aa0b3"></path><text x="1.5" y="24">N</text>
+        </g>
+      </svg>
+      <div style="position:absolute;left:0;right:0;bottom:0;background:linear-gradient(to top,var(--color-bg) 78%,rgba(22,24,38,0));padding:44px 20px 16px">
+        <div class="kick">Easy 6 km · effort 2 / 10</div>
+        <div style="display:flex;align-items:flex-end;gap:6px;margin:8px 0 2px">
+          <div style="font:500 62px/1 Inter,system-ui,sans-serif;color:var(--color-text);letter-spacing:-.03em">{{ live.km }}</div>
+          <div style="font-size:15px;color:rgba(233,233,237,.5);padding-bottom:11px">km</div>
+        </div>
+        <div style="display:flex;gap:26px;margin:14px 0 18px">
+          <div><div class="kick">Time</div><div style="font-size:21px;color:var(--color-text);margin-top:3px">{{ live.clock }}</div></div>
+          <div><div class="kick">Pace</div><div style="font-size:21px;color:var(--color-text);margin-top:3px">7:24</div></div>
+          <div><div class="kick">Heart</div><div style="font-size:21px;color:var(--color-text);margin-top:3px">138</div></div>
+        </div>
+        <div style="padding:12px 14px;border-radius:12px;background:var(--color-surface);font-size:12.5px;color:rgba(233,233,237,.72);line-height:1.5;margin-bottom:14px">Nicely inside easy. Hold this and you'll finish feeling like you could go again.</div>
+        <button class="btn btn-secondary btn-block tapp" onClick="{{ flow.finish }}" style="height:46px;margin:0">Finish run</button>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ flow.done }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;overflow:hidden;padding:0 20px">
+      <div style="padding:14px 0 6px"><div class="kick">Sunday · easy run</div>
+      <h2 style="font-size:26px;margin:10px 0 6px;color:var(--color-text);line-height:1.15">Run 24 of 78 done.</h2>
+      <div style="font-size:13px;color:rgba(233,233,237,.5);line-height:1.5">Sixth week complete. That's the hardest part of a first marathon and you're through it.</div></div>
+      <div style="display:flex;gap:1px;margin:20px 0 0;border-radius:12px;overflow:hidden;background:var(--color-divider)">
+        <div style="flex:1;background:var(--color-surface);padding:14px"><div class="kick">Distance</div><div style="font-size:22px;color:var(--color-text);margin-top:5px">6.04 km</div></div>
+        <div style="flex:1;background:var(--color-surface);padding:14px"><div class="kick">Time</div><div style="font-size:22px;color:var(--color-text);margin-top:5px">44:37</div></div>
+        <div style="flex:1;background:var(--color-surface);padding:14px"><div class="kick">Avg pace</div><div style="font-size:22px;color:var(--color-text);margin-top:5px">7:23</div></div>
+      </div>
+      <div style="margin-top:20px"><div class="kick">Effort by kilometre</div>
+      <div style="display:flex;align-items:flex-end;gap:6px;height:78px;margin-top:12px">
+        <sc-for list="{{ splits }}" as="s" hint-placeholder-count="6">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+            <div style="{{ s.bar }}"></div>
+            <div style="font-size:9.5px;color:rgba(233,233,237,.35)">{{ s.label }}</div>
+          </div>
+        </sc-for>
+      </div></div>
+      <div style="margin-top:22px"><div style="font-size:13.5px;color:var(--color-text);margin-bottom:11px">How did that feel?</div>
+      <div style="display:flex;gap:8px">
+        <sc-for list="{{ feels }}" as="f" hint-placeholder-count="4">
+          <div class="tapp" onClick="{{ f.pick }}" style="{{ f.style }}">{{ f.label }}</div>
+        </sc-for>
+      </div></div>
+      <div style="margin-top:18px;padding:14px 16px;border-radius:12px;background:var(--color-accent-900)">
+        <div style="font-size:12.5px;line-height:1.55;color:var(--color-accent-300)">{{ feelNote }}</div>
+      </div>
+    </div>
+    <div style="padding:12px 20px 8px"><button class="btn btn-primary btn-block tapp" onClick="{{ flow.back }}" style="height:46px;margin:0">Save run</button></div>
+  </sc-if>
+</div><div class="gp"></div></div></div>
+
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Training plan — the adaptive week</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ⌁ 84%</span></div><div class="sc" style="padding:0 20px">
+  <div style="padding:8px 0 16px"><h2 style="font-size:22px;margin:0;color:var(--color-text)">Your 20 weeks</h2>
+  <div style="font-size:12.5px;color:rgba(233,233,237,.48);margin-top:4px">Base → build → peak → taper · race Sun 22 Nov</div></div>
+  <div style="display:flex;gap:2px;height:34px;align-items:flex-end;margin-bottom:20px">
+    <sc-for list="{{ planBars }}" as="b" hint-placeholder-count="20"><div style="{{ b.style }}"></div></sc-for>
+  </div>
+  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:9px">
+    <sc-for list="{{ planWeeks }}" as="w" hint-placeholder-count="4">
+      <div class="tapp" onClick="{{ w.open }}" style="{{ w.style }}">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <div style="font-size:14px;color:var(--color-text)">{{ w.title }}</div>
+          <div style="font-size:12px;color:rgba(233,233,237,.45)">{{ w.total }}</div>
+        </div>
+        <div style="font-size:11.5px;color:rgba(233,233,237,.45);margin-top:3px">{{ w.sub }}</div>
+        <sc-if value="{{ w.open2 }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px;display:flex;flex-direction:column">
+            <sc-for list="{{ w.days }}" as="d" hint-placeholder-count="4">
+              <div style="display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid rgba(233,233,237,.07)">
+                <div style="width:26px;font:500 10.5px ui-monospace,Menlo,monospace;color:rgba(233,233,237,.4)">{{ d.d }}</div>
+                <div style="{{ d.dot }}"></div>
+                <div style="flex:1;font-size:12.5px;color:{{ d.tone }}">{{ d.name }}</div>
+                <div style="font-size:11.5px;color:rgba(233,233,237,.4)">{{ d.km }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+    <div style="padding:13px 15px;border-radius:12px;background:var(--color-surface);box-shadow:0 0 0 1px var(--color-accent-700)">
+      <div style="font-size:12.5px;color:var(--color-accent-400);line-height:1.5"><span style="color:var(--color-text)">Rewritten Wednesday.</span> One missed easy run in week 6. Thursday dropped 1 km, long runs untouched. Peak week unchanged.</div>
+    </div>
+  </div>
+</div><div class="gp"></div></div></div>
+
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Progress — am I actually getting fitter?</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ⌁ 84%</span></div><div class="sc" style="padding:0 20px">
+  <div style="padding:8px 0 4px"><h2 style="font-size:22px;margin:0;color:var(--color-text)">Progress</h2></div>
+  <div style="margin-top:18px;padding:18px;border-radius:16px;background:linear-gradient(160deg,var(--color-accent-900),var(--color-surface) 70%);box-shadow:var(--shadow-sm)">
+    <div class="kick" style="color:var(--color-accent-400)">Predicted finish</div>
+    <div style="font:500 40px/1 Inter,system-ui,sans-serif;color:var(--color-text);margin:10px 0 6px;letter-spacing:-.02em">4:41</div>
+    <div style="font-size:12.5px;color:rgba(233,233,237,.55);line-height:1.5">14 minutes faster than four weeks ago. Range 4:41–5:05 depending on the day.</div>
+  </div>
+  <div style="margin-top:22px"><div style="display:flex;justify-content:space-between;align-items:baseline">
+    <div class="kick">Weekly distance</div><div style="font-size:11.5px;color:rgba(233,233,237,.4)">last 8 weeks</div></div>
+    <svg viewBox="0 0 320 120" style="width:100%;height:118px;margin-top:12px;overflow:visible">
+      <g stroke="rgba(233,233,237,.08)"><path d="M0 10H320M0 45H320M0 80H320M0 114H320"></path></g>
+      <path d="M6 96L50 88L94 74L138 79L182 58L226 47L270 34L314 26" fill="none" stroke="var(--color-accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>
+      <path d="M6 96L50 88L94 74L138 79L182 58L226 47L270 34L314 26L314 114L6 114Z" fill="url(#g1)" opacity=".35"></path>
+      <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--color-accent)"></stop><stop offset="1" stop-color="var(--color-accent)" stop-opacity="0"></stop></linearGradient></defs>
+      <circle cx="314" cy="26" r="4" fill="var(--color-accent)"></circle>
+      <circle cx="138" cy="79" r="3.5" fill="var(--color-bg)" stroke="var(--color-accent-400)" stroke-width="2"></circle>
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-size:9.5px;color:rgba(233,233,237,.32);margin-top:2px"><span>W1</span><span>W3</span><span>W5</span><span>W6</span><span>now</span></div>
+    <div style="font-size:11.5px;color:rgba(233,233,237,.42);margin-top:10px;line-height:1.5">The dip in week 4 was a deliberate down week. It's why week 5 felt easy.</div>
+  </div>
+  <div style="display:flex;gap:1px;margin-top:22px;border-radius:12px;overflow:hidden;background:var(--color-divider)">
+    <div style="flex:1;background:var(--color-surface);padding:13px"><div class="kick">Longest run</div><div style="font-size:19px;color:var(--color-text);margin-top:5px">16 km</div><div style="font-size:10.5px;color:var(--color-accent-400);margin-top:3px">+4 this month</div></div>
+    <div style="flex:1;background:var(--color-surface);padding:13px"><div class="kick">Easy pace</div><div style="font-size:19px;color:var(--color-text);margin-top:5px">7:24</div><div style="font-size:10.5px;color:var(--color-accent-400);margin-top:3px">−38s at same effort</div></div>
+  </div>
+  <div style="margin-top:16px;padding:14px 16px;border-radius:12px;background:var(--color-surface);box-shadow:var(--shadow-sm)">
+    <div style="font-size:12.5px;line-height:1.55;color:rgba(233,233,237,.72)"><span style="color:var(--color-text)">Same heart rate, more distance.</span> That's the only signal that matters right now, and it's been moving the right way for five weeks.</div>
+  </div>
+</div><div class="gp"></div></div></div>
+
+<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Race week — countdown and prep</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ⌁ 84%</span></div><div class="sc" style="padding:0 20px">
+  <div style="padding:16px 0 0"><div class="kick">Lakeside Marathon · Sun 22 Nov, 08:30</div>
+  <div style="display:flex;align-items:baseline;gap:10px;margin-top:12px">
+    <div style="font:500 76px/1 Inter,system-ui,sans-serif;color:var(--color-text);letter-spacing:-.04em">4</div>
+    <div style="font-size:17px;color:rgba(233,233,237,.5)">days to go</div>
+  </div>
+  <div style="height:1px;margin:20px 0;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 40px,rgba(233,233,237,.16) calc(100% - 40px),transparent)"></div></div>
+  <div style="padding:16px;border-radius:14px;background:linear-gradient(160deg,var(--color-accent-900),var(--color-surface) 70%);box-shadow:var(--shadow-sm)">
+    <div class="kick" style="color:var(--color-accent-400)">Your plan for the day</div>
+    <div style="display:flex;gap:0;margin-top:14px">
+      <div style="flex:1"><div style="font-size:10.5px;color:rgba(233,233,237,.42)">km 1–16</div><div style="font-size:15px;color:var(--color-text);margin-top:4px">6:55</div></div>
+      <div style="flex:1"><div style="font-size:10.5px;color:rgba(233,233,237,.42)">km 17–32</div><div style="font-size:15px;color:var(--color-text);margin-top:4px">6:45</div></div>
+      <div style="flex:1"><div style="font-size:10.5px;color:rgba(233,233,237,.42)">km 33–42</div><div style="font-size:15px;color:var(--color-text);margin-top:4px">hold on</div></div>
+    </div>
+    <div style="font-size:12px;color:rgba(233,233,237,.55);margin-top:14px;line-height:1.5">Start slower than feels right. Every first marathon that goes wrong goes wrong in the first 10 km.</div>
+  </div>
+  <div style="margin-top:20px;flex:1;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+      <div class="kick">Race kit</div><div style="font-size:11px;color:var(--color-accent-400)">{{ checkCount }}</div>
+    </div>
+    <div style="display:flex;flex-direction:column">
+      <sc-for list="{{ checks }}" as="c" hint-placeholder-count="6">
+        <div class="tapp" onClick="{{ c.toggle }}" style="display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(233,233,237,.07)">
+          <div style="{{ c.box }}">{{ c.mark }}</div>
+          <div style="flex:1;font-size:13px;color:{{ c.tone }}">{{ c.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="padding:12px 0 8px"><div style="padding:13px 15px;border-radius:12px;background:var(--color-surface);box-shadow:var(--shadow-sm);font-size:12.5px;line-height:1.55;color:rgba(233,233,237,.72)"><span style="color:var(--color-text)">You've run 612 km to get here.</span> Nothing you do this week makes you fitter. Sleep, eat, stay bored.</div></div>
+</div><div class="gp"></div></div></div>
+
+</div>
+<p class="dv-next">Try next: "make <a class="dv-oid" href="#1b">1b</a>'s home screen quieter — one card only" · "show what a missed-run recovery flow looks like" · "add the injury check-in screen"</p>
+</section>
+
+<section class="dv-turn" id="t0">
+<div class="dv-thd"><a class="dv-tid" href="#t0">1·live</a><span class="dv-tname">Three live-run directions — same run, different thing in charge</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1f"><div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Map in charge — stats on a sheet you can drag</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ⌁ 84%</span></div><div class="sc" style="position:relative;background:#10111c">
+  <svg viewBox="0 0 360 700" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">
+    <rect width="360" height="700" fill="#12131f"></rect>
+    <g stroke="#1b1d29" stroke-width="1"><path d="M0 80H360M0 180H360M0 280H360M0 380H360M0 480H360M0 580H360M60 0V700M150 0V700M240 0V700M320 0V700"></path></g>
+    <g fill="#171929"><rect x="62" y="182" width="86" height="96" rx="3"></rect><rect x="242" y="382" width="76" height="96" rx="3"></rect><rect x="0" y="482" width="58" height="96" rx="3"></rect></g>
+    <path d="M52 560C52 470 108 452 138 404c36-58 8-118 62-146 52-27 106 14 134-24" fill="none" stroke="var(--color-accent-700)" stroke-width="8" stroke-linecap="round" opacity=".38"></path>
+    <path d="M52 560C52 470 108 452 138 404c30-48 16-92 44-124" fill="none" stroke="var(--color-accent)" stroke-width="8" stroke-linecap="round"></path>
+    <circle cx="52" cy="560" r="5" fill="var(--color-text)" opacity=".7"></circle>
+    <circle cx="182" cy="280" r="20" fill="var(--color-accent)" opacity=".18"></circle><circle cx="182" cy="280" r="9" fill="var(--color-accent)"></circle>
+  </svg>
+  <div style="position:absolute;top:12px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="padding:6px 12px;border-radius:20px;background:rgba(22,24,38,.82);font-size:11.5px;color:var(--color-accent-300)">Easy 6 km · effort 2/10</div>
+    <div style="width:34px;height:34px;border-radius:17px;background:rgba(22,24,38,.82);display:flex;align-items:center;justify-content:center;font-size:13px;color:rgba(233,233,237,.7)">♪</div>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;background:var(--color-bg);border-radius:20px 20px 0 0;padding:10px 20px 16px;box-shadow:0 -1px 0 var(--color-divider),0 -20px 40px rgba(0,0,0,.5)">
+    <div style="width:36px;height:4px;border-radius:2px;background:var(--color-divider);margin:0 auto 16px"></div>
+    <div style="display:flex;align-items:flex-end;gap:6px">
+      <div style="font:500 66px/1 Inter,system-ui,sans-serif;color:var(--color-text);letter-spacing:-.035em">{{ live.km }}</div>
+      <div style="font-size:15px;color:rgba(233,233,237,.45);padding-bottom:11px">km of 6</div>
+    </div>
+    <div style="display:flex;gap:28px;margin:18px 0 16px">
+      <div><div class="kick">Time</div><div style="font-size:22px;color:var(--color-text);margin-top:4px">{{ live.clock }}</div></div>
+      <div><div class="kick">Pace</div><div style="font-size:22px;color:var(--color-text);margin-top:4px">7:24</div></div>
+      <div><div class="kick">Heart</div><div style="font-size:22px;color:var(--color-text);margin-top:4px">138</div></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-secondary tapp" style="flex:1;height:46px">Pause</button>
+      <button class="btn btn-primary tapp" style="flex:1;height:46px">Finish</button>
+    </div>
+  </div>
+</div><div class="gp"></div></div></div>
+
+<div class="dv-opt" id="1g"><div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Effort in charge — the ring tells you to slow down</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ⌁ 84%</span></div><div class="sc" style="position:relative;background:#10111c">
+  <svg viewBox="0 0 360 700" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;opacity:.32">
+    <rect width="360" height="700" fill="#12131f"></rect>
+    <g stroke="#1b1d29" stroke-width="1"><path d="M0 120H360M0 260H360M0 400H360M0 540H360M70 0V700M180 0V700M290 0V700"></path></g>
+    <path d="M40 600C40 500 110 470 140 420c40-66 6-130 70-160" fill="none" stroke="var(--color-accent)" stroke-width="9" stroke-linecap="round"></path>
+  </svg>
+  <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(22,24,38,.4),rgba(22,24,38,.92) 55%)"></div>
+  <div style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;padding:0 20px">
+    <div style="padding:14px 0 6px;font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;color:rgba(233,233,237,.45)">Easy run · km 3 of 6</div>
+    <div style="position:relative;width:250px;height:250px;margin-top:22px">
+      <svg viewBox="0 0 200 200" style="width:100%;height:100%;transform:rotate(-90deg)">
+        <circle cx="100" cy="100" r="86" fill="none" stroke="var(--color-surface)" stroke-width="12"></circle>
+        <circle cx="100" cy="100" r="86" fill="none" stroke="var(--color-accent-700)" stroke-width="12" stroke-linecap="round" stroke-dasharray="216 540" opacity=".55"></circle>
+        <circle cx="100" cy="100" r="86" fill="none" stroke="var(--color-accent)" stroke-width="12" stroke-linecap="round" stroke-dasharray="{{ live.ring }} 540"></circle>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+        <div style="font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:rgba(233,233,237,.42)">Effort</div>
+        <div style="font:500 68px/1 Inter,system-ui,sans-serif;color:var(--color-text);letter-spacing:-.03em">3</div>
+        <div style="font-size:12.5px;color:var(--color-accent-400)">a touch hot</div>
+      </div>
+    </div>
+    <div style="margin-top:20px;padding:13px 18px;border-radius:24px;background:var(--color-accent-900);font-size:13px;color:var(--color-accent-300);text-align:center;line-height:1.45">Ease off for a minute.<br>You should be able to talk.</div>
+    <div style="display:flex;gap:34px;margin-top:auto;padding:22px 0">
+      <div style="text-align:center"><div class="kick">Time</div><div style="font-size:20px;color:var(--color-text);margin-top:4px">{{ live.clock }}</div></div>
+      <div style="text-align:center"><div class="kick">Distance</div><div style="font-size:20px;color:var(--color-text);margin-top:4px">{{ live.km }}</div></div>
+      <div style="text-align:center"><div class="kick">Heart</div><div style="font-size:20px;color:var(--color-text);margin-top:4px">148</div></div>
+    </div>
+    <div style="display:flex;gap:10px;width:100%;padding-bottom:10px">
+      <button class="btn btn-secondary tapp" style="flex:1;height:46px">Pause</button>
+      <button class="btn btn-primary tapp" style="flex:1;height:46px">Finish</button>
+    </div>
+  </div>
+</div><div class="gp"></div></div></div>
+
+<div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>The session in charge — map plus what's next</div>
+<div class="ph"><div class="sb"><span>9:41</span><span>▮▮▮ ⌁ 84%</span></div><div class="sc" style="background:#10111c">
+  <div style="padding:14px 20px 12px;background:var(--color-bg)">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <div class="kick">Step 2 of 4 · run easy</div><div style="font-size:11.5px;color:var(--color-accent-400)">{{ live.left }} left</div>
+    </div>
+    <div style="display:flex;gap:3px;margin-top:10px">
+      <div style="flex:1;height:4px;border-radius:2px;background:var(--color-accent)"></div>
+      <div style="flex:2.4;height:4px;border-radius:2px;background:var(--color-divider);overflow:hidden"><div style="width:{{ live.pct }};height:100%;background:var(--color-accent)"></div></div>
+      <div style="flex:1;height:4px;border-radius:2px;background:var(--color-divider)"></div>
+      <div style="flex:.8;height:4px;border-radius:2px;background:var(--color-divider)"></div>
+    </div>
+  </div>
+  <div style="position:relative;height:230px;flex:none">
+    <svg viewBox="0 0 360 230" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">
+      <rect width="360" height="230" fill="#12131f"></rect>
+      <g stroke="#1b1d29" stroke-width="1"><path d="M0 60H360M0 120H360M0 180H360M80 0V230M180 0V230M280 0V230"></path></g>
+      <path d="M40 196C40 150 96 140 126 108c34-36 16-70 58-84" fill="none" stroke="var(--color-accent)" stroke-width="7" stroke-linecap="round"></path>
+      <path d="M184 24c40-14 78 12 108-10" fill="none" stroke="var(--color-accent-700)" stroke-width="7" stroke-linecap="round" opacity=".4"></path>
+      <circle cx="184" cy="24" r="8" fill="var(--color-accent)"></circle>
+    </svg>
+  </div>
+  <div style="flex:1;padding:18px 20px 10px;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between">
+      <div><div class="kick">Elapsed</div><div style="font:500 46px/1 Inter,system-ui,sans-serif;color:var(--color-text);margin-top:6px;letter-spacing:-.03em">{{ live.clock }}</div></div>
+      <div style="text-align:right"><div class="kick">Distance</div><div style="font:500 46px/1 Inter,system-ui,sans-serif;color:var(--color-text);margin-top:6px;letter-spacing:-.03em">{{ live.km }}</div></div>
+    </div>
+    <div style="margin-top:20px;padding:14px 16px;border-radius:12px;background:var(--color-surface);box-shadow:var(--shadow-sm)">
+      <div class="kick">Up next</div>
+      <div style="font-size:14px;color:var(--color-text);margin-top:6px">4 × 1 min pick-up</div>
+      <div style="font-size:12px;color:rgba(233,233,237,.5);margin-top:3px;line-height:1.5">Brisk, not sprinting. Full minute walk between each.</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:auto;padding-bottom:8px">
+      <button class="btn btn-secondary tapp" style="flex:1;height:46px">Pause</button>
+      <button class="btn btn-secondary tapp" style="flex:1;height:46px">Skip step</button>
+      <button class="btn btn-primary tapp" style="flex:1;height:46px">Finish</button>
+    </div>
+  </div>
+</div><div class="gp"></div></div></div>
+
+</div>
+<p class="dv-next">Try next: "take <a class="dv-oid" href="#1g">1g</a>'s ring into <a class="dv-oid" href="#1f">1f</a>'s sheet" · "show <a class="dv-oid" href="#1h">1h</a> mid-interval" · "add a walk-break coach to <a class="dv-oid" href="#1f">1f</a>"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1000}}">
+const CHIP = "padding:14px 15px;border-radius:12px;background:var(--color-surface);box-shadow:0 0 0 1px ";
+const FEEL = "flex:1;text-align:center;padding:10px 4px;border-radius:10px;font-size:12px;";
+
+class Component extends DCLogic {
+  state = {
+    step: 0, base: 1, flow: "today", t: 1462, feel: 1,
+    openWeek: 6,
+    checks: [false, true, true, false, false, false]
+  };
+  componentDidMount() {
+    this.iv = setInterval(() => this.setState(s => ({ t: s.t + 1 })), 1000);
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+
+  renderVals() {
+    const S = this.state, set = (o) => this.setState(o);
+    const mmss = (n) => Math.floor(n / 60) + ":" + String(n % 60).padStart(2, "0");
+    const km = (2.9 + (S.t - 1462) * 0.0023).toFixed(2);
+
+    const baseData = [
+      ["I've never really run", "We start with walk-run intervals"],
+      ["I run 3–5 km sometimes", "Most first marathoners start here"],
+      ["I've done a 10k or half", "We can build straight to distance"],
+      ["Coming back after a break", "Extra easy weeks, no rush"]
+    ];
+    const baseOpts = baseData.map((b, i) => ({
+      title: b[0], sub: b[1],
+      style: CHIP + (S.base === i ? "var(--color-accent);background:var(--color-accent-900)" : "var(--color-divider)"),
+      pick: () => set({ base: i })
+    }));
+
+    const phases = [
+      { wk: "1–6", name: "Base", note: "Time on feet, no pace targets", tone: "var(--color-accent)" },
+      { wk: "7–13", name: "Build", note: "Long run grows to 26 km", tone: "rgba(233,233,237,.4)" },
+      { wk: "14–17", name: "Peak", note: "Two 30 km runs, then done", tone: "rgba(233,233,237,.4)" },
+      { wk: "18–20", name: "Taper", note: "Half the volume, all the sleep", tone: "rgba(233,233,237,.4)" }
+    ];
+
+    const dot = (fill, ring, size) => "width:" + size + "px;height:" + size + "px;border-radius:" + size + "px;background:" + fill + ";box-shadow:0 0 0 1px " + ring;
+    const week = [
+      { d: "M", km: "rest", s: "rest" }, { d: "T", km: "5", s: "miss" }, { d: "W", km: "rest", s: "rest" },
+      { d: "T", km: "7", s: "done" }, { d: "F", km: "rest", s: "rest" }, { d: "S", km: "16", s: "done" },
+      { d: "S", km: "6", s: "today" }
+    ].map(d => ({
+      d: d.d, km: d.km,
+      dot: d.s === "today" ? dot("var(--color-accent)", "rgba(145,132,217,.35)", 12)
+        : d.s === "done" ? dot("var(--color-accent-700)", "transparent", 12)
+        : d.s === "miss" ? dot("transparent", "var(--color-accent)", 12)
+        : dot("var(--color-neutral-900)", "transparent", 12)
+    }));
+
+    const splits = [3, 5, 4, 6, 5, 7].map((h, i) => ({
+      label: "km " + (i + 1),
+      bar: "width:100%;border-radius:3px;height:" + (h * 8) + "px;background:" + (i === 5 ? "var(--color-accent)" : "var(--color-accent-700)")
+    }));
+
+    const feelLabels = ["Easy", "Just right", "Hard", "Rough"];
+    const feels = feelLabels.map((l, i) => ({
+      label: l,
+      style: FEEL + (S.feel === i
+        ? "background:var(--color-accent-900);color:var(--color-accent-300);box-shadow:0 0 0 1px var(--color-accent)"
+        : "background:var(--color-surface);color:rgba(233,233,237,.6);box-shadow:var(--shadow-sm)"),
+      pick: () => set({ feel: i })
+    }));
+    const feelNotes = [
+      "Logged as easy. Next week's easy runs get 1 km longer.",
+      "Logged. Exactly where week 6 should feel — nothing changes.",
+      "Logged as hard. Thursday drops to 5 km so Saturday's long run still lands.",
+      "Logged as rough. Tomorrow becomes a rest day and we'll check in before the long run."
+    ];
+
+    const planBars = Array.from({ length: 20 }, (_, i) => {
+      const h = [10, 12, 14, 9, 16, 18, 17, 20, 22, 19, 24, 26, 25, 30, 28, 32, 30, 20, 14, 8][i];
+      const cur = i === 5;
+      return { style: "flex:1;border-radius:2px 2px 0 0;height:" + h + "px;background:" + (cur ? "var(--color-accent)" : i < 5 ? "var(--color-accent-700)" : "var(--color-neutral-900)") };
+    });
+
+    const wkDays = {
+      6: [["Mon", "Rest", "—", "rest"], ["Tue", "Easy run — missed", "5 km", "miss"], ["Thu", "Easy run", "7 km", "done"], ["Sat", "Long run", "16 km", "done"], ["Sun", "Easy run", "6 km", "today"]],
+      7: [["Mon", "Rest", "—", "rest"], ["Tue", "Easy run", "6 km", "next"], ["Thu", "Easy + strides", "7 km", "next"], ["Sat", "Long run", "18 km", "next"], ["Sun", "Walk or rest", "—", "rest"]],
+      8: [["Mon", "Rest", "—", "rest"], ["Tue", "Easy run", "6 km", "next"], ["Thu", "First pick-ups", "8 km", "next"], ["Sat", "Long run", "19 km", "next"], ["Sun", "Easy run", "5 km", "next"]]
+    };
+    const planWeeks = [
+      { n: 6, title: "Week 6 · this week", sub: "Base — last easy week before the build", total: "29 km" },
+      { n: 7, title: "Week 7", sub: "Build begins · long run 18 km", total: "31 km" },
+      { n: 8, title: "Week 8", sub: "First pick-ups · long run 19 km", total: "38 km" }
+    ].map(w => ({
+      title: w.title, sub: w.sub, total: w.total,
+      open: () => set({ openWeek: S.openWeek === w.n ? 0 : w.n }),
+      open2: S.openWeek === w.n,
+      style: "padding:14px 15px;border-radius:12px;background:" + (w.n === 6 ? "var(--color-accent-900)" : "var(--color-surface)") + ";box-shadow:0 0 0 1px " + (w.n === 6 ? "var(--color-accent-700)" : "var(--color-divider)"),
+      days: (wkDays[w.n] || []).map(d => ({
+        d: d[0], name: d[1], km: d[2],
+        tone: d[3] === "miss" ? "var(--color-accent-400)" : d[3] === "rest" ? "rgba(233,233,237,.4)" : "var(--color-text)",
+        dot: d[3] === "today" ? dot("var(--color-accent)", "rgba(145,132,217,.35)", 8)
+          : d[3] === "done" ? dot("var(--color-accent-700)", "transparent", 8)
+          : d[3] === "miss" ? dot("transparent", "var(--color-accent)", 8)
+          : dot("var(--color-neutral-900)", "transparent", 8)
+      }))
+    }));
+
+    const checkLabels = ["Shoes with 300+ km left in them", "Race kit tried on a long run", "Gels — 6, flavours you've tested", "Number collected", "Travel to the start planned", "Breakfast rehearsed"];
+    const checks = checkLabels.map((l, i) => {
+      const on = S.checks[i];
+      return {
+        label: l, mark: on ? "✓" : "",
+        tone: on ? "rgba(233,233,237,.45)" : "var(--color-text)",
+        box: "width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--color-bg);background:" + (on ? "var(--color-accent)" : "transparent") + ";box-shadow:0 0 0 1px " + (on ? "var(--color-accent)" : "var(--color-divider)"),
+        toggle: () => this.setState(s => { const c = s.checks.slice(); c[i] = !c[i]; return { checks: c }; })
+      };
+    });
+
+    const stepCta = ["Continue", "Build my plan", "Start week 6"][S.step];
+    return {
+      baseOpts, phases, week, splits, feels, planBars, planWeeks, checks,
+      baseShort: ["a standing start", "3–5 km", "a half marathon", "a break"][S.base],
+      feelNote: feelNotes[S.feel],
+      checkCount: S.checks.filter(Boolean).length + " of 6 ready",
+      ob: {
+        s0: S.step === 0, s1: S.step === 1, s2: S.step === 2, cta: stepCta,
+        b1: "var(--color-accent)", b2: S.step > 0 ? "var(--color-accent)" : "var(--color-divider)", b3: S.step > 1 ? "var(--color-accent)" : "var(--color-divider)",
+        next: () => set({ step: (S.step + 1) % 3 }),
+        back: () => set({ step: Math.max(0, S.step - 1) })
+      },
+      flow: {
+        today: S.flow === "today", live: S.flow === "live", done: S.flow === "done",
+        start: () => set({ flow: "live", t: 1462 }),
+        finish: () => set({ flow: "done" }),
+        back: () => set({ flow: "today" })
+      },
+      live: {
+        clock: mmss(S.t), km: km,
+        ring: Math.round(216 + (S.t % 60) * 1.2) + "",
+        pct: Math.round(40 + (S.t % 40)) + "%",
+        left: mmss(Math.max(0, 900 - (S.t % 900)))
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
