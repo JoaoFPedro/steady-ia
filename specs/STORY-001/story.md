@@ -17,8 +17,16 @@ O corredor hoje ajusta o equilíbrio entre musculação e corrida por tentativa 
 - [ ] Corredor consegue registrar uma Sessão de Treino de corrida (volume/distância, intensidade)
 - [ ] Corredor consegue registrar uma Sessão de Treino de musculação (grupo muscular/região trabalhada, intensidade)
 - [ ] Sistema alerta o corredor quando o padrão combinado da semana indica risco de sobrecarga (ex: musculação pesada de perna + aumento de volume de corrida)
-- [ ] Corredor consegue registrar dor/desconforto pós-treino, associada à Sessão de Treino
+- [ ] Corredor consegue registrar dor/desconforto pós-treino, com data e região do corpo
 - [ ] Regra de detecção de sobrecarga é rastreável a uma fonte reconhecida de treino (ADR obrigatório, conforme Lei do Domínio do Steady)
+
+> **Alinhado ao modelo real pelo `/sync` em 2026-08-16.** O critério dizia
+> "associada à Sessão de Treino", mas `PainLog` foi implementado como
+> `(Data, Região)` independente. A decisão foi deliberada no `/spec` da
+> STORY-003: dor costuma surgir horas ou dias após o treino, e frequentemente
+> sem uma sessão única a culpar — exigir o vínculo forçaria o corredor a
+> inventar uma atribuição que ele não tem. O critério foi corrigido para
+> descrever o que o domínio faz, não o contrário.
 
 ## Estimativa
 
