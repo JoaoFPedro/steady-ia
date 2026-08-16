@@ -1,0 +1,31 @@
+# Postgres de desenvolvimento.
+#
+# Credenciais idênticas às que `CustomWebApplicationFactory` usa via Testcontainers,
+# para que a connection string do dev seja a mesma dos testes a menos do host.
+# São credenciais locais e descartáveis — nada aqui vale fora da sua máquina.
+#
+# Esta máquina não tem o plugin `docker compose`. O equivalente em `docker run`:
+#
+#   docker run -d --name steady-db \
+#     -e POSTGRES_DB=steady -e POSTGRES_USER=steady -e POSTGRES_PASSWORD=steady \
+#     -p 5432:5432 -v steady-pgdata:/var/lib/postgresql/data postgres:16-alpine
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: steady-db
+    environment:
+      POSTGRES_DB: steady
+      POSTGRES_USER: steady
+      POSTGRES_PASSWORD: steady
+    ports:
+      - "5432:5432"
+    volumes:
+      - steady-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U steady -d steady"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  steady-pgdata:

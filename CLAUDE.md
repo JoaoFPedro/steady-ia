@@ -99,3 +99,48 @@ Não avance sem o cenário anterior verde. Se surgir decisão arquitetural: `doc
 - Se encontrar ambiguidade, pergunte
 - Se precisar de decisão arquitetural, proponha ADR
 - Artefatos de discovery vão para `.discovery/`; artefatos de spec e implementação vão para `specs/`
+- Sempre explique o que um comando de terminal faz antes ou junto da execução — nunca rode Bash silenciosamente
+
+## Ambiente Local — rodar e testar o app no celular
+
+Validado em 2026-08-16. Setup completo (Google Cloud, keystore, client IDs) em `docs/SETUP-LOGIN-GOOGLE.md`.
+
+**O ambiente é WSL2 em modo NAT.** O `hostname -I` devolve um IP interno (`172.17.x.x`) que o celular **não alcança**. O endereço que vale é o do Windows na rede: **192.168.0.28** (Ethernet).
+
+### Subir tudo (3 processos)
+
+```bash
+# 1. Banco — Postgres em container (credenciais iguais às dos testes)
+docker run -d --name steady-db \
+  -e POSTGRES_DB=steady -e POSTGRES_USER=steady -e POSTGRES_PASSWORD=steady \
+  -p 5432:5432 -v steady-pgdata:/var/lib/postgresql/data postgres:16-alpine
+# já existe? `docker start steady-db`. Esta máquina não tem o plugin `docker compose`.
+
+# 2. API — sobe já configurada pelo launchSettings.json (Google__ClientId + connection string).
+#    Esse arquivo é ignorado pelo git: na primeira vez, copie de launchSettings.example.json
+#    e preencha o client ID. Sem ele a API se recusa a subir, de propósito (ADR-002).
+dotnet run --project src/Steady.Api
+
+# 3. Dev server — o hostname é obrigatório, senão o Metro anuncia o IP do WSL
+cd src/steady-app && REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.28 npx expo start --clear
+```
+
+No celular, na tela "Development build": **Enter URL manually** → `http://192.168.0.28:8081`.
+**Não use o QR code** — ele aponta para o IP interno do WSL.
+
+Sanity check antes de culpar o app: `curl http://192.168.0.28:5050/health` → `{"status":"ok"}`.
+
+### Pré-requisitos que quebram silenciosamente
+
+- **Port proxy no Windows** (PowerShell admin) encaminhando 5050 e 8081 para o IP do WSL. **O IP do WSL muda a cada reboot** — quando o celular parar de alcançar, é quase sempre isso. Ver `docs/SETUP-LOGIN-GOOGLE.md`.
+- **Migrations aplicadas**: `dotnet-ef` está instalado mas fora do `PATH` (use `~/.dotnet/tools/dotnet-ef`) e **não lê o `launchSettings.json`** — passe `Google__ClientId` e `ConnectionStrings__SteadyDb` inline.
+- **Expo Go não funciona** neste app: `@react-native-google-signin` é módulo nativo e o import quebra na inicialização. Só development build (`.apk` do EAS, perfil `development`). Rebuild só é necessário quando muda algo **nativo** — `.env` e código JS vêm do dev server.
+
+### Roteiro de teste ponta a ponta
+
+1. Login com Google → home. Falhou? Suspeito nº 1: e-mail fora de *Usuários de teste* na tela de consentimento. Nº 2: divergência entre o Client ID Web do `.env` e o `Google__ClientId` da API (ADR-002).
+2. Registrar corrida → `docker exec -it steady-db psql -U steady -d steady -c "select * from running_sessions;"` deve ter `corredor_id` e `idempotency_key`.
+3. **Desligar o Wi-Fi**, registrar outra → app aceita, home mostra "1 registro pendente".
+4. **Religar** → o aviso some sozinho e a linha aparece no banco.
+
+Os passos 3 e 4 são a única prova de que a fila offline funciona no aparelho — nenhum teste automatizado cobre isso.
