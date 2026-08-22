@@ -4,5 +4,10 @@ namespace Steady.Infrastructure.Repositories;
 
 public interface ICorredorRepository
 {
-    Task<CorredorEntity> GetOrCreateBySubAsync(string googleSub, CancellationToken cancellationToken);
+    /// <summary>
+    /// Resolve o corredor pelo "sub" do Google, criando-o no primeiro acesso.
+    /// <paramref name="email"/> é gravado como cache do provedor — nunca usado para
+    /// localizar o corredor, e nulo não apaga o que já estava guardado (STORY-009).
+    /// </summary>
+    Task<CorredorEntity> GetOrCreateBySubAsync(string googleSub, string? email, CancellationToken cancellationToken);
 }

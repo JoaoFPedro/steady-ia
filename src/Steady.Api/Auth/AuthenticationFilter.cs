@@ -7,6 +7,8 @@ namespace Steady.Api.Auth;
 /// Valida o ID token do Google em toda requisição do grupo /api (ADR-002).
 /// Sem token válido: 401 antes de qualquer lógica de negócio.
 /// Com token válido: resolve/cria o Corredor por "sub" e disponibiliza via <see cref="CurrentCorredor"/>.
+/// O e-mail do token acompanha a resolução como cache do provedor (STORY-009) — nunca
+/// como identidade, e nunca em log (OWASP A09; dado pessoal, Constituição §3).
 /// </summary>
 public sealed class AuthenticationFilter(
     IGoogleTokenValidator tokenValidator,
@@ -26,12 +28,13 @@ public sealed class AuthenticationFilter(
         if (string.IsNullOrWhiteSpace(idToken))
             return Unauthorized(context, reason: "missing_bearer_token");
 
-        var sub = await tokenValidator.ValidateAndGetSubAsync(idToken);
+        var identity = await tokenValidator.ValidateAsync(idToken);
 
-        if (sub is null)
+        if (identity is null)
             return Unauthorized(context, reason: "invalid_or_expired_token");
 
-        var corredor = await corredorRepository.GetOrCreateBySubAsync(sub, context.HttpContext.RequestAborted);
+        var corredor = await corredorRepository.GetOrCreateBySubAsync(
+            identity.Sub, identity.Email, context.HttpContext.RequestAborted);
         currentCorredor.Id = corredor.Id;
 
         return await next(context);

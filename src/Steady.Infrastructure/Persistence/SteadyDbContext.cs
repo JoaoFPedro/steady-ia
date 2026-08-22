@@ -17,6 +17,9 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
             entity.HasKey(c => c.Id);
             entity.Property(c => c.GoogleSub).HasColumnName("google_sub").IsRequired();
             entity.HasIndex(c => c.GoogleSub).IsUnique();
+            // Sem índice único e sem IsRequired: e-mail repetido entre corredores é
+            // estado válido, e ausência também (STORY-009, regras 1 e 2).
+            entity.Property(c => c.Email).HasColumnName("email");
             entity.Property(c => c.CreatedAt).HasColumnName("created_at");
         });
 

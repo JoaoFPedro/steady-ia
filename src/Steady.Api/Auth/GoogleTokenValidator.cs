@@ -20,16 +20,26 @@ public sealed class GoogleTokenValidator(GoogleAuthOptions options) : IGoogleTok
         Audience = [options.ClientId],
     };
 
-    public async Task<string?> ValidateAndGetSubAsync(string idToken)
+    public async Task<GoogleIdentity?> ValidateAsync(string idToken)
     {
         try
         {
             var payload = await GoogleJsonWebSignature.ValidateAsync(idToken, _settings);
-            return payload.Subject;
+
+            // Sem "sub" não há identidade — tratar como token inválido é mais seguro que
+            // seguir com uma chave vazia, que colidiria entre corredores (ADR-002).
+            if (string.IsNullOrWhiteSpace(payload.Subject))
+                return null;
+
+            return new GoogleIdentity(payload.Subject, NormalizarEmail(payload.Email));
         }
         catch (InvalidJwtException)
         {
             return null;
         }
     }
+
+    /// <summary>Claim ausente chega como null ou vazio — os dois significam "sem e-mail".</summary>
+    private static string? NormalizarEmail(string? email) =>
+        string.IsNullOrWhiteSpace(email) ? null : email.Trim();
 }
