@@ -3,10 +3,18 @@ import { Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { PrimaryButton, Rule } from '../ui/Nocturne';
 import { color, radius, space, textAlpha, type } from '../theme/nocturne';
 import type { Exercise, TrainingPlanDocument, WeekPlanDay } from './trainingPlanDocument';
+import type { PlanRequestSummary } from './planRequest';
+import { formatRaceDate } from './raceDate';
+import {
+  EQUIPMENT_ACCESS_LABEL,
+  PAIN_AREA_LABEL,
+  RACE_DISTANCE_LABEL,
+} from './trainingPlanRequest';
 
-type SectionId = 'fases' | 'semana' | 'mobilidade' | 'regras';
+type SectionId = 'dados' | 'fases' | 'semana' | 'mobilidade' | 'regras';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
+  { id: 'dados', label: 'Seus dados' },
   { id: 'fases', label: 'Fases' },
   { id: 'semana', label: 'Semana' },
   { id: 'mobilidade', label: 'Mobilidade' },
@@ -21,27 +29,37 @@ const SECTIONS: { id: SectionId; label: string }[] = [
  */
 export function PlanningDocument({
   document,
+  request,
   topInset,
   onEdit,
 }: {
   document: TrainingPlanDocument;
+  /**
+   * O pedido que originou este planejamento. É a única parte que varia entre
+   * dois planejamentos: os treinos abaixo são o mesmo conteúdo para todos, até
+   * a geração deixar de ser mockada (spec STORY-010, regra 17).
+   */
+  request: PlanRequestSummary;
   topInset: number;
   onEdit: () => void;
 }) {
-  const [section, setSection] = useState<SectionId>('fases');
+  const [section, setSection] = useState<SectionId>('dados');
 
   return (
     <View style={s.screen}>
       <View style={[s.header, { paddingTop: topInset + space[4] }]}>
         <View style={s.headerTop}>
           <Text style={s.title} numberOfLines={2}>
-            {document.title}
+            {RACE_DISTANCE_LABEL[request.raceDistance] ?? request.raceDistance}
           </Text>
           <Pressable onPress={onEdit} hitSlop={space[3]}>
             <Text style={s.editLink}>Editar dados</Text>
           </Pressable>
         </View>
-        <Text style={s.subtitle}>{document.subtitle}</Text>
+        <Text style={s.subtitle}>
+          Prova em {formatRaceDate(request.raceDate)}
+          {request.pending ? ' · ainda não enviado' : ''}
+        </Text>
         <View style={s.tabs}>
           {SECTIONS.map((sec) => {
             const active = sec.id === section;
@@ -56,6 +74,7 @@ export function PlanningDocument({
       </View>
 
       <ScrollView style={s.body} contentContainerStyle={s.bodyContent} showsVerticalScrollIndicator={false}>
+        {section === 'dados' && <SeusDadosSection request={request} />}
         {section === 'fases' && <FasesSection document={document} />}
         {section === 'semana' && <SemanaSection document={document} />}
         {section === 'mobilidade' && <MobilidadeSection document={document} />}
@@ -65,6 +84,74 @@ export function PlanningDocument({
       <View style={s.footer}>
         <PrimaryButton label="Começar semana 1" onPress={() => setSection('semana')} />
       </View>
+    </View>
+  );
+}
+
+/**
+ * As respostas gravadas deste pedido. Campo opcional não respondido simplesmente
+ * não aparece — sem "—", sem "não informado" (spec regra 16).
+ */
+function SeusDadosSection({ request }: { request: PlanRequestSummary }) {
+  const linhas: { rotulo: string; valor: string }[] = [
+    { rotulo: 'Distância', valor: RACE_DISTANCE_LABEL[request.raceDistance] ?? request.raceDistance },
+    { rotulo: 'Data da prova', valor: formatRaceDate(request.raceDate) },
+    { rotulo: 'Primeira vez nesta distância', valor: request.raceIsFirstTime ? 'Sim' : 'Não' },
+    { rotulo: 'Maior corrida recente', valor: `${request.longestRecentRunKm} km` },
+    { rotulo: 'Treinos por semana', valor: `${request.trainingDaysPerWeek} dias` },
+  ];
+
+  if (request.currentWeeklyRunningDays !== null)
+    linhas.push({ rotulo: 'Corridas por semana hoje', valor: `${request.currentWeeklyRunningDays}` });
+
+  if (request.referenceDistanceKm !== null && request.referenceDuration)
+    linhas.push({
+      rotulo: 'Referência',
+      valor: `${request.referenceDistanceKm} km em ${request.referenceDuration}`,
+    });
+
+  if (request.strengthSessionMinutes !== null)
+    linhas.push({ rotulo: 'Sessão de força', valor: `${request.strengthSessionMinutes} min` });
+
+  if (request.equipmentAccess)
+    linhas.push({
+      rotulo: 'Equipamento',
+      valor: EQUIPMENT_ACCESS_LABEL[request.equipmentAccess] ?? request.equipmentAccess,
+    });
+
+  if (request.recurringPainAreas.length > 0)
+    linhas.push({
+      rotulo: 'Dores recorrentes',
+      valor: request.recurringPainAreas.map((area) => PAIN_AREA_LABEL[area] ?? area).join(', '),
+    });
+
+  return (
+    <View>
+      <Text style={s.kick}>O que você respondeu</Text>
+      <View style={s.dataList}>
+        {linhas.map((linha) => (
+          <View key={linha.rotulo} style={s.dataRow}>
+            <Text style={s.dataLabel}>{linha.rotulo}</Text>
+            <Text style={s.dataValue}>{linha.valor}</Text>
+          </View>
+        ))}
+      </View>
+
+      {request.priorInjuries && (
+        <>
+          <Rule />
+          <Text style={s.kick}>Lesões anteriores</Text>
+          <Text style={s.paragraph}>{request.priorInjuries}</Text>
+        </>
+      )}
+
+      <Rule />
+      {/* Honestidade explícita: o plano abaixo ainda não é calculado a partir
+          destas respostas (DISC-002 — geração fica para depois). */}
+      <Text style={s.paragraph}>
+        O plano nas abas seguintes ainda não é calculado a partir destas respostas —
+        elas ficam guardadas para quando a geração entrar.
+      </Text>
     </View>
   );
 }
@@ -248,6 +335,10 @@ function BulletList({ items }: { items: string[] }) {
 }
 
 const s = StyleSheet.create({
+  dataList: { marginTop: space[4], gap: space[3] },
+  dataRow: { flexDirection: 'row', justifyContent: 'space-between', gap: space[6] },
+  dataLabel: { color: textAlpha.label, fontSize: type.meta, flexShrink: 1 },
+  dataValue: { color: color.text, fontSize: type.meta, fontWeight: '600', textAlign: 'right', flexShrink: 1 },
   screen: { flex: 1, backgroundColor: color.bg },
 
   header: { paddingHorizontal: space[8], paddingBottom: 0 },

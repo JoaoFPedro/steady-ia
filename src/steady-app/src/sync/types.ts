@@ -6,13 +6,20 @@
  * crítica #2 do DISC-001 é justamente que ele registre de forma consistente.
  */
 
-export type RecordKind = 'running' | 'strength' | 'pain';
+/**
+ * `plan` entrou na STORY-010: o pedido de plano segue o mesmo caminho de um
+ * treino — fila primeiro, rede depois. Montar um plano é coisa de casa, não da
+ * rua, mas fazer dele a única ação do app que exige sinal quebraria a
+ * expectativa que a STORY-003 estabeleceu.
+ */
+export type RecordKind = 'running' | 'strength' | 'pain' | 'plan';
 
 /** Rota da API para cada tipo de registro (STORY-002). */
 export const ENDPOINT_BY_KIND: Record<RecordKind, string> = {
   running: '/api/running-sessions',
   strength: '/api/strength-sessions',
   pain: '/api/pain-logs',
+  plan: '/api/plan-requests',
 };
 
 export type PendingRecord = {

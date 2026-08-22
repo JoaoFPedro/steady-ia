@@ -32,6 +32,10 @@ namespace Steady.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("Email")
+                        .HasColumnType("text")
+                        .HasColumnName("email");
+
                     b.Property<string>("GoogleSub")
                         .IsRequired()
                         .HasColumnType("text")
@@ -76,6 +80,85 @@ namespace Steady.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("pain_logs", (string)null);
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.PlanRequestEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CorredorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("corredor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("CurrentWeeklyRunningDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("current_weekly_running_days");
+
+                    b.Property<string>("EquipmentAccess")
+                        .HasColumnType("text")
+                        .HasColumnName("equipment_access");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<double>("LongestRecentRunKm")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longest_recent_run_km");
+
+                    b.Property<string>("PriorInjuries")
+                        .HasColumnType("text")
+                        .HasColumnName("prior_injuries");
+
+                    b.Property<string>("RaceDate")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("race_date");
+
+                    b.Property<string>("RaceDistance")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("race_distance");
+
+                    b.Property<bool>("RaceIsFirstTime")
+                        .HasColumnType("boolean")
+                        .HasColumnName("race_is_first_time");
+
+                    b.Property<string[]>("RecurringPainAreas")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("recurring_pain_areas");
+
+                    b.Property<double?>("ReferenceDistanceKm")
+                        .HasColumnType("double precision")
+                        .HasColumnName("reference_distance_km");
+
+                    b.Property<string>("ReferenceDuration")
+                        .HasColumnType("text")
+                        .HasColumnName("reference_duration");
+
+                    b.Property<int?>("StrengthSessionMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("strength_session_minutes");
+
+                    b.Property<int>("TrainingDaysPerWeek")
+                        .HasColumnType("integer")
+                        .HasColumnName("training_days_per_week");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorredorId");
+
+                    b.HasIndex("CorredorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("plan_requests", (string)null);
                 });
 
             modelBuilder.Entity("Steady.Infrastructure.Persistence.RunningSessionEntity", b =>
@@ -162,6 +245,42 @@ namespace Steady.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("strength_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.PainLogEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.PlanRequestEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.RunningSessionEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.StrengthSessionEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

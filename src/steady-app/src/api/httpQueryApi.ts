@@ -1,5 +1,7 @@
 import type { TokenSource } from '../auth/googleSession';
 import type { OverloadView, QueryApi, QueryResult, TrainingSessionSummary } from './queryApi';
+import type { PlanRequestSummary } from '../planning/planRequest';
+import type { PlanRequestReader } from '../planning/planListState';
 
 /** Só o suficiente de `fetch` para uma leitura autenticada. */
 type FetchLike = (
@@ -33,7 +35,7 @@ type SessionBody = {
  * expirado uma vez e repetir a chamada, para o corredor não cair no login no
  * meio de uma consulta (ADR-002).
  */
-export class HttpQueryApi implements QueryApi {
+export class HttpQueryApi implements QueryApi, PlanRequestReader {
   constructor(
     private readonly baseUrl: string,
     private readonly session: TokenSource,
@@ -48,6 +50,11 @@ export class HttpQueryApi implements QueryApi {
   async trainingHistory(): Promise<QueryResult<TrainingSessionSummary[]>> {
     const result = await this.get('/api/training-sessions');
     return result.status === 'ok' ? { status: 'ok', data: toSessions(result.data) } : result;
+  }
+
+  async planRequests(): Promise<QueryResult<PlanRequestSummary[]>> {
+    const result = await this.get('/api/plan-requests');
+    return result.status === 'ok' ? { status: 'ok', data: toPlanRequests(result.data) } : result;
   }
 
   private async get(path: string): Promise<QueryResult<unknown>> {
@@ -129,3 +136,31 @@ const numberOrNull = (value: unknown): number | null =>
 
 const stringOrNull = (value: unknown): string | null =>
   typeof value === 'string' ? value : null;
+
+/**
+ * Tradução defensiva do corpo da API. Tudo que vem da rede é `unknown` até
+ * provar o contrário — mesmo padrão de `toSessions`.
+ */
+function toPlanRequests(body: unknown): PlanRequestSummary[] {
+  if (!Array.isArray(body)) return [];
+
+  return body.map((item: Record<string, unknown>) => ({
+    idempotencyKey: String(item.idempotencyKey),
+    createdAt: String(item.createdAt),
+    pending: false,
+    raceDistance: String(item.raceDistance) as PlanRequestSummary['raceDistance'],
+    raceDate: String(item.raceDate),
+    raceIsFirstTime: item.raceIsFirstTime === true,
+    longestRecentRunKm: Number(item.longestRecentRunKm),
+    trainingDaysPerWeek: Number(item.trainingDaysPerWeek),
+    currentWeeklyRunningDays: numberOrNull(item.currentWeeklyRunningDays),
+    referenceDistanceKm: numberOrNull(item.referenceDistanceKm),
+    referenceDuration: stringOrNull(item.referenceDuration),
+    strengthSessionMinutes: numberOrNull(item.strengthSessionMinutes),
+    equipmentAccess: stringOrNull(item.equipmentAccess) as PlanRequestSummary['equipmentAccess'],
+    recurringPainAreas: Array.isArray(item.recurringPainAreas)
+      ? (item.recurringPainAreas.map(String) as PlanRequestSummary['recurringPainAreas'])
+      : [],
+    priorInjuries: stringOrNull(item.priorInjuries),
+  }));
+}

@@ -27,6 +27,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRunningSessionRepository, RunningSessionRepository>();
         services.AddScoped<IStrengthSessionRepository, StrengthSessionRepository>();
         services.AddScoped<IPainLogRepository, PainLogRepository>();
+        services.AddScoped<IPlanRequestRepository, PlanRequestRepository>();
 
         return services;
     }

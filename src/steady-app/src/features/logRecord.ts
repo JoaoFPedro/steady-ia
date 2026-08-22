@@ -33,8 +33,20 @@ export async function logRecord(
 ): Promise<LogOutcome> {
   await queue.enqueue(kind, payload);
 
-  const summary = await syncEngine.sync();
+  return outcomeOf(await syncEngine.sync(), kind);
+}
 
+/**
+ * Traduz o resultado do sync no desfecho que o corredor vê.
+ *
+ * Extraído de `logRecord` na STORY-010: o pedido de plano precisa do mesmo
+ * desfecho, mas também da chave de idempotência que o `enqueue` devolve — e por
+ * isso não pode simplesmente chamar `logRecord`.
+ */
+export function outcomeOf(
+  summary: Awaited<ReturnType<SyncEngine['sync']>>,
+  kind: RecordKind,
+): LogOutcome {
   const rejected = summary.rejected.find((r) => r.kind === kind);
   if (rejected) return { status: 'rejected', message: rejected.message };
 

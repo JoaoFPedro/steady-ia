@@ -1,37 +1,45 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Card, Kicker, Muted, PrimaryButton } from '../../src/ui/Nocturne';
-import { color, radius, space, textAlpha, type } from '../../src/theme/nocturne';
-import { RACE_DISTANCES } from '../../src/planning/trainingPlanRequest';
-import { listGeneratedPlans, type GeneratedPlan } from '../../src/planning/generatedPlansStore';
-
-const RACE_DISTANCE_LABEL: Record<string, string> = Object.fromEntries(
-  RACE_DISTANCES.map((option) => [option.value, option.label]),
-);
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Card, Kicker, Muted, NoticeStrip, PrimaryButton } from '../../src/ui/Nocturne';
+import { color, space, textAlpha, type } from '../../src/theme/nocturne';
+import { loadPlanList, type PlanListState } from '../../src/planning/planListState';
+import { formatRaceDate } from '../../src/planning/raceDate';
+import { RACE_DISTANCE_LABEL } from '../../src/planning/trainingPlanRequest';
+import { goToLogin } from '../../src/auth/goToLogin';
+import { queryApi, recordQueue } from '../../src/services';
 
 /**
- * Planejamento (STORY-006/STORY-008) — a aba mostra os planos já criados
- * e o botão para criar mais um. Não é um estado interno alternando entre
- * form/lista/documento: criar e visualizar são rotas próprias
- * (`/planning/new`, `/planning/plan`, irmãs de `log/*`), do mesmo jeito que
- * o resto do app já empilha telas sobre uma aba. A aba, sozinha, é sempre
- * esta lista.
+ * A aba **é** a lista de planejamentos criados (STORY-008), agora vinda do
+ * servidor (STORY-010): ela sobrevive a fechar o app e é a mesma em qualquer
+ * aparelho do corredor.
  */
 export default function PlanningScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [plans, setPlans] = useState<GeneratedPlan[]>(() => listGeneratedPlans());
+  const [state, setState] = useState<PlanListState>({ status: 'ok', plans: [] });
+  const [loading, setLoading] = useState(true);
 
-  // Recarrega ao voltar de `/planning/new`: um plano pode ter sido criado.
   useFocusEffect(
     useCallback(() => {
-      setPlans(listGeneratedPlans());
-    }, []),
+      let ativo = true;
+
+      loadPlanList(recordQueue, queryApi).then((novo) => {
+        if (!ativo) return;
+        if (novo.status === 'sessionLost') return goToLogin(router);
+
+        setState(novo);
+        setLoading(false);
+      });
+
+      return () => {
+        ativo = false;
+      };
+    }, [router]),
   );
 
-  const mostRecentId = plans[0]?.id;
+  const maisRecente = state.plans[0]?.idempotencyKey;
 
   return (
     <ScrollView
@@ -42,24 +50,48 @@ export default function PlanningScreen() {
       <Kicker accent>Planejamento</Kicker>
       <Text style={s.title}>Seus planejamentos</Text>
 
-      {plans.length === 0 ? (
+      {/* "Não consegui carregar" nunca vira "você não tem nenhum": são estados
+          diferentes, e só um deles convida a criar (ADR-004, spec regra 14). */}
+      {state.status === 'unavailable' && (
         <View style={s.spaced}>
-          <Muted>Você ainda não criou nenhum planejamento.</Muted>
+          <NoticeStrip>
+            <Text style={s.noticeText}>
+              Não foi possível carregar seus planejamentos. O que está aqui é o que
+              ainda não subiu deste aparelho.
+            </Text>
+          </NoticeStrip>
+        </View>
+      )}
+
+      {state.plans.length === 0 ? (
+        <View style={s.spaced}>
+          <Muted>
+            {loading
+              ? 'Carregando…'
+              : state.status === 'unavailable'
+                ? 'Nada guardado neste aparelho.'
+                : 'Você ainda não criou nenhum planejamento.'}
+          </Muted>
         </View>
       ) : (
         <View style={s.listItems}>
-          {plans.map((plan) => {
-            const isActive = plan.id === mostRecentId;
+          {state.plans.map((plan) => {
+            const ativo = plan.idempotencyKey === maisRecente;
             return (
-              <Pressable key={plan.id} onPress={() => router.push('/planning/plan')}>
+              <Pressable
+                key={plan.idempotencyKey}
+                onPress={() => router.push(`/planning/plan?key=${plan.idempotencyKey}`)}
+              >
                 <Card style={s.listItem}>
                   <View style={s.listItemRow}>
                     <View style={s.listItemBody}>
-                      <Kicker accent={isActive}>{isActive ? 'Ativo' : 'Anterior'}</Kicker>
+                      <Kicker accent={ativo}>
+                        {plan.pending ? 'Pendente' : ativo ? 'Ativo' : 'Anterior'}
+                      </Kicker>
                       <Text style={s.listItemTitle}>
                         {RACE_DISTANCE_LABEL[plan.raceDistance] ?? plan.raceDistance}
                       </Text>
-                      <Muted>Prova em {plan.raceDate}</Muted>
+                      <Muted>Prova em {formatRaceDate(plan.raceDate)}</Muted>
                     </View>
                     <Text style={s.chevron}>›</Text>
                   </View>
@@ -80,12 +112,13 @@ export default function PlanningScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.bg },
   content: { paddingHorizontal: space[8], paddingBottom: space[8] * 2 },
-  title: { color: color.text, fontSize: type.section, fontWeight: '500', marginTop: space[2] },
-  listItems: { gap: space[3], marginTop: space[6] },
-  listItem: { borderRadius: radius.md },
-  listItemRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  listItemBody: { flex: 1 },
-  listItemTitle: { color: color.text, fontSize: type.body, marginTop: space[2], marginBottom: 2 },
-  chevron: { color: textAlpha.faint, fontSize: type.cardTitle, paddingTop: space[1] },
-  spaced: { marginTop: space[8] },
+  title: { color: color.text, fontSize: type.title, fontWeight: '600', marginTop: space[2] },
+  spaced: { marginTop: space[6] },
+  listItems: { marginTop: space[6], gap: space[4] },
+  listItem: { paddingVertical: space[4] },
+  listItemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  listItemBody: { flex: 1, gap: space[1] },
+  listItemTitle: { color: color.text, fontSize: type.cardTitle, fontWeight: '600' },
+  chevron: { color: textAlpha.ghost, fontSize: type.cardTitle, marginLeft: space[4] },
+  noticeText: { color: color.accentRamp[400], fontSize: type.meta, lineHeight: 19 },
 });

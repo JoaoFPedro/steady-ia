@@ -73,3 +73,18 @@ export const DERIVED_FIELDS: string[] = [
   'Zonas de ritmo (fácil, moderado, forte), a partir do seu tempo de referência.',
   'Semanas de recuo a cada 3 semanas de progressão.',
 ];
+
+/** Rótulo de exibição por distância — usado pela lista e pelo documento do pedido. */
+export const RACE_DISTANCE_LABEL: Record<string, string> = Object.fromEntries(
+  RACE_DISTANCES.map((opcao) => [opcao.value, opcao.label]),
+);
+
+/** Rótulo de exibição por acesso a equipamento. */
+export const EQUIPMENT_ACCESS_LABEL: Record<string, string> = Object.fromEntries(
+  EQUIPMENT_ACCESS.map((opcao) => [opcao.value, opcao.label]),
+);
+
+/** Rótulo de exibição por região de dor. */
+export const PAIN_AREA_LABEL: Record<string, string> = Object.fromEntries(
+  PAIN_AREAS.map((opcao) => [opcao.value, opcao.label]),
+);

@@ -21,7 +21,7 @@ import { useAccountMenu } from '../../src/account/useAccountMenu';
 import { loadHomeState, type HomeState } from '../../src/home/homeState';
 import { todaysTraining } from '../../src/planning/todaysTraining';
 import { TRAINING_PLAN_DOCUMENT } from '../../src/planning/trainingPlanDocument';
-import { latestGeneratedPlan } from '../../src/planning/generatedPlansStore';
+import { loadPlanList } from '../../src/planning/planListState';
 
 const HEADER_AVATAR_SIZE = 32;
 
@@ -34,6 +34,12 @@ const HEADER_AVATAR_SIZE = 32;
 export default function HomeScreen() {
   const router = useRouter();
   const [state, setState] = useState<HomeState | null>(null);
+  /**
+   * Chave do planejamento mais recente, ou `null` se não houver nenhum. Decide
+   * para onde "Ver plano da semana" leva (STORY-008) — agora vindo do servidor,
+   * já que a lista deixou de viver na memória do processo (STORY-010).
+   */
+  const [latestPlanKey, setLatestPlanKey] = useState<string | null>(null);
   const menu = useAccountMenu();
   // Sem a barra do Stack, o topo da tela é a barra de status: o recuo é nosso.
   const insets = useSafeAreaInsets();
@@ -48,6 +54,14 @@ export default function HomeScreen() {
         if (!active) return;
         if (loaded.sessionLost) return goToLogin(router);
         setState(loaded);
+      });
+
+      // Leitura separada e tolerante: falhar aqui não pode derrubar a home. Sem
+      // planejamento conhecido, o botão leva ao formulário — o mesmo destino de
+      // quando de fato não existe nenhum.
+      loadPlanList(recordQueue, queryApi).then((lista) => {
+        if (!active) return;
+        setLatestPlanKey(lista.plans[0]?.idempotencyKey ?? null);
       });
 
       return () => {
@@ -133,7 +147,11 @@ export default function HomeScreen() {
           <View style={s.spaced}>
             <SecondaryButton
               label="Ver plano da semana"
-              onPress={() => router.push(latestGeneratedPlan() ? '/planning/plan' : '/planning/new')}
+              onPress={() =>
+                router.push(
+                  latestPlanKey ? `/planning/plan?key=${latestPlanKey}` : '/planning/new',
+                )
+              }
             />
           </View>
         </Card>

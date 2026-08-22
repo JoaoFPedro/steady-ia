@@ -33,6 +33,7 @@ api.MapStrengthSessionEndpoints();
 api.MapPainLogEndpoints();
 api.MapOverloadAssessmentEndpoints();
 api.MapTrainingHistoryEndpoints();
+api.MapPlanRequestEndpoints();
 
 app.Run();
 

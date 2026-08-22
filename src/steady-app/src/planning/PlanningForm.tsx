@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Field } from '../ui/Field';
 import { Choice } from '../ui/Choice';
-import { Card, Kicker, Muted, PrimaryButton } from '../ui/Nocturne';
+import { Card, Kicker, Muted, NoticeStrip, PrimaryButton } from '../ui/Nocturne';
 import { color, radius, space, textAlpha, type } from '../theme/nocturne';
 import { MultiChoice } from './MultiChoice';
+import { maskRaceDate, parseRaceDate, raceDateMessage } from './raceDate';
+import type { PlanRequestPayload } from './planRequest';
 import {
   DERIVED_FIELDS,
   EQUIPMENT_ACCESS,
@@ -33,9 +35,16 @@ const TOTAL_WEEKS_LABEL = '24 semanas';
  * "24 semanas" — o que o documento de fato tem — em vez de um número
  * calculado da data que ainda não é usado para nada.
  */
-export type GeneratePlanInput = { raceDistance: RaceDistance; raceDate: string };
-
-export function PlanningForm({ onGenerate }: { onGenerate: (input: GeneratePlanInput) => void }) {
+export function PlanningForm({
+  onGenerate,
+  saving = false,
+  problem = null,
+}: {
+  onGenerate: (payload: PlanRequestPayload) => void;
+  saving?: boolean;
+  problem?: string | null;
+}) {
+  const [dateProblem, setDateProblem] = useState<string | null>(null);
   const [raceDistance, setRaceDistance] = useState<RaceDistance | null>(null);
   const [firstTime, setFirstTime] = useState(false);
   const [raceDate, setRaceDate] = useState('');
@@ -56,6 +65,35 @@ export function PlanningForm({ onGenerate }: { onGenerate: (input: GeneratePlanI
     longestRecentRunKm.trim() !== '' &&
     trainingDaysPerWeek !== null;
 
+  /**
+   * A data é o único campo com formato: valida aqui e normaliza para ISO antes de
+   * sair da tela, para que exista um ponto só de conversão (ADR-007). Os demais
+   * campos já vêm tipados das escolhas.
+   */
+  function enviar() {
+    const data = parseRaceDate(raceDate);
+
+    if (data.status !== 'ok') {
+      setDateProblem(raceDateMessage(data.status));
+      return;
+    }
+
+    onGenerate({
+      raceDistance: raceDistance!,
+      raceDate: data.iso,
+      raceIsFirstTime: firstTime,
+      longestRecentRunKm: numero(longestRecentRunKm),
+      trainingDaysPerWeek: Number(trainingDaysPerWeek),
+      currentWeeklyRunningDays: numeroOuNulo(weeklyRunningDays),
+      referenceDistanceKm: numeroOuNulo(referenceDistanceKm),
+      referenceDuration: textoOuNulo(referenceDuration),
+      strengthSessionMinutes: numeroOuNulo(strengthMinutes),
+      equipmentAccess: equipment,
+      recurringPainAreas: painAreas,
+      priorInjuries: textoOuNulo(priorInjuries),
+    });
+  }
+
   return (
     <View>
       <Text style={s.title}>Montar meu plano</Text>
@@ -74,9 +112,14 @@ export function PlanningForm({ onGenerate }: { onGenerate: (input: GeneratePlanI
           <Field
             label="Data da prova"
             value={raceDate}
-            onChangeText={setRaceDate}
-            placeholder="AAAA-MM-DD"
+            onChangeText={(texto) => {
+              setRaceDate(maskRaceDate(texto));
+              setDateProblem(null);
+            }}
+            placeholder="dd/mm/aaaa"
+            keyboardType="numeric"
           />
+          {dateProblem && <Text style={s.fieldProblem}>{dateProblem}</Text>}
         </View>
       </View>
 
@@ -212,11 +255,22 @@ export function PlanningForm({ onGenerate }: { onGenerate: (input: GeneratePlanI
         </View>
       </Card>
 
+      {problem && (
+        <View style={s.problem}>
+          <NoticeStrip>
+            <Text style={s.problemText}>
+              <Text style={s.problemStrong}>Não foi gerado. </Text>
+              {problem}
+            </Text>
+          </NoticeStrip>
+        </View>
+      )}
+
       <View style={s.submit}>
         <PrimaryButton
-          label={`Gerar plano de ${TOTAL_WEEKS_LABEL}`}
-          disabled={!complete}
-          onPress={() => onGenerate({ raceDistance: raceDistance!, raceDate })}
+          label={saving ? 'Gerando…' : `Gerar plano de ${TOTAL_WEEKS_LABEL}`}
+          disabled={!complete || saving}
+          onPress={enviar}
         />
       </View>
     </View>
@@ -243,6 +297,10 @@ function FirstTimeToggle({ checked, onToggle }: { checked: boolean; onToggle: ()
 }
 
 const s = StyleSheet.create({
+  fieldProblem: { color: color.accentRamp[400], fontSize: type.meta, marginTop: space[2] },
+  problem: { marginTop: space[6] },
+  problemText: { color: color.accentRamp[400], fontSize: type.meta, lineHeight: 19 },
+  problemStrong: { color: color.text },
   title: { color: color.text, fontSize: type.section, fontWeight: '500', marginTop: space[2] },
   section: { marginTop: space[8] },
   sectionBody: { marginTop: space[4] },
@@ -300,3 +358,20 @@ const s = StyleSheet.create({
 
   submit: { marginTop: space[8] },
 });
+
+/**
+ * Vírgula é o separador decimal que o teclado brasileiro oferece — sem trocar por
+ * ponto, `Number('21,5')` é `NaN`. Mesmo tratamento de `log/run.tsx`.
+ */
+const numero = (valor: string): number => Number(valor.trim().replace(',', '.'));
+
+/** Campo opcional em branco é ausência, não zero. */
+const numeroOuNulo = (valor: string): number | null => {
+  const limpo = valor.trim();
+  if (limpo === '') return null;
+
+  const convertido = numero(limpo);
+  return Number.isNaN(convertido) ? null : convertido;
+};
+
+const textoOuNulo = (valor: string): string | null => valor.trim() || null;
