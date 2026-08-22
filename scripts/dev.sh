@@ -32,7 +32,9 @@ erro()  { printf '  %s✗%s %s\n' "$R" "$N" "$1" >&2; }
 if [ "${1:-}" = "--stop" ]; then
   tmux kill-session -t "$SESSION" 2>/dev/null && ok "sessão tmux encerrada" \
     || aviso "nenhuma sessão '$SESSION' em execução"
-  echo "  o banco ($DB_CONTAINER) continua de pé — 'docker stop $DB_CONTAINER' para derrubar"
+  if [ -n "$(docker ps -q -f "name=^${DB_CONTAINER}$")" ]; then
+    echo "  o banco local ($DB_CONTAINER) continua de pé — 'docker stop $DB_CONTAINER' para derrubar"
+  fi
   exit 0
 fi
 
@@ -61,40 +63,72 @@ if [ "$APP_CLIENT_ID" != "$API_CLIENT_ID" ]; then
   exit 1
 fi
 
-# --- 1. banco -----------------------------------------------------------------
-passo "Banco (Postgres em container)"
-if [ -z "$(docker ps -q -f "name=^${DB_CONTAINER}$")" ]; then
-  if [ -n "$(docker ps -aq -f "name=^${DB_CONTAINER}$")" ]; then
-    docker start "$DB_CONTAINER" >/dev/null
-    ok "container existente reiniciado"
-  else
-    docker run -d --name "$DB_CONTAINER" \
-      -e POSTGRES_DB=steady -e POSTGRES_USER=steady -e POSTGRES_PASSWORD=steady \
-      -p 5432:5432 -v steady-pgdata:/var/lib/postgresql/data postgres:16-alpine >/dev/null
-    ok "container criado"
-  fi
-else
-  ok "já estava de pé"
-fi
+# A connection string sai do launchSettings.json — mesma fonte única do Client ID.
+# Antes ela estava repetida aqui em texto puro, o que só era inofensivo enquanto o
+# banco era local e descartável: com banco gerenciado, seria uma senha real num
+# arquivo versionado.
+CONN="$(sed -n 's/.*"ConnectionStrings__SteadyDb"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+  "$REPO/src/Steady.Api/Properties/launchSettings.json" | head -1)"
+[ -n "$CONN" ] || {
+  erro "não achei ConnectionStrings__SteadyDb no launchSettings.json"
+  echo "     veja o formato em launchSettings.example.json" >&2
+  exit 1
+}
 
-# Postgres aceita conexão alguns segundos depois do container subir; sem esperar,
-# a migration falha por corrida e não por configuração.
-printf '  aguardando o banco aceitar conexão'
-for _ in $(seq 30); do
-  docker exec "$DB_CONTAINER" pg_isready -U steady -d steady >/dev/null 2>&1 && break
-  printf '.'; sleep 1
-done
-echo
-docker exec "$DB_CONTAINER" pg_isready -U steady -d steady >/dev/null 2>&1 \
-  || { erro "banco não respondeu em 30s"; exit 1; }
-ok "pronto para conexão"
+# Banco local em container ou gerenciado na nuvem? Só o primeiro precisa de docker.
+case "$CONN" in
+  *Host=localhost*|*Host=127.0.0.1*) DB_LOCAL=1 ;;
+  *)                                 DB_LOCAL=0 ;;
+esac
+# Lê um campo da connection string do Npgsql (`Chave=valor;...`). Usado para
+# falar com o banco via psql, que não entende o formato do Npgsql.
+conn_campo() { # $1 = chave, ex: Port
+  printf '%s' "$CONN" | tr ';' '\n' \
+    | sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//Ip" \
+    | head -1 | sed 's/^"//; s/"$//'
+}
+DB_HOST="$(conn_campo Host)"
+
+# --- 1. banco -----------------------------------------------------------------
+if [ "$DB_LOCAL" = 0 ]; then
+  passo "Banco (gerenciado — $DB_HOST)"
+  ok "sem container: a connection string aponta para fora da máquina"
+  aviso "banco gerenciado hiberna quando ocioso — a primeira conexão pode demorar"
+else
+  passo "Banco (Postgres em container)"
+  if [ -z "$(docker ps -q -f "name=^${DB_CONTAINER}$")" ]; then
+    if [ -n "$(docker ps -aq -f "name=^${DB_CONTAINER}$")" ]; then
+      docker start "$DB_CONTAINER" >/dev/null
+      ok "container existente reiniciado"
+    else
+      docker run -d --name "$DB_CONTAINER" \
+        -e POSTGRES_DB=steady -e POSTGRES_USER=steady -e POSTGRES_PASSWORD=steady \
+        -p 5432:5432 -v steady-pgdata:/var/lib/postgresql/data postgres:16-alpine >/dev/null
+      ok "container criado"
+    fi
+  else
+    ok "já estava de pé"
+  fi
+
+  # Postgres aceita conexão alguns segundos depois do container subir; sem esperar,
+  # a migration falha por corrida e não por configuração.
+  printf '  aguardando o banco aceitar conexão'
+  for _ in $(seq 30); do
+    docker exec "$DB_CONTAINER" pg_isready -U steady -d steady >/dev/null 2>&1 && break
+    printf '.'; sleep 1
+  done
+  echo
+  docker exec "$DB_CONTAINER" pg_isready -U steady -d steady >/dev/null 2>&1 \
+    || { erro "banco não respondeu em 30s"; exit 1; }
+  ok "pronto para conexão"
+fi
 
 # --- 2. migrations ------------------------------------------------------------
 # O dotnet-ef não lê o launchSettings.json: as variáveis vão inline (CLAUDE.md).
 passo "Migrations"
 if [ -x "$DOTNET_EF" ]; then
   if Google__ClientId="$API_CLIENT_ID" \
-     ConnectionStrings__SteadyDb="Host=localhost;Port=5432;Database=steady;Username=steady;Password=steady" \
+     ConnectionStrings__SteadyDb="$CONN" \
      "$DOTNET_EF" database update \
        --project "$REPO/src/Steady.Infrastructure" \
        --startup-project "$REPO/src/Steady.Api" >/tmp/steady-ef.log 2>&1; then
@@ -107,6 +141,40 @@ if [ -x "$DOTNET_EF" ]; then
 else
   aviso "dotnet-ef não encontrado em $DOTNET_EF — pulando"
 fi
+
+# --- 2b. blindagem do Supabase ------------------------------------------------
+# O Supabase publica o schema `public` numa API REST (PostgREST) alcançável com a
+# `anon key`, que é pública por design. Tabela criada por migration do EF Core
+# nasce com grant para anon/authenticated e sem RLS: o dado de saúde do corredor
+# ficaria legível e gravável sem passar pela API e sem o isolamento por
+# corredor_id (Constituição §3, ADR-002, Lei do Domínio #2).
+#
+# Roda a cada subida, e não uma vez só, porque toda migration que cria tabela
+# reabre a exposição. É idempotente.
+case "$DB_HOST" in
+  *supabase*)
+    passo "Blindagem do Supabase"
+    if ! command -v docker >/dev/null 2>&1; then
+      erro "docker é necessário para rodar scripts/supabase-lockdown.sql (não há psql no host)"
+      exit 1
+    fi
+    if docker run --rm -i \
+         -e PGPASSWORD="$(conn_campo Password)" -e PGSSLMODE=require \
+         postgres:16-alpine \
+         psql -h "$DB_HOST" -p "$(conn_campo Port)" \
+              -U "$(conn_campo Username)" -d "$(conn_campo Database)" \
+              -v ON_ERROR_STOP=1 -q \
+         < "$REPO/scripts/supabase-lockdown.sql" >/tmp/steady-lockdown.log 2>&1; then
+      ok "tabelas fechadas para anon/authenticated, RLS ligado"
+    else
+      # Falha fechada de propósito: subir com as tabelas expostas seria pior que
+      # não subir — mesma lógica do Client ID ausente (ADR-002).
+      erro "falha ao blindar o Supabase — log em /tmp/steady-lockdown.log"
+      tail -5 /tmp/steady-lockdown.log >&2
+      exit 1
+    fi
+    ;;
+esac
 
 # --- 3. API + dev server ------------------------------------------------------
 passo "API e dev server (sessão tmux '$SESSION')"

@@ -9,7 +9,26 @@
     "no token (ADR-002). Divergiram, todo login vira 401. A API se recusa a subir sem ele.",
     "",
     "applicationUrl usa 0.0.0.0 e não localhost porque o celular precisa alcançar a API",
-    "pela rede local — em localhost ela só escuta na própria máquina."
+    "pela rede local — em localhost ela só escuta na própria máquina.",
+    "",
+    "ConnectionStrings__SteadyDb — é a única fonte da connection string: scripts/dev.sh",
+    "lê daqui para aplicar as migrations, em vez de manter uma cópia versionada.",
+    "",
+    "Banco local (Docker):",
+    "  Host=localhost;Port=5432;Database=steady;Username=steady;Password=SUA-SENHA-LOCAL",
+    "",
+    "Banco gerenciado (Neon, Supabase, Railway...): o console entrega uma URI no",
+    "formato postgresql://user:senha@host/db?sslmode=require. O Npgsql NÃO aceita URI —",
+    "converta para chave=valor, senão o erro é um 'format of the initialization string'",
+    "que não diz nada sobre a causa:",
+    "  Host=ep-xxxx.sa-east-1.aws.neon.tech;Database=steady;Username=USER;Password=SENHA;SSL Mode=Require;Timeout=30",
+    "",
+    "SSL Mode=Require é obrigatório — todo provedor gerenciado recusa conexão em claro,",
+    "e aqui trafega dado de saúde. Timeout=30 cobre o cold start: instância de free tier",
+    "hiberna quando ociosa e a primeira conexão leva alguns segundos.",
+    "",
+    "Este arquivo, preenchido, é gitignorado — é o lugar certo para a senha do banco.",
+    "Ela nunca vai para scripts/, nem para o .env do app: o celular não fala com o banco."
   ],
   "profiles": {
     "http": {
