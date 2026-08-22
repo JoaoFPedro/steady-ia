@@ -196,3 +196,81 @@ describe('Conta autenticada', () => {
     expect(await session.currentAccount()).toBeNull();
   });
 });
+
+describe('Renovação concorrente (regressão da STORY-010)', () => {
+  it('duas leituras simultâneas compartilham uma única renovação', async () => {
+    // A Dashboard passou a carregar home e planejamentos ao mesmo tempo. Sem
+    // compartilhar a renovação, as duas chamam signInSilently() em paralelo: uma
+    // ganha e a outra recebe `false`, vira `unauthenticated` e manda o corredor
+    // para o login com sessão válida.
+    let chamadas = 0;
+    const client = {
+      signIn: async () => true,
+      signInSilently: async () => {
+        chamadas += 1;
+        await new Promise((r) => setTimeout(r, 10));
+        // O módulo nativo recusa a segunda chamada concorrente.
+        return chamadas === 1;
+      },
+      getTokens: async () => ({ idToken: 'token-novo' }),
+      currentUser: async () => null,
+      signOut: async () => {},
+    };
+
+    const session = new GoogleSignInSession(client);
+    const [primeira, segunda] = await Promise.all([session.refresh(), session.refresh()]);
+
+    expect(chamadas).toBe(1);
+    expect(primeira).toBe('token-novo');
+    expect(segunda).toBe('token-novo');
+  });
+
+  it('uma renovação posterior acontece de novo — não fica em cache', async () => {
+    let chamadas = 0;
+    const client = {
+      signIn: async () => true,
+      signInSilently: async () => {
+        chamadas += 1;
+        return true;
+      },
+      getTokens: async () => ({ idToken: 'token' }),
+      currentUser: async () => null,
+      signOut: async () => {},
+    };
+
+    const session = new GoogleSignInSession(client);
+    await session.refresh();
+    await session.refresh();
+
+    expect(chamadas).toBe(2);
+  });
+});
+
+describe('Leitura concorrente do token (regressão da STORY-010)', () => {
+  it('duas leituras simultâneas compartilham uma única consulta ao módulo nativo', async () => {
+    // Mesma causa da renovação concorrente: a Dashboard passou a ter dois
+    // leitores. `getTokens()` também é chamada nativa, e a segunda falhando
+    // devolve `null` — que o HttpQueryApi lia como sessão perdida.
+    let chamadas = 0;
+    const client = {
+      signIn: async () => true,
+      signInSilently: async () => true,
+      getTokens: async () => {
+        chamadas += 1;
+        await new Promise((r) => setTimeout(r, 10));
+        if (chamadas > 1) throw new Error('módulo nativo ocupado');
+        return { idToken: 'token-valido' };
+      },
+      currentUser: async () => null,
+      signOut: async () => {},
+    };
+
+    const session = new GoogleSignInSession(client);
+    const [a, b] = await Promise.all([session.currentToken(), session.currentToken()]);
+
+    expect(chamadas).toBe(1);
+    expect(a).toBe('token-valido');
+    expect(b).toBe('token-valido');
+  });
+});
+

@@ -30,15 +30,49 @@ export interface GoogleSignInClient {
  * não é condição excepcional, e a fila offline não perde nada por causa disso.
  */
 export class GoogleSignInSession implements GoogleSession {
+  /**
+   * Renovação em andamento, compartilhada por quem chegar durante ela.
+   *
+   * Sem isto, dois leitores concorrentes (a Dashboard carrega home e
+   * planejamentos ao mesmo tempo, STORY-010) chamam `signInSilently()` em
+   * paralelo. O módulo nativo recusa a segunda: ela vira `null`, o chamador lê
+   * isso como sessão perdida e manda o corredor ao login — com a sessão válida.
+   */
+  private renovacaoEmAndamento: Promise<string | null> | null = null;
+
+  /**
+   * Leitura de token em andamento, compartilhada pelo mesmo motivo da renovação:
+   * `getTokens()` também é chamada ao módulo nativo, e a segunda simultânea pode
+   * falhar. O `null` resultante era lido como sessão perdida.
+   */
+  private leituraEmAndamento: Promise<string | null> | null = null;
+
   constructor(private readonly client: GoogleSignInClient) {}
 
   /** Token atual. A biblioteca renova sozinha se o cache estiver vencido. */
-  async currentToken(): Promise<string | null> {
-    return this.tokenOrNull();
+  currentToken(): Promise<string | null> {
+    this.leituraEmAndamento ??= this.tokenOrNull().finally(() => {
+      this.leituraEmAndamento = null;
+    });
+
+    return this.leituraEmAndamento;
   }
 
-  /** Entra sem interação, reaproveitando a conta já autorizada no aparelho. */
-  async refresh(): Promise<string | null> {
+  /**
+   * Entra sem interação, reaproveitando a conta já autorizada no aparelho.
+   *
+   * Chamadas concorrentes compartilham a mesma renovação; a próxima, depois que
+   * esta terminar, renova de novo — o resultado não fica em cache.
+   */
+  refresh(): Promise<string | null> {
+    this.renovacaoEmAndamento ??= this.renovar().finally(() => {
+      this.renovacaoEmAndamento = null;
+    });
+
+    return this.renovacaoEmAndamento;
+  }
+
+  private async renovar(): Promise<string | null> {
     if (!(await this.attempt(() => this.client.signInSilently()))) return null;
 
     return this.tokenOrNull();

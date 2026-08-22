@@ -58,7 +58,10 @@ export class HttpQueryApi implements QueryApi, PlanRequestReader {
   }
 
   private async get(path: string): Promise<QueryResult<unknown>> {
-    const token = await this.session.currentToken();
+    // `null` aqui significa "o módulo nativo não devolveu o token agora", não
+    // "não há sessão" — desistir sem tentar renovar mandava o corredor ao login
+    // com sessão válida (regressão da STORY-010).
+    const token = (await this.session.currentToken()) ?? (await this.session.refresh());
     if (!token) return { status: 'unauthenticated' };
 
     const first = await this.send(path, token);

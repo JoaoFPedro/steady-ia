@@ -154,3 +154,21 @@ describe('Tradução da resposta HTTP', () => {
     expect(fetchFn.calls[0].url).toBe('https://api.steady.test/api/strength-sessions');
   });
 });
+
+describe('Token ausente não é prova de sessão perdida (regressão da STORY-010)', () => {
+  it('tenta renovar antes de desistir quando não há token guardado', async () => {
+    // `currentToken()` devolver null significa "o módulo nativo não me deu o
+    // token agora" — não "o corredor não está autenticado". Desistir aqui
+    // mandava para o login com sessão válida.
+    const session = sessionWith([null, 'token-renovado']);
+    const fetchFn = fakeFetch({ status: 201 });
+    const api = new HttpRecordApi('https://api.steady.test', session, fetchFn as never);
+
+    const response = await api.send('running', { distanceKm: 8 }, 'chave-1');
+
+    expect(response).not.toEqual({ status: 'unauthenticated' });
+    expect(fetchFn.calls).toHaveLength(1);
+    expect(fetchFn.calls[0].headers.Authorization).toBe('Bearer token-renovado');
+  });
+});
+
