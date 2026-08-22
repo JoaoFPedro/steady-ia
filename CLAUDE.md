@@ -107,7 +107,23 @@ Validado em 2026-08-16. Setup completo (Google Cloud, keystore, client IDs) em `
 
 **O ambiente é WSL2 em modo NAT.** O `hostname -I` devolve um IP interno (`172.17.x.x`) que o celular **não alcança**. O endereço que vale é o do Windows na rede: **192.168.0.28** (Ethernet).
 
-### Subir tudo (3 processos)
+### Subir tudo — `steady-up`
+
+`scripts/dev.sh` faz o roteiro inteiro: sobe o banco, espera ele aceitar conexão,
+aplica migrations e lança API + dev server numa sessão tmux chamada `steady`.
+Antes de subir qualquer coisa ele confere o que quebra silenciosamente — `.env`,
+`launchSettings.json` e se os dois Client IDs batem (ADR-002).
+
+```bash
+steady-up      # sobe tudo e devolve o terminal
+steady-logs    # tmux attach -t steady (Ctrl-b n troca de janela, Ctrl-b d sai)
+steady-down    # derruba API e Expo; o banco fica de pé
+```
+
+Os aliases estão no `~/.bashrc` desta máquina. O IP que o celular usa sai do
+`EXPO_PUBLIC_API_URL` do `.env` — uma fonte só, sem IP repetido no script.
+
+### Subir tudo na mão (3 processos)
 
 ```bash
 # 1. Banco — Postgres em container (credenciais iguais às dos testes)
