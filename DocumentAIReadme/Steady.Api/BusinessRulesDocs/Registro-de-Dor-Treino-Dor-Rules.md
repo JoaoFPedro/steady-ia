@@ -48,8 +48,9 @@ journey
 
 **O que faz**: Recebe data e regiao do corpo onde o corredor sentiu dor/desconforto, e salva permanentemente associado ao corredor.
 
-**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #7, e `specs/STORY-002/spec.bdd.md`, regras #1-#5):
+**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #7, `specs/STORY-002/spec.bdd.md`, regras #1-#5, e `specs/STORY-003/spec.bdd.md` para a idempotencia, fundamentada em [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)):
 - **Autenticacao obrigatoria**: mesmo requisito de qualquer outro registro.
+- **Reenvio da fila offline nao cria registro duplicado**: mesma protecao aplicada aos registros de treino - a chave gerada quando o item entra na fila local garante que reenviar apos falha de rede devolve o registro ja salvo, sem duplicar.
 - **Regiao do corpo obrigatoria**: nao e possivel registrar dor sem informar onde ela ocorreu.
   - *Exemplo*: enviar o registro sem regiao (ou so com espacos em branco) e rejeitado com "A região do corpo é obrigatória para registrar dor."
 - **Independente de sessao especifica**: o registro de dor nao exige vinculo com uma Sessao de Treino de corrida ou musculacao especifica - e um registro autonomo (data + regiao).
@@ -70,7 +71,7 @@ journey
 - **Hierarquia**: nao ha niveis de acesso diferentes no MVP.
 
 ### Dados e Entrada
-- **Dados Obrigatorios**: data e regiao do corpo (texto livre).
+- **Dados Obrigatorios**: data e regiao do corpo (texto livre), alem da chave de idempotencia (gerada pelo app, nao digitada pelo corredor).
 - **Formatos Aceitos**: `region` e texto livre, sem lista fechada de opcoes (diferente do grupo muscular de musculacao). Data no formato `AAAA-MM-DD`.
 - **Limitacoes de Volume**: nenhuma restricao de quantidade de registros por dia/semana.
 
@@ -135,3 +136,4 @@ graph LR
 | Sem autenticacao | Requisicao sem token | Recusa antes de processar | 401 |
 | Regiao ausente/vazia | `region: ""` ou `null` | Rejeita com mensagem de dominio | 400 - "A região do corpo é obrigatória para registrar dor." |
 | Registro tardio | Data de dias atras, sem sessao vinculada | Salva normalmente | 201 - registro criado |
+| Reenvio do mesmo item da fila offline | Mesma chave de idempotencia de um envio ja processado | Devolve o registro ja existente, sem criar outro | 200 - registro ja existente (nao um novo 201) |

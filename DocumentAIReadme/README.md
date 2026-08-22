@@ -7,7 +7,7 @@ Cada projeto tem três tipos de documentação, um por audiência:
 - **BusinessRulesDocs** — regras de negócio em linguagem acessível a produto/negócio
 - **TechnicalDebtsDocs** — débitos técnicos classificados por criticidade, com plano de ação
 
-> Última geração completa: 2026-08-10, via pipeline autônomo (`documentai-orchestrator` + agentes especialistas `steady-api-docs`, `steady-domain-docs`, `steady-infrastructure-docs`, definidos em `.claude/agents/`).
+> Última geração completa: 2026-08-10. Última atualização: 2026-08-22, via pipeline autônomo (`documentai-orchestrator` + agentes especialistas `steady-api-docs`, `steady-domain-docs`, `steady-infrastructure-docs`, definidos em `.claude/agents/`). A rodada de 2026-08-22 sincronizou a documentação com três mudanças de código não cobertas na geração original: restrição de audiência do ID token do Google ([ADR-002](../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), adendo de 2026-08-16), chave de idempotência para os três endpoints de registro ([ADR-003](../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)) e o estado explícito de "histórico insuficiente" na avaliação de sobrecarga ([ADR-004](../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md)). Nenhuma unidade nova apareceu — as 14 unidades documentadas continuam as mesmas, só o conteúdo foi corrigido/ampliado.
 
 ## Steady.Api — ASP.NET Core 10 Minimal APIs
 
@@ -52,6 +52,16 @@ Os três agentes especialistas trabalharam de forma independente e paralela; est
 2. **Isolamento por Corredor depende só de disciplina manual, sem rede de segurança estrutural** ([débito](Steady.Infrastructure/TechnicalDebtsDocs/SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-Debts.md)) — `SteadyDbContext` não define um `HasQueryFilter` global por `corredor_id`; a regra central de ADR-002 (ver [BusinessRulesDocs](Steady.Infrastructure/BusinessRulesDocs/Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md)) só é garantida porque cada repositório filtra manualmente. Um novo repositório sem essa filtragem vazaria dados entre corredores sem gerar nenhum erro visível.
 
 Também vale registrar, sem ser crítico: a spec `STORY-001` descreve um indicador booleano "doeu" para `PainLog` que não existe em nenhuma camada do código (Domain, Api ou Infrastructure) — ver [débito no Domain](Steady.Domain/TechnicalDebtsDocs/PainLog-Treino-Dor-Debts.md). Recomenda-se rodar `/sync` para reconciliar spec e código antes de tratar isso como bug.
+
+## Sincronização de 2026-08-22
+
+Os três agentes especialistas atualizaram a documentação existente (nenhuma unidade nova, só conteúdo corrigido) para cobrir três mudanças que a geração de 2026-08-10 não capturou:
+
+- **Steady.Api** (14 arquivos ajustados): os três endpoints de registro (`RunningSessionEndpoints`, `StrengthSessionEndpoints`, `PainLogEndpoints`) passaram a exigir o header `Idempotency-Key` e a responder `200` (em vez de `201`) num reenvio com a mesma chave — [ADR-003](../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md); a seção `F.1` canônica de autenticação ([RunningSessionEndpoints DevDocs](Steady.Api/DevDocs/RunningSessionEndpoints-Treino-Corrida-DevDocs.md)) passou a documentar a restrição de audiência do token do Google e o fail-closed do `Program.cs` — [ADR-002](../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md); o contrato de `GET /api/overload-assessment` ganhou o campo `hasSufficientHistory` — [ADR-004](../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md).
+- **Steady.Domain** (4 arquivos ajustados): `OverloadAssessment`/`OverloadDetectionService` passaram a expor um terceiro estado (`InsufficientHistory()`), distinguindo "ainda reunindo dados" de "avaliei e não há risco" — [ADR-004](../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md). `RunningSession`, `StrengthSession` e `PainLog` foram conferidos e não mudaram.
+- **Steady.Infrastructure** (8 arquivos ajustados): `RunningSessionRepository`, `StrengthSessionRepository` e `PainLogRepository` tiveram o método `AddAsync` alterado para checar a chave de idempotência antes de gravar, retornando `SaveResult<TEntity>`; `SteadyDbContext` ganhou o mapeamento da coluna `idempotency_key` e o índice único composto `(corredor_id, idempotency_key)` nas três tabelas de registro, além da migration `20260816021123_AddIdempotencyKey` — tudo [ADR-003](../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md). `CorredorRepository` foi conferido e não mudou.
+
+Nenhum débito técnico pré-existente mencionava risco de duplicata por reenvio ou aceitação de token de outro aplicativo — não havia, portanto, item a marcar como "resolvido"; a proteção entrou como reforço documentado, não como fechamento de gap já registrado.
 
 ## Estatísticas
 

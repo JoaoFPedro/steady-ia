@@ -49,8 +49,9 @@ journey
 
 **O que faz**: Recebe os dados de uma sessao de musculacao e salva permanentemente, associada ao corredor autenticado.
 
-**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #2, e `specs/STORY-002/spec.bdd.md`, regras #1-#5):
+**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #2, `specs/STORY-002/spec.bdd.md`, regras #1-#5, e `specs/STORY-003/spec.bdd.md` para a idempotencia, fundamentada em [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)):
 - **Autenticacao obrigatoria**: mesmo requisito de qualquer outro registro - login valido do Google.
+- **Reenvio da fila offline nao cria treino duplicado**: mesma protecao aplicada ao registro de corrida - a chave gerada quando o item entra na fila local garante que reenviar apos falha de rede devolve o registro ja salvo, sem duplicar. Especialmente relevante aqui, porque uma sessao de "Perna Pesada" duplicada poderia disparar um alerta de sobrecarga falso.
 - **Grupo muscular obrigatorio**: deve ser um dos cinco valores fixos suportados (Peito+Triceps, Ombro, Perna Frontal, Perna Posterior, Biceps+Costas).
   - *Exemplo*: enviar o registro sem grupo muscular e rejeitado com "O grupo muscular é obrigatório para registrar uma sessão de musculação."
 - **Intensidade obrigatoria**: deve ser Leve, Moderado ou Pesado.
@@ -73,7 +74,7 @@ journey
 - **Hierarquia**: nao ha niveis de acesso diferentes no MVP.
 
 ### Dados e Entrada
-- **Dados Obrigatorios**: data, grupo muscular (um dos cinco valores fixos), intensidade (Leve/Moderado/Pesado), duracao (minutos).
+- **Dados Obrigatorios**: data, grupo muscular (um dos cinco valores fixos), intensidade (Leve/Moderado/Pesado), duracao (minutos), alem da chave de idempotencia (gerada pelo app, nao digitada pelo corredor).
 - **Formatos Aceitos**: grupo muscular e intensidade sao valores de lista fechada (nao texto livre); duracao em numero inteiro; data no formato `AAAA-MM-DD`.
 - **Limitacoes de Volume**: duracao deve ser maior que zero; nao ha limite maximo definido nesta versao.
 
@@ -141,3 +142,4 @@ graph LR
 | Grupo muscular ausente | `muscleGroup: null` | Rejeita com mensagem de dominio | 400 - "O grupo muscular é obrigatório..." |
 | Intensidade ausente | `intensity: null` | Rejeita com mensagem de dominio | 400 - "A intensidade é obrigatória..." |
 | Duracao invalida | Duracao 0 ou negativa | Rejeita com mensagem de dominio | 400 - "A duração deve ser maior que zero." |
+| Reenvio do mesmo item da fila offline | Mesma chave de idempotencia de um envio ja processado | Devolve o registro ja existente, sem criar outro | 200 - sessao ja existente (nao um novo 201) |

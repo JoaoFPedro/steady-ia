@@ -56,6 +56,8 @@ journey
 - **Tres niveis de intensidade**: Leve, Moderado, Pesado -- definidos como enum `Intensity`. A combinacao "Perna Frontal ou Posterior" + "Pesado" e o gatilho especifico de musculacao para a regra de sobrecarga.
 - **Persistido de forma legivel**: grupo muscular e intensidade sao gravados como texto no banco (nao como numero), facilitando auditoria direta dos dados sem precisar decodificar um enum.
 - **Dono sempre do contexto de autenticacao**: mesmo padrao de `RunningSessionRepository` -- o `CorredorId` vem do corredor autenticado, nunca do payload do cliente.
+- **Reenvio nao duplica**: a chave de idempotencia enviada no header `Idempotency-Key` (ver [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)) e gravada junto com o registro, escopada por `(corredor_id, idempotency_key)`. Existe para a fila offline do app: se a resposta se perder depois que o servidor ja persistiu o registro, o app reenvia o mesmo item da fila. Ao reconhecer a chave, o repositorio devolve a sessao ja existente em vez de criar outra.
+  - *Exemplo*: app perde conexao logo apos enviar a musculacao; ao reenviar com a mesma `Idempotency-Key`, o repositorio devolve a sessao ja salva, sem gravar uma segunda linha.
 
 **Cenarios de Uso**:
 - **Registro valido**: grupo muscular, intensidade e duracao informados corretamente.
@@ -127,7 +129,7 @@ graph LR
 1. Corredor envia `POST /api/strength-sessions` com `MuscleGroup = PernaFrontal`, `Intensity = Pesado`, duracao valida.
 2. Dominio valida os campos obrigatorios.
 3. Repositorio persiste associando ao `CorredorId`.
-4. API responde 201.
+4. API responde 201 na primeira tentativa; se for um reenvio da fila offline com a mesma `Idempotency-Key`, a API responde 200 com a sessao ja existente, sem criar duplicata (ver ADR-003).
 
 **Pos-condicoes**: sessao passa a contar como possivel gatilho de musculacao para a regra de sobrecarga nos proximos 7 dias.
 
@@ -135,6 +137,7 @@ graph LR
 | Cenario | Entrada | Acao do Sistema | Resultado Esperado |
 |---------|---------|-----------------|-------------------|
 | Registro valido | PernaFrontal, Pesado, 40min | Persiste associada ao corredor | Sessao criada, 201 |
+| Reenvio com mesma Idempotency-Key | Mesmo payload e mesma chave de uma tentativa anterior ja persistida | Repositorio localiza `(corredor_id, idempotency_key)` existente e nao persiste de novo | Sessao existente devolvida, 200, sem duplicata |
 | Sem grupo muscular | grupo muscular ausente | Dominio rejeita antes da persistencia | 400, nada gravado |
 | Sem intensidade | intensidade ausente | Dominio rejeita antes da persistencia | 400, nada gravado |
 | Consulta com historico | Corredor com sessoes registradas | Filtra por corredor_id | Lista com as sessoes do corredor |

@@ -15,10 +15,11 @@
 
 **Responsabilidades**:
 - Converter um objeto de dominio `Steady.Domain.Training.RunningSession` (ja validado pelas guard clauses de `RunningSession.Create`) em `RunningSessionEntity` e persisti-lo associado a um `CorredorId`.
+- Aplicar a chave de idempotencia recebida do cliente antes de gravar, devolvendo o registro ja existente em vez de duplicar em caso de reenvio -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
 - Listar todas as sessoes de corrida de um corredor.
 - Buscar uma sessao especifica por ID, escopada ao corredor (isolamento -- ver [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)).
 
-**Integracoes**: chamado por `Steady.Api.Endpoints.RunningSessionEndpoints` (POST `/api/running-sessions`), `Steady.Api.Endpoints.TrainingHistoryEndpoints` (GET `/api/training-sessions` e GET `/api/training-sessions/{id}`) e `Steady.Api.Endpoints.OverloadAssessmentEndpoints` (GET `/api/overload-assessment`, que reconstroi objetos de dominio a partir das entidades persistidas para avaliar sobrecarga) -- ver `DocumentAIReadme/Steady.Api/DevDocs/RunningSessionEndpoints-Treino-Corrida-DevDocs.md`, `DocumentAIReadme/Steady.Api/DevDocs/TrainingHistoryEndpoints-Historico-DevDocs.md` e `DocumentAIReadme/Steady.Api/DevDocs/OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md`. Regras fundamentadas em `specs/STORY-001/spec.bdd.md` (validacao de dominio) e `specs/STORY-002/spec.bdd.md` (persistencia e isolamento).
+**Integracoes**: chamado por `Steady.Api.Endpoints.RunningSessionEndpoints` (POST `/api/running-sessions`), `Steady.Api.Endpoints.TrainingHistoryEndpoints` (GET `/api/training-sessions` e GET `/api/training-sessions/{id}`) e `Steady.Api.Endpoints.OverloadAssessmentEndpoints` (GET `/api/overload-assessment`, que reconstroi objetos de dominio a partir das entidades persistidas para avaliar sobrecarga) -- ver `DocumentAIReadme/Steady.Api/DevDocs/RunningSessionEndpoints-Treino-Corrida-DevDocs.md`, `DocumentAIReadme/Steady.Api/DevDocs/TrainingHistoryEndpoints-Historico-DevDocs.md` e `DocumentAIReadme/Steady.Api/DevDocs/OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md`. Regras fundamentadas em `specs/STORY-001/spec.bdd.md` (validacao de dominio), `specs/STORY-002/spec.bdd.md` (persistencia e isolamento) e `specs/STORY-003/spec.bdd.md` (idempotencia, [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)). O utilitario `IIdempotentRecord`/`SaveResult<TEntity>` usado por `AddAsync` esta documentado em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003`.
 
 ## 2. Configuracao e Dependencias
 
@@ -28,7 +29,7 @@
 **Interface implementada**: `IRunningSessionRepository` (`Repositories/IRunningSessionRepository.cs`).
 
 **Metodos Publicos**:
-- `Task<RunningSessionEntity> AddAsync(Guid corredorId, RunningSession session, CancellationToken cancellationToken)`
+- `Task<SaveResult<RunningSessionEntity>> AddAsync(Guid corredorId, RunningSession session, Guid idempotencyKey, CancellationToken cancellationToken)` -- assinatura alterada pelo [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md); antes retornava `RunningSessionEntity` direto e nao recebia `idempotencyKey`.
 - `Task<IReadOnlyList<RunningSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken)`
 - `Task<RunningSessionEntity?> GetByIdAsync(Guid corredorId, Guid sessionId, CancellationToken cancellationToken)`
 
@@ -46,21 +47,26 @@
     "DurationMinutes": "int (> 0, validado em RunningSession.Create)",
     "AveragePaceMinPerKm": "double",
     "PerceivedEffort": "int (1 a 10, validado em RunningSession.Create)"
-  }
+  },
+  "idempotencyKey": "Guid - lido do header 'Idempotency-Key' pelo Endpoint (ADR-003); gerado pelo cliente no momento em que o item entra na fila local, nao a cada tentativa de envio"
 }
 ```
 
 **Saida**:
 ```json
 {
-  "RunningSessionEntity": {
-    "Id": "Guid - gerado pelo repositorio (Guid.NewGuid())",
-    "CorredorId": "Guid",
-    "Date": "DateOnly",
-    "DistanceKm": "double",
-    "DurationMinutes": "int",
-    "AveragePaceMinPerKm": "double",
-    "PerceivedEffort": "int"
+  "SaveResult<RunningSessionEntity>": {
+    "Entity": {
+      "Id": "Guid - gerado pelo repositorio (Guid.NewGuid()) se novo, ou o Id ja existente se reenvio",
+      "CorredorId": "Guid",
+      "Date": "DateOnly",
+      "DistanceKm": "double",
+      "DurationMinutes": "int",
+      "AveragePaceMinPerKm": "double",
+      "PerceivedEffort": "int",
+      "IdempotencyKey": "Guid"
+    },
+    "Created": "bool - true se gravou uma linha nova (Endpoint responde 201); false se devolveu um registro ja existente por reenvio da mesma chave (Endpoint responde 200)"
   }
 }
 ```
@@ -74,14 +80,22 @@ sequenceDiagram
     participant Context as SteadyDbContext
     participant Database as PostgreSQL (running_sessions)
 
-    Endpoint->>+Repository: AddAsync(corredorId, session, ct)
-    Repository->>Repository: monta RunningSessionEntity (Id = NewGuid, CorredorId = corredorId, campos de session)
-    Repository->>+Context: RunningSessions.Add(entity)
-    Repository->>+Context: SaveChangesAsync(ct)
-    Context->>+Database: INSERT INTO running_sessions (...)
-    Database-->>-Context: 1 linha afetada
-    Context-->>-Repository: ok
-    Repository-->>-Endpoint: entity (com Id gerado)
+    Endpoint->>+Repository: AddAsync(corredorId, session, idempotencyKey, ct)
+    Repository->>+Context: RunningSessions.FindByIdempotencyKeyAsync(corredorId, idempotencyKey, ct)
+    Context->>+Database: SELECT * FROM running_sessions WHERE corredor_id = @corredorId AND idempotency_key = @idempotencyKey
+    Database-->>-Context: 0 ou 1 linha
+    Context-->>-Repository: RunningSessionEntity ou null
+    alt Ja existe registro com esta chave (reenvio)
+        Repository-->>Endpoint: SaveResult(entity: existente, Created: false)
+    else Registro novo
+        Repository->>Repository: monta RunningSessionEntity (Id = NewGuid, CorredorId = corredorId, IdempotencyKey = idempotencyKey, campos de session)
+        Repository->>+Context: RunningSessions.Add(entity)
+        Repository->>+Context: SaveChangesAsync(ct)
+        Context->>+Database: INSERT INTO running_sessions (...)
+        Database-->>-Context: 1 linha afetada
+        Context-->>-Repository: ok
+        Repository-->>-Endpoint: SaveResult(entity: nova, Created: true)
+    end
 ```
 
 #### Detalhamento do Fluxo
@@ -89,17 +103,19 @@ sequenceDiagram
 **R. Repository (RunningSessionRepository)**
 
 R.1. AddAsync()
-- Recebe o objeto de dominio `RunningSession` ja validado (guard clauses em `RunningSession.Create`, ver `specs/STORY-001/spec.bdd.md`) e o `corredorId` resolvido pelo `AuthenticationFilter`.
-- **Mapeamento Dominio -> Persistencia (U1)**: monta um novo `RunningSessionEntity` copiando campo a campo de `RunningSession` (`Date`, `DistanceKm`, `DurationMinutes`, `AveragePaceMinPerKm`, `PerceivedEffort`) e atribuindo `Id = Guid.NewGuid()` e `CorredorId = corredorId` -- este ultimo nunca vem do cliente, sempre do contexto de autenticacao (garantia de isolamento na escrita).
+- Recebe o objeto de dominio `RunningSession` ja validado (guard clauses em `RunningSession.Create`, ver `specs/STORY-001/spec.bdd.md`), o `corredorId` resolvido pelo `AuthenticationFilter` e a `idempotencyKey` do header `Idempotency-Key` ([ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)).
+- **Passo 1 -- busca por chave existente**: chama `dbContext.RunningSessions.FindByIdempotencyKeyAsync(corredorId, idempotencyKey, ct)` -- documentado em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md#u1-iidempotentrecord-e-saveresult` (U1.1) -> [CTX.1](#ctx1-runningsessions-dbset)
+- **Se ja existe** (`existing is not null`): retorna imediatamente `new SaveResult<RunningSessionEntity>(existing, Created: false)` -- **nao grava nada novo**. Este e o caminho de reenvio da fila offline apos uma resposta perdida.
+- **Se nao existe -- Mapeamento Dominio -> Persistencia (U1)**: monta um novo `RunningSessionEntity` copiando campo a campo de `RunningSession` (`Date`, `DistanceKm`, `DurationMinutes`, `AveragePaceMinPerKm`, `PerceivedEffort`) e atribuindo `Id = Guid.NewGuid()`, `CorredorId = corredorId` (nunca vem do cliente, sempre do contexto de autenticacao) e `IdempotencyKey = idempotencyKey`.
 - Adiciona a entidade ao `DbSet<RunningSessionEntity>` e persiste via `SaveChangesAsync` -> [CTX.1](#ctx1-runningsessions-dbset)
-- Retorna a entidade persistida (com `Id` ja preenchido) para o Endpoint montar a resposta HTTP 201.
+- Retorna `new SaveResult<RunningSessionEntity>(entity, Created: true)`. O Endpoint usa `Created` para decidir entre HTTP 201 (novo) e HTTP 200 (reenvio) -- ver `RunningSessionEndpoints-Treino-Corrida-DevDocs.md`.
 
 **CTX. SteadyDbContext**
 
 <a id="ctx1-runningsessions-dbset"></a>
 CTX.1. RunningSessions (DbSet&lt;RunningSessionEntity&gt;) + SaveChangesAsync
-- Mapeado para a tabela `running_sessions`: `Id` como chave primaria; `CorredorId` -> coluna `corredor_id` (indexada via `IX_running_sessions_corredor_id`); `Date` -> `date`; `DistanceKm` -> `distance_km`; `DurationMinutes` -> `duration_minutes`; `AveragePaceMinPerKm` -> `average_pace_min_per_km`; `PerceivedEffort` -> `perceived_effort`.
-- `SaveChangesAsync` persiste o INSERT em uma transacao implicita de uma unica operacao.
+- Mapeado para a tabela `running_sessions`: `Id` como chave primaria; `CorredorId` -> coluna `corredor_id` (indexada via `IX_running_sessions_corredor_id`); `Date` -> `date`; `DistanceKm` -> `distance_km`; `DurationMinutes` -> `duration_minutes`; `AveragePaceMinPerKm` -> `average_pace_min_per_km`; `PerceivedEffort` -> `perceived_effort`; `IdempotencyKey` -> `idempotency_key` (indice UNICO composto `IX_running_sessions_corredor_id_idempotency_key` em `(corredor_id, idempotency_key)`, [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)).
+- `SaveChangesAsync` persiste o INSERT em uma transacao implicita de uma unica operacao. O indice unico composto e a garantia final contra duplicata mesmo sob corrida entre dois envios simultaneos da mesma chave, conforme previsto no [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) ("mesmo com uma corrida entre dois envios simultaneos, o banco recusa a segunda insercao") -- diferente de `CorredorRepository.GetOrCreateBySubAsync`, este metodo nao captura `DbUpdateException` para esse cenario (ver secao 4, Observacoes Tecnicas).
 
 ### 3.2. GetByCorredorIdAsync - Lista o historico de corrida do corredor
 
@@ -195,6 +211,6 @@ R.3. GetByIdAsync()
 
 ## 4. Observacoes Tecnicas
 
-- **Performance**: `GetByCorredorIdAsync` nao pagina -- para um corredor com historico muito extenso, a query retorna todas as linhas de uma vez (ver TechnicalDebtsDocs). O indice `corredor_id` garante que a busca em si seja eficiente mesmo com a tabela cheia de dados de outros corredores.
-- **Tratamento de Erros**: nenhum dos tres metodos trata excecoes de banco explicitamente -- falhas de infraestrutura propagam para o Endpoint chamador sem tratamento especifico nesta camada.
-- **Integracoes Criticas**: `GetByCorredorIdAsync` e reutilizado tanto para exibir historico (`TrainingHistoryEndpoints`) quanto para recalcular a regra de sobrecarga (`OverloadAssessmentEndpoints`) -- qualquer mudanca de comportamento aqui (ex.: adicionar paginacao) precisa considerar ambos os consumidores.
+- **Performance**: `GetByCorredorIdAsync` nao pagina -- para um corredor com historico muito extenso, a query retorna todas as linhas de uma vez (ver TechnicalDebtsDocs). O indice `corredor_id` garante que a busca em si seja eficiente mesmo com a tabela cheia de dados de outros corredores. `AddAsync` agora faz 1 SELECT (busca por chave de idempotencia) antes do INSERT no caminho de registro novo -- custo adicional pequeno e justificado pela protecao contra duplicata do [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
+- **Tratamento de Erros**: nenhum dos tres metodos trata excecoes de banco explicitamente -- falhas de infraestrutura propagam para o Endpoint chamador sem tratamento especifico nesta camada. Isso inclui o cenario (raro, de corrida) em que dois envios simultaneos com a mesma `idempotencyKey` passam ambos pela verificacao de existencia antes que o primeiro `SaveChangesAsync` termine: o indice unico composto garante que apenas um INSERT seja aceito pelo banco, mas o segundo propagaria uma `DbUpdateException` nao capturada, diferente do tratamento de corrida ja existente em `CorredorRepository.GetOrCreateBySubAsync`.
+- **Integracoes Criticas**: `GetByCorredorIdAsync` e reutilizado tanto para exibir historico (`TrainingHistoryEndpoints`) quanto para recalcular a regra de sobrecarga (`OverloadAssessmentEndpoints`) -- qualquer mudanca de comportamento aqui (ex.: adicionar paginacao) precisa considerar ambos os consumidores. `AddAsync` agora depende do utilitario `IIdempotentRecord`/`SaveResult<TEntity>` compartilhado com `StrengthSessionRepository` e `PainLogRepository` -- documentado uma unica vez em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md`.

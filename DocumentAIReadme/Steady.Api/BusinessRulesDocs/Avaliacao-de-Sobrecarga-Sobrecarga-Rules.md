@@ -48,7 +48,7 @@ journey
 
 **O que faz**: Analisa o historico de treinos de corrida e musculacao dos ultimos 14 dias do corredor autenticado e indica se ha risco de sobrecarga, com uma sugestao de ajuste quando aplicavel.
 
-**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regras #3-#6, fundamentadas em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md)):
+**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regras #3-#6 e #9, fundamentadas em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md) e [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md)):
 - **Janela movel de 7 dias**: a avaliacao compara os ultimos 7 dias corridos (nao a semana de calendario) com os 7 dias imediatamente anteriores.
 - **Gatilho de musculacao**: precisa haver ao menos uma sessao de musculacao de Perna Frontal ou Perna Posterior com intensidade Pesado nos ultimos 7 dias.
   - *Exemplo*: uma sessao de perna com intensidade Leve ou Moderado nao aciona o gatilho, mesmo que seja frequente.
@@ -56,15 +56,16 @@ journey
   - *Exemplo*: carga anterior de 300 e carga recente de 720 (240%) aciona o gatilho; carga recente de 320 (106%) nao aciona.
 - **Ambas as condicoes precisam ocorrer juntas**: so musculacao pesada de perna sem aumento de carga de corrida, ou so aumento de carga sem musculacao pesada de perna, nao geram alerta isoladamente.
 - **Historico minimo de 14 dias**: sem pelo menos 14 dias de historico total (contando da sessao mais antiga ate hoje), nenhuma avaliacao e feita - o sistema nunca gera um falso alerta por falta de dados de comparacao.
+- **"Reunindo dados" e um estado proprio, distinto de "sem risco" (ADR-004)**: quando o historico e insuficiente, a resposta sinaliza explicitamente esse estado (`hasSufficientHistory: false`) em vez de devolver a mesma resposta de "avaliei e nao ha risco". O app usa esse sinal para exibir "ainda estou reunindo dados" ao corredor novo, em vez de dar a falsa garantia de "esta tudo bem" - um corredor que treina pesado na primeira semana e se lesiona na terceira nao pode ter recebido do app uma tranquilidade que o sistema nunca calculou de verdade.
 - **Nunca bloqueia**: mesmo quando ha risco, o registro de qualquer nova sessao continua funcionando normalmente - a avaliacao e informativa, nunca impeditiva.
 - **Sugestao concreta**: quando ha risco, a mensagem explica a causa (musculacao pesada de perna + aumento de carga de corrida) e sugere reduzir distancia/ritmo da proxima corrida ou aliviar a intensidade do proximo treino de perna.
 
 **Cenarios de Uso**:
 - **Cenario Principal**: corredor com historico suficiente, musculacao pesada de perna recente e aumento de carga de corrida - recebe sugestao concreta.
 - **Cenario Alternativo**: corredor consulta a avaliacao sem ter esse padrao - recebe indicacao de "sem risco", sem mensagem.
-- **Cenario de Excecao**: corredor novo, com menos de 14 dias de historico - recebe "sem risco" mesmo que o padrao recente pareca arriscado, porque nao ha base de comparacao confiavel.
+- **Cenario de Excecao**: corredor novo, com menos de 14 dias de historico - recebe "reunindo dados" (nao "sem risco"), mesmo que o padrao recente pareca arriscado, porque nao ha base de comparacao confiavel (ADR-004).
 
-**Resultado Esperado**: o corredor recebe uma indicacao clara (`hasRisk: true/false`) e, quando ha risco, uma sugestao especifica de ajuste - sem qualquer bloqueio de funcionalidade.
+**Resultado Esperado**: o corredor recebe uma de tres indicacoes claras - "reunindo dados" (historico insuficiente), "sem risco" (avaliado, nada preocupante) ou "risco identificado" (com sugestao especifica de ajuste) - sem qualquer bloqueio de funcionalidade em nenhum dos casos.
 
 ## 4. Validacoes e Restricoes
 
@@ -90,9 +91,9 @@ flowchart TD
     A[Corredor consulta avaliacao de sobrecarga] --> B{Esta autenticado?}
     B -->|Nao| C[Recusa - 401]
     B -->|Sim| D{Tem 14+ dias de historico?}
-    D -->|Nao| E[Retorna sem risco]
+    D -->|Nao| I["Retorna reunindo dados (hasSufficientHistory: false)"]
     D -->|Sim| F{Musculacao pesada de perna nos ultimos 7 dias?}
-    F -->|Nao| E
+    F -->|Nao| E[Retorna sem risco]
     F -->|Sim| G{Carga de corrida recente >= 110% da anterior?}
     G -->|Nao| E
     G -->|Sim| H[Retorna risco + sugestao concreta]
@@ -129,16 +130,16 @@ graph LR
 **Fluxo Principal**:
 1. Corredor registra suas primeiras sessoes de treino
 2. Consulta a avaliacao de sobrecarga
-3. Sistema retorna "sem risco", mesmo que o padrao recente pudesse parecer arriscado
+3. Sistema retorna "reunindo dados" (nao "sem risco"), mesmo que o padrao recente pudesse parecer arriscado - o app comunica que a avaliacao ainda nao esta disponivel, nao que ja avaliou e nao ha risco (ADR-004)
 
-**Pos-condicoes**: Nenhum falso alerta gerado por falta de dados.
+**Pos-condicoes**: Nenhum falso alerta gerado por falta de dados, e nenhuma falsa garantia de seguranca transmitida ao corredor.
 
 ### Matriz de Cenarios
 | Cenario | Entrada | Acao do Sistema | Resultado Esperado |
 |---------|---------|-----------------|-------------------|
-| Sem historico | Corredor novo, zero sessoes | Retorna sem risco | 200 - `hasRisk: false`, `suggestion: null` |
-| Historico insuficiente | Menos de 14 dias de historico | Retorna sem risco | 200 - `hasRisk: false` |
-| Padrao de sobrecarga completo | Perna pesada recente + carga de corrida >= 110% | Retorna risco com sugestao | 200 - `hasRisk: true`, sugestao especifica |
-| So musculacao pesada, sem aumento de carga | Perna pesada recente, carga de corrida estavel | Retorna sem risco | 200 - `hasRisk: false` |
-| So aumento de carga, sem musculacao pesada | Carga de corrida em alta, sem perna pesada | Retorna sem risco | 200 - `hasRisk: false` |
+| Sem historico | Corredor novo, zero sessoes | Retorna "reunindo dados" | 200 - `hasRisk: false`, `suggestion: null`, `hasSufficientHistory: false` |
+| Historico insuficiente | Menos de 14 dias de historico | Retorna "reunindo dados" | 200 - `hasRisk: false`, `hasSufficientHistory: false` |
+| Padrao de sobrecarga completo | Perna pesada recente + carga de corrida >= 110% | Retorna risco com sugestao | 200 - `hasRisk: true`, sugestao especifica, `hasSufficientHistory: true` |
+| So musculacao pesada, sem aumento de carga | Perna pesada recente, carga de corrida estavel | Retorna sem risco | 200 - `hasRisk: false`, `hasSufficientHistory: true` |
+| So aumento de carga, sem musculacao pesada | Carga de corrida em alta, sem perna pesada | Retorna sem risco | 200 - `hasRisk: false`, `hasSufficientHistory: true` |
 | Sem autenticacao | Requisicao sem token | Recusa antes de processar | 401 |

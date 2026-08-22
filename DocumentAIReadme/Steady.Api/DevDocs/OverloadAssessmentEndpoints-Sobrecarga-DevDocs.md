@@ -15,7 +15,7 @@
 - Carregar todo o historico de sessoes de corrida e musculacao do corredor autenticado.
 - Reconstruir instancias de dominio (`RunningSession`, `StrengthSession`) a partir das entidades persistidas.
 - Delegar o calculo de risco para `Steady.Domain.Overload.OverloadDetectionService.Evaluate`.
-- Retornar `200 OK` com o resultado da avaliacao (`hasRisk` + `suggestion` opcional).
+- Retornar `200 OK` com o resultado da avaliacao (`hasRisk` + `suggestion` opcional + `hasSufficientHistory` - ver ADR-004).
 
 **Integracoes**: PostgreSQL (via `IRunningSessionRepository` e `IStrengthSessionRepository`), Google Sign-In indiretamente atraves do `AuthenticationFilter`. Nao ha chamada a servico externo alem da autenticacao.
 
@@ -45,14 +45,36 @@ Este arquivo (`src/Steady.Api/Endpoints/OverloadAssessmentEndpoints.cs`) e uma c
 
 **Entrada**: nenhum corpo ou parametro de rota/query - a avaliacao usa exclusivamente o `CurrentCorredor.Id` resolvido pela autenticacao e a data atual (`DateTime.UtcNow`) como referencia de "hoje".
 
-**Saida - 200 OK** (`OverloadAssessmentResponse`, `src/Steady.Api/Contracts/OverloadAssessmentResponse.cs`):
+**Saida - 200 OK** (`OverloadAssessmentResponse`, `src/Steady.Api/Contracts/OverloadAssessmentResponse.cs`) - agora com tres estados distintos (ADR-004):
+
+Risco identificado (sempre com `hasSufficientHistory: true` - a regra so avalia risco depois de confirmar historico suficiente):
 ```json
 {
   "hasRisk": true,
-  "suggestion": "Você teve um treino pesado de perna e sua carga de corrida aumentou nos últimos 7 dias. Considere reduzir a distância ou o ritmo da próxima corrida, ou aliviar a intensidade do próximo treino de perna, para não sobrecarregar."
+  "suggestion": "Você teve um treino pesado de perna e sua carga de corrida aumentou nos últimos 7 dias. Considere reduzir a distância ou o ritmo da próxima corrida, ou aliviar a intensidade do próximo treino de perna, para não sobrecarregar.",
+  "hasSufficientHistory": true
 }
 ```
-Quando nao ha risco: `{"hasRisk": false, "suggestion": null}` (inclui o caso de corredor sem historico algum, ou historico insuficiente - menos de 14 dias).
+
+Sem risco, com historico suficiente avaliado (o app exibe "sem risco"):
+```json
+{
+  "hasRisk": false,
+  "suggestion": null,
+  "hasSufficientHistory": true
+}
+```
+
+Historico insuficiente - corredor com menos de 14 dias de historico total, ADR-001 §5 (o app exibe "reunindo dados", **nao** "sem risco" - antes do ADR-004 este caso era indistinguivel do anterior):
+```json
+{
+  "hasRisk": false,
+  "suggestion": null,
+  "hasSufficientHistory": false
+}
+```
+
+A combinacao `hasRisk: true` com `hasSufficientHistory: false` nunca ocorre - e invalida por construcao no dominio (as fabricas privadas de `OverloadAssessment` impedem essa combinacao).
 
 **Saida - 401 Unauthorized**: sem header `Authorization: Bearer {token}`, ou token invalido/expirado.
 
@@ -86,7 +108,7 @@ sequenceDiagram
         StrengthRepo-->>-Endpoint: IReadOnlyList StrengthSessionEntity
         Endpoint->>Endpoint: reconstroi RunningSession/StrengthSession de dominio a partir das entidades
         Endpoint->>+Domain: OverloadDetectionService.Evaluate(runningSessions, strengthSessions, today)
-        Domain-->>-Endpoint: OverloadAssessment (HasRisk, Suggestion)
+        Domain-->>-Endpoint: OverloadAssessment (HasRisk, Suggestion, HasSufficientHistory)
         Endpoint-->>-Client: 200 OK (OverloadAssessmentResponse)
     end
 ```
@@ -102,7 +124,7 @@ E.1. `MapOverloadAssessmentEndpoints()` - handler de `GET /overload-assessment`
 - Reconstroi instancias de dominio a partir das entidades: `runningEntities.Select(e => RunningSession.Create(e.Date, e.DistanceKm, e.DurationMinutes, e.AveragePaceMinPerKm, e.PerceivedEffort))` e o equivalente para `StrengthSession.Create` -> [D2.1](#d21-runningsessioncreate-reconstrucao) / [D2.2](#d22-strengthsessioncreate-reconstrucao).
 - Calcula `today = DateOnly.FromDateTime(DateTime.UtcNow)`.
 - Chama `OverloadDetectionService.Evaluate(runningSessions, strengthSessions, today)` -> [D1.1](#d11-overloaddetectionserviceevaluate).
-- Retorna `Results.Ok(new OverloadAssessmentResponse(assessment.HasRisk, assessment.Suggestion))` -> `200 OK`.
+- Retorna `Results.Ok(new OverloadAssessmentResponse(assessment.HasRisk, assessment.Suggestion, assessment.HasSufficientHistory))` -> `200 OK`. O terceiro campo (`HasSufficientHistory`) e o unico repasse novo desde o ADR-004 - o endpoint nao interpreta nem deriva esse valor, apenas propaga o que `OverloadDetectionService` calculou.
 
 **F. Endpoint Filter (AuthenticationFilter)**
 
@@ -112,13 +134,13 @@ F.1. `InvokeAsync()` - aplicado a todo o grupo `/api`. Mesmo comportamento docum
 **D1. Domain (OverloadDetectionService, Steady.Domain.Overload)**
 
 <a id="d11-overloaddetectionserviceevaluate"></a>
-D1.1. `OverloadDetectionService.Evaluate(runningSessions, strengthSessions, today)` (`src/Steady.Domain/Overload/OverloadDetectionService.cs`) - regra fundamentada em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md) (ACWR - Gabbett 2016 - + session-RPE - Foster 2001 - + regra dos 10%).
-- Chama `HasSufficientHistory(...)`: calcula a data mais antiga entre todas as sessoes; se nao houver nenhuma sessao (`earliestDate is null`) ou o intervalo entre a data mais antiga e hoje for menor que `MinimumHistoryDays = 14`, retorna `OverloadAssessment.NoRisk()` imediatamente - sem avaliar a regra combinada.
+D1.1. `OverloadDetectionService.Evaluate(runningSessions, strengthSessions, today)` (`src/Steady.Domain/Overload/OverloadDetectionService.cs`) - regra fundamentada em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md) (ACWR - Gabbett 2016 - + session-RPE - Foster 2001 - + regra dos 10%). Algoritmo completo documentado no lado do dominio; aqui o essencial para entender o contrato HTTP.
+- Chama `HasSufficientHistory(...)`: calcula a data mais antiga entre todas as sessoes; se nao houver nenhuma sessao (`earliestDate is null`) ou o intervalo entre a data mais antiga e hoje for menor que `MinimumHistoryDays = 14`, retorna `OverloadAssessment.InsufficientHistory()` imediatamente - sem avaliar a regra combinada (**ADR-004**: antes deste ADR, retornava `OverloadAssessment.NoRisk()`, o que tornava "sem historico suficiente" indistinguivel de "avaliei e nao ha risco" para quem consome a API).
 - Define `recentWindow = [hoje-6, hoje]` e `previousWindow = [hoje-13, hoje-7]` (janelas moveis de 7 dias corridos, nao semana de calendario).
 - `hasHeavyLegSession`: verifica se existe alguma `StrengthSession` na `recentWindow` com `MuscleGroup` igual a `PernaFrontal` ou `PernaPosterior` **e** `Intensity.Pesado`.
 - `recentRunningLoad`/`previousRunningLoad`: soma de `RunningSession.Load` (`DurationMinutes * PerceivedEffort`) em cada janela, via `SumLoad`.
 - `isOverloaded = hasHeavyLegSession && previousRunningLoad > 0 && recentRunningLoad >= previousRunningLoad * 1.10` (constante `OverloadThreshold`).
-- Retorna `OverloadAssessment.Risk(SuggestionMessage)` (mensagem fixa, nao personalizada por numero) quando `isOverloaded`, senao `OverloadAssessment.NoRisk()`.
+- Retorna `OverloadAssessment.Risk(SuggestionMessage)` (mensagem fixa, nao personalizada por numero, `HasSufficientHistory = true`) quando `isOverloaded`, senao `OverloadAssessment.NoRisk()` (`HasSufficientHistory = true`). `OverloadAssessment` tem tres fabricas privadas (`Risk`, `NoRisk`, `InsufficientHistory`) que impedem por construcao a combinacao invalida `HasRisk = true` com `HasSufficientHistory = false`.
 
 <a id="d21-runningsessioncreate-reconstrucao"></a>
 D2.1. `RunningSession.Create(...)` - mesma factory documentada em [RunningSessionEndpoints DevDocs - D1.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#d11-runningsessioncreate). Aqui e usada para **reconstruir** instancias de dominio a partir de dados ja persistidos e validados (nao para validar entrada nova do usuario) - as guard clauses tecnicamente rodam de novo, mas nao deveriam falhar porque os dados ja passaram pela validacao no momento do registro original.
@@ -142,3 +164,4 @@ R2.1. `StrengthSessionRepository.GetByCorredorIdAsync(corredorId, cancellationTo
 - **Tratamento de Erros**: nao ha validacao de entrada (rota sem parametros) - o unico erro possivel e `401` (falha de autenticacao) ou falha de infraestrutura nao tratada (mesmo debito generico de middleware de excecao ja identificado nos demais endpoints).
 - **Reconstrucao de dominio via entidade de persistencia**: o endpoint reconstroi objetos de dominio chamando `RunningSession.Create`/`StrengthSession.Create` novamente sobre dados ja validados - funciona, mas acopla a leitura as mesmas guard clauses da escrita (qualquer mudanca de guard clause afeta tambem a leitura do historico).
 - **Consistencia com ADR-001**: a janela de 7 dias e o limiar de 14 dias de historico batem exatamente com o que esta documentado no ADR-001 e na spec BDD da STORY-001 - nenhuma divergencia encontrada entre codigo e documentacao.
+- **Estado de historico insuficiente explicito no contrato (ADR-004)**: `OverloadAssessmentResponse` ganhou o campo `hasSufficientHistory`. O app usa esse campo para decidir entre exibir "reunindo dados" (`false`) e "sem risco" (`true` + `hasRisk: false`) - antes da mudanca, os dois casos chegavam ao cliente como `{"hasRisk": false, "suggestion": null}` identicos, o que arriscava o app afirmar "sem risco" para um corredor cujo historico ainda nao permite avaliacao alguma. O limiar de 14 dias continua definido exclusivamente no dominio (ADR-001) - este endpoint apenas repassa o booleano calculado, nunca calcula o limiar.

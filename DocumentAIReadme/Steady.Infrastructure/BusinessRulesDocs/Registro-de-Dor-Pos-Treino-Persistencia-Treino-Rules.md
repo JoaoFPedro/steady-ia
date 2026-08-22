@@ -51,6 +51,8 @@ journey
   - *Exemplo*: tentar registrar dor sem informar a regiao resulta em rejeicao pelo dominio, nada e persistido.
 - **Binario, sem escala de intensidade**: o registro representa "doeu" (a existencia do registro) -- o MVP nao inclui uma escala de intensidade de dor (decisao de escopo documentada em `specs/STORY-001/spec.bdd.md`, "Fora do escopo desta story").
 - **Dono sempre do contexto de autenticacao**: mesmo padrao dos demais repositorios -- `CorredorId` vem do corredor autenticado.
+- **Reenvio nao duplica**: a chave de idempotencia enviada no header `Idempotency-Key` (ver [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)) e gravada junto com o registro, escopada por `(corredor_id, idempotency_key)`. Existe para a fila offline do app: se a resposta se perder depois que o servidor ja persistiu o registro de dor, o app reenvia o mesmo item da fila. Ao reconhecer a chave, o repositorio devolve o registro ja existente em vez de criar outro.
+  - *Exemplo*: app perde conexao logo apos enviar o registro de dor; ao reenviar com a mesma `Idempotency-Key`, o repositorio devolve o registro ja salvo, sem gravar uma segunda linha.
 
 **Cenarios de Uso**:
 - **Registro no mesmo dia do treino**: corredor sente dor logo apos treinar.
@@ -106,7 +108,7 @@ graph LR
 1. Corredor envia `POST /api/pain-logs` com a data e a regiao da dor.
 2. Dominio valida que a regiao nao esta vazia.
 3. Repositorio persiste o registro associado ao `CorredorId`.
-4. API responde 201 com os dados do registro criado.
+4. API responde 201 com os dados do registro criado na primeira tentativa; se for um reenvio da fila offline com a mesma `Idempotency-Key`, a API responde 200 com o registro ja existente, sem criar duplicata (ver ADR-003).
 
 **Pos-condicoes**: registro de dor salvo, disponivel no banco de dados (ainda que sem consulta implementada no MVP).
 
@@ -114,5 +116,6 @@ graph LR
 | Cenario | Entrada | Acao do Sistema | Resultado Esperado |
 |---------|---------|-----------------|-------------------|
 | Registro valido | Data de hoje, regiao "joelho direito" | Persiste associado ao corredor | Registro criado, 201 |
+| Reenvio com mesma Idempotency-Key | Mesmo payload e mesma chave de uma tentativa anterior ja persistida | Repositorio localiza `(corredor_id, idempotency_key)` existente e nao persiste de novo | Registro existente devolvido, 200, sem duplicata |
 | Registro sem regiao | Regiao vazia | Dominio rejeita antes da persistencia | 400, nada gravado |
 | Registro dias depois do treino | Data anterior a hoje | Persiste normalmente | Registro criado, 201 |

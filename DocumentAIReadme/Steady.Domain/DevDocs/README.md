@@ -7,7 +7,7 @@ Documentação técnica detalhada das entidades e serviços de domínio de `src/
 | [RunningSession-Treino-Corrida-DevDocs.md](./RunningSession-Treino-Corrida-DevDocs.md) | Treino-Corrida | Entidade de sessão de corrida: guard clauses de `Create` (distância, duração, escala de esforço 1-10) e cálculo de carga de treino (`Load`). |
 | [StrengthSession-Treino-Forca-DevDocs.md](./StrengthSession-Treino-Forca-DevDocs.md) | Treino-Forca | Entidade de sessão de musculação: guard clauses de `Create` (grupo muscular e intensidade obrigatórios, duração positiva) e mapeamento de intensidade para carga (`IntensityWeight`). Documenta também os enums de apoio `MuscleGroup` e `Intensity`. |
 | [PainLog-Treino-Dor-DevDocs.md](./PainLog-Treino-Dor-DevDocs.md) | Treino-Dor | Entidade de registro de dor: guard clause única (região obrigatória) e desacoplamento intencional de sessões de treino específicas. |
-| [OverloadDetectionService-Sobrecarga-DevDocs.md](./OverloadDetectionService-Sobrecarga-DevDocs.md) | Sobrecarga | Serviço de domínio estático que implementa o algoritmo de detecção de sobrecarga combinada (ACWR + session-RPE + regra dos 10%, fundamentado em ADR-001). Documenta `OverloadDetectionService.Evaluate` junto com o value object de retorno `OverloadAssessment`. |
+| [OverloadDetectionService-Sobrecarga-DevDocs.md](./OverloadDetectionService-Sobrecarga-DevDocs.md) | Sobrecarga | Serviço de domínio estático que implementa o algoritmo de detecção de sobrecarga combinada (ACWR + session-RPE + regra dos 10%, fundamentado em ADR-001). Documenta `OverloadDetectionService.Evaluate` junto com o value object de retorno `OverloadAssessment`, que expõe três estados (histórico insuficiente, sem risco, risco com sugestão) desde o ADR-004. |
 
 ## Convenções
 

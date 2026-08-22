@@ -53,7 +53,7 @@
 **Criterios de Aceite**:
 - [ ] `GET /api/overload-assessment` retorna exatamente o mesmo resultado antes e depois da mudanca para os cenarios ja cobertos em `OverloadAssessmentEndpointTests` e `OverloadDetectionTests`.
 - [ ] A quantidade de linhas trazidas do banco para esta rota nao cresce indefinidamente com o tempo de uso do corredor (limitada a uma janela fixa em torno de 14 dias).
-- [ ] Nenhuma regressao no cenario de "corredor com menos de 14 dias de historico total" (deve continuar retornando sem risco).
+- [ ] Nenhuma regressao no cenario de "corredor com menos de 14 dias de historico total" (deve continuar retornando `hasSufficientHistory: false`, ver ADR-004).
 
 **Roteiro de Teste**:
 1. **Teste 1**: corredor com sessoes distribuidas ao longo de mais de 1 ano, com padrao de sobrecarga apenas nos ultimos 14 dias.
@@ -61,4 +61,4 @@
    - **Resultado Esperado**: mesmo resultado de `hasRisk: true` com a sugestao, independente do volume de sessoes antigas.
 2. **Teste 2**: corredor com historico total de 10 dias (menos que o minimo de 14).
    - **Entrada**: `GET /api/overload-assessment` com sessoes cobrindo so os ultimos 10 dias, mesmo que o padrao recente parecesse arriscado.
-   - **Resultado Esperado**: `hasRisk: false` (regressao do cenario de historico insuficiente nao pode acontecer).
+   - **Resultado Esperado**: `hasRisk: false, hasSufficientHistory: false` (regressao do cenario de historico insuficiente nao pode acontecer - desde ADR-004, este e um estado distinto de "sem risco", nao mais o mesmo `hasRisk: false` generico).

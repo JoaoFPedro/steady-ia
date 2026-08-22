@@ -6,6 +6,7 @@
 - [3. Detalhamento por Componente](#3-detalhamento-por-componente)
   - [3.1. AddSteadyInfrastructure - Registro de servicos de infraestrutura](#31-addsteadyinfrastructure---registro-de-servicos-de-infraestrutura)
   - [3.2. OnModelCreating - Mapeamento objeto-relacional completo](#32-onmodelcreating---mapeamento-objeto-relacional-completo)
+  - [3.3. IIdempotentRecord e SaveResult - Utilitario de idempotencia (ADR-003)](#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003)
 - [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
 
 ## 1. Visao Geral Tecnica
@@ -15,8 +16,9 @@
 **Responsabilidades**:
 - `SteadyDbContext`: expor os quatro `DbSet<>` da aplicacao (`Corredores`, `RunningSessions`, `StrengthSessions`, `PainLogs`) e definir, em `OnModelCreating`, como cada entidade de persistencia mapeia para tabela, colunas, chaves, indices e conversoes de tipo no PostgreSQL.
 - `ServiceCollectionExtensions`: registrar o `SteadyDbContext` (com a connection string resolvida em tempo de DI) e os quatro repositorios (`ICorredorRepository`, `IRunningSessionRepository`, `IStrengthSessionRepository`, `IPainLogRepository`) como servicos `Scoped` no container de Injecao de Dependencia do ASP.NET Core.
+- `IIdempotentRecord` / `IdempotentRecordQueries` / `SaveResult<TEntity>` (`Persistence/IIdempotentRecord.cs`, `Repositories/SaveResult.cs`): utilitario transversal que sustenta a chave de idempotencia introduzida pelo [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md), usado por `RunningSessionRepository`, `StrengthSessionRepository` e `PainLogRepository` -- ver [U1](#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003).
 
-**Integracoes**: `AddSteadyInfrastructure()` e chamado a partir do `Program.cs` de `Steady.Api` durante o bootstrap da aplicacao -- o bootstrap em si (`Program.cs`) nao e uma unidade coberta em `DocumentAIReadme/Steady.Api/DevDocs/` (ver `DocumentAIReadme/Steady.Api/DevDocs/README.md` para a lista de unidades documentadas la, todas Endpoints). `SteadyDbContext` e consumido por todos os repositorios documentados nesta camada (`CorredorRepository`, `RunningSessionRepository`, `StrengthSessionRepository`, `PainLogRepository`).
+**Integracoes**: `AddSteadyInfrastructure()` e chamado a partir do `Program.cs` de `Steady.Api` durante o bootstrap da aplicacao -- o bootstrap em si (`Program.cs`) nao e uma unidade coberta em `DocumentAIReadme/Steady.Api/DevDocs/` (ver `DocumentAIReadme/Steady.Api/DevDocs/README.md` para a lista de unidades documentadas la, todas Endpoints). `SteadyDbContext` e consumido por todos os repositorios documentados nesta camada (`CorredorRepository`, `RunningSessionRepository`, `StrengthSessionRepository`, `PainLogRepository`). O utilitario de idempotencia (`IIdempotentRecord`/`SaveResult<TEntity>`) e consumido pelos tres repositorios de registro (`RunningSessionRepository-Persistencia-Treino-DevDocs.md`, `StrengthSessionRepository-Persistencia-Treino-DevDocs.md`, `PainLogRepository-Persistencia-Treino-DevDocs.md`), fundamentado no [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) e `specs/STORY-003/spec.bdd.md`.
 
 ## 2. Configuracao e Dependencias
 
@@ -114,16 +116,19 @@ CTX.1. Resolucao tardia da connection string + ciclo de vida Scoped
 | | | `DurationMinutes` -> `duration_minutes` | `integer` |
 | | | `AveragePaceMinPerKm` -> `average_pace_min_per_km` | `double precision` |
 | | | `PerceivedEffort` -> `perceived_effort` | `integer` |
+| | | `IdempotencyKey` -> `idempotency_key` | `uuid`, obrigatoria; indice UNICO composto `IX_running_sessions_corredor_id_idempotency_key` `(corredor_id, idempotency_key)` -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) |
 | `StrengthSessionEntity` | `strength_sessions` | `Id` (PK) | `Guid`, chave primaria |
 | | | `CorredorId` -> `corredor_id` | indice `IX_strength_sessions_corredor_id` (nao unico) |
 | | | `Date` -> `date` | `date` |
 | | | `MuscleGroup` -> `muscle_group` | `.HasConversion<string>()` -> `text` |
 | | | `Intensity` -> `intensity` | `.HasConversion<string>()` -> `text` |
 | | | `DurationMinutes` -> `duration_minutes` | `integer` |
+| | | `IdempotencyKey` -> `idempotency_key` | `uuid`, obrigatoria; indice UNICO composto `IX_strength_sessions_corredor_id_idempotency_key` `(corredor_id, idempotency_key)` -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) |
 | `PainLogEntity` | `pain_logs` | `Id` (PK) | `Guid`, chave primaria |
 | | | `CorredorId` -> `corredor_id` | indice `IX_pain_logs_corredor_id` (nao unico, sem consumidor de leitura hoje) |
 | | | `Date` -> `date` | `date` |
 | | | `Region` -> `region` | `IsRequired()`; `text` livre |
+| | | `IdempotencyKey` -> `idempotency_key` | `uuid`, obrigatoria; indice UNICO composto `IX_pain_logs_corredor_id_idempotency_key` `(corredor_id, idempotency_key)` -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) |
 
 #### Detalhamento do Fluxo
 
@@ -136,9 +141,35 @@ CTX.2. Configuracao de CorredorEntity
 CTX.3. Configuracao de RunningSessionEntity, StrengthSessionEntity e PainLogEntity
 - Padrao identico nas tres: `ToTable(...)`, `HasKey(s => s.Id)`, `Property(s => s.CorredorId).HasColumnName("corredor_id")`, `HasIndex(s => s.CorredorId)` (nao unico -- multiplos registros por corredor sao esperados).
 - `StrengthSessionEntity` e a unica com conversao de tipo explicita (`HasConversion<string>()` para os dois enums) -- ver `StrengthSessionRepository-Persistencia-Treino-DevDocs.md` para o detalhamento do impacto dessa escolha.
+- As tres tambem mapeiam `Property(s => s.IdempotencyKey).HasColumnName("idempotency_key")` e `HasIndex(s => new { s.CorredorId, s.IdempotencyKey }).IsUnique()` -- este e um **segundo** indice por tabela, composto e unico, que convive com o indice simples `corredor_id` ja existente (ele nao foi substituido). Ver [U1](#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003) para o motivo do escopo composto por `(corredor_id, idempotency_key)`.
+
+### 3.3. IIdempotentRecord e SaveResult - Utilitario de idempotencia (ADR-003)
+
+**Proposito**: dois arquivos de apoio, usados pelos tres repositorios de registro (`RunningSessionRepository`, `StrengthSessionRepository`, `PainLogRepository`), que implementam o contrato de idempotencia definido pelo [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md). Nao sao chamados via HTTP nem tem Entrada/Saida no sentido de rota -- documentados aqui, uma unica vez, para evitar repetir a mesma explicacao nos tres DevDocs de repositorio (que apenas referenciam esta secao).
+
+**Arquivos**:
+- `Persistence/IIdempotentRecord.cs`: define a interface `IIdempotentRecord` (`Guid CorredorId`, `Guid IdempotencyKey`) e a classe estatica `IdempotentRecordQueries`.
+- `Repositories/SaveResult.cs`: define `public readonly record struct SaveResult<TEntity>(TEntity Entity, bool Created)`.
+
+#### Detalhamento do Fluxo
+
+**U1. Mapeamento Dominio<->Persistencia (Utilitario de Idempotencia)**
+
+<a id="u1-iidempotentrecord-e-saveresult"></a>
+U1.1. `IIdempotentRecord` + `IdempotentRecordQueries.FindByIdempotencyKeyAsync<TEntity>(DbSet<TEntity>, Guid corredorId, Guid idempotencyKey, CancellationToken)`
+- `IIdempotentRecord` e implementada por `RunningSessionEntity`, `StrengthSessionEntity` e `PainLogEntity` (as tres entidades ganharam as propriedades `CorredorId`/`IdempotencyKey` exigidas pela interface).
+- `FindByIdempotencyKeyAsync` e um metodo de extensao generico sobre `DbSet<TEntity>` que executa `FirstOrDefaultAsync(r => r.CorredorId == corredorId && r.IdempotencyKey == idempotencyKey, ct)`.
+- **O filtro por `corredorId` E `idempotencyKey` juntos e deliberado**: alem de localizar o registro certo, impede que a chave de um corredor seja usada para inferir a existencia de um registro de outro corredor -- mesma preocupacao de isolamento (A01) ja registrada no [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), agora estendida ao novo eixo de busca por chave de idempotencia.
+- Chamado no inicio de cada `AddAsync` dos tres repositorios de registro, antes de decidir se cria uma linha nova -- ver `RunningSessionRepository-Persistencia-Treino-DevDocs.md#31-addasync---persiste-uma-nova-sessao-de-corrida`, `StrengthSessionRepository-Persistencia-Treino-DevDocs.md#31-addasync---persiste-uma-nova-sessao-de-musculacao` e `PainLogRepository-Persistencia-Treino-DevDocs.md#31-addasync---persiste-um-novo-registro-de-dor`.
+
+U1.2. `SaveResult<TEntity>`
+- `record struct` imutavel com dois campos: `Entity` (a entidade persistida, nova ou preexistente) e `Created` (`bool`).
+- `Created = true` quando `AddAsync` gravou uma linha nova (nenhum registro com aquela `(corredorId, idempotencyKey)` existia antes) -- o Endpoint de `Steady.Api` usa isso para responder **201 Created**.
+- `Created = false` quando `AddAsync` encontrou um registro ja existente para a mesma `(corredorId, idempotencyKey)` (reenvio da fila offline) e devolveu-o **sem gravar nada novo** -- o Endpoint responde **200 OK** neste caso, tratando o reenvio como sucesso identico ao original.
+- E o tipo de retorno de `AddAsync` nos tres repositorios de registro, substituindo o retorno direto de `TEntity` que existia antes do ADR-003.
 
 ## 4. Observacoes Tecnicas
 
-- **Performance**: nenhum indice composto existe hoje (ex.: `(corredor_id, date)`) -- todas as consultas por periodo filtram por `corredor_id` no banco e por data em memoria (ver TechnicalDebtsDocs dos repositorios individuais de treino).
+- **Performance**: nenhum indice composto por data existe hoje (ex.: `(corredor_id, date)`) -- todas as consultas por periodo filtram por `corredor_id` no banco e por data em memoria (ver TechnicalDebtsDocs dos repositorios individuais de treino). O indice composto `(corredor_id, idempotency_key)` introduzido pelo ADR-003 e um indice diferente, com proposito de garantia de unicidade, nao de acelerar consulta por periodo.
 - **Tratamento de Erros**: `AddSteadyInfrastructure()` lanca `InvalidOperationException` de forma proposital e explicita quando a connection string `SteadyDb` nao esta configurada -- falha rapido e com mensagem acionavel, em vez de deixar o EF Core falhar de forma mais obscura na primeira query.
-- **Integracoes Criticas**: este e o unico ponto de verdade para o schema relacional de toda a aplicacao -- qualquer mudanca em uma entidade de dominio que precise refletir no banco passa necessariamente por `OnModelCreating` + uma nova migration em `Migrations/`. A migration `20260809210535_InitialCreate` e, no momento desta documentacao, a unica migration existente (schema inicial completo, gerado a partir deste `OnModelCreating`).
+- **Integracoes Criticas**: este e o unico ponto de verdade para o schema relacional de toda a aplicacao -- qualquer mudanca em uma entidade de dominio que precise refletir no banco passa necessariamente por `OnModelCreating` + uma nova migration em `Migrations/`. Duas migrations existem no momento desta documentacao: `20260809210535_InitialCreate` (schema inicial completo) e `20260816021123_AddIdempotencyKey` ([ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)) -- esta ultima adiciona a coluna `idempotency_key` (uuid, not null) nas tres tabelas de registro via `defaultValueSql: "gen_random_uuid()"` (usado **apenas** para dar um valor distinto a cada linha ja existente no backfill, evitando colisao no indice unico criado em seguida), depois remove esse default com `ALTER TABLE ... DROP DEFAULT` -- a partir dali a chave passa a ser responsabilidade exclusiva do cliente, sem o banco gerar uma silenciosamente em um INSERT sem valor. Em seguida cria os tres indices unicos compostos `(corredor_id, idempotency_key)`.

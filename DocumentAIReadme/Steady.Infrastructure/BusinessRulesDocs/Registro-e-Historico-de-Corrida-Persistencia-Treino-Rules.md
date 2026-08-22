@@ -55,6 +55,8 @@ journey
 - **Validacao de dominio antes da persistencia**: distancia > 0, duracao > 0 e percepcao de esforco entre 1 e 10 sao verificadas em `Steady.Domain` (`RunningSession.Create`) antes de qualquer chamada ao repositorio -- a camada de persistencia nunca recebe uma sessao invalida (ver `specs/STORY-001/spec.bdd.md`).
   - *Exemplo*: uma tentativa de registrar distancia zero e rejeitada com 400 antes mesmo de chegar ao repositorio.
 - **Identificador gerado na persistencia**: o `Id` da sessao e gerado pelo repositorio (`Guid.NewGuid()`), nao pelo cliente nem pelo banco.
+- **Reenvio nao duplica**: a chave de idempotencia enviada pelo cliente no header `Idempotency-Key` (ver [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)) e gravada junto com o registro, escopada por `(corredor_id, idempotency_key)`. Isso existe para suportar a fila offline do app: se a rede cair depois que o servidor ja persistiu o registro mas antes da resposta chegar ao cliente, o app reenvia o mesmo item da fila. Ao receber uma chave ja conhecida daquele corredor, o repositorio devolve a sessao existente em vez de criar outra.
+  - *Exemplo*: corredor perde conexao logo apos enviar a corrida; o app reenvia com a mesma `Idempotency-Key` quando a rede volta -- o repositorio identifica a chave repetida e devolve a sessao ja salva, sem gravar uma segunda linha.
 
 **Cenarios de Uso**:
 - **Registro valido**: corredor informa dados dentro das regras, sessao e salva e aparece no historico.
@@ -130,7 +132,7 @@ graph LR
 1. Corredor envia `POST /api/running-sessions` com os dados da corrida.
 2. Dominio valida (distancia > 0, duracao > 0, esforco entre 1-10).
 3. Repositorio persiste a sessao associada ao `CorredorId`.
-4. API responde 201 com os dados da sessao criada.
+4. API responde 201 com os dados da sessao criada na primeira tentativa; se for um reenvio da fila offline com a mesma `Idempotency-Key`, a API responde 200 com os dados da sessao ja existente, sem criar duplicata (ver ADR-003).
 
 **Pos-condicoes**: sessao aparece no historico e passa a contar para a proxima avaliacao de sobrecarga.
 
@@ -150,6 +152,7 @@ graph LR
 | Cenario | Entrada | Acao do Sistema | Resultado Esperado |
 |---------|---------|-----------------|-------------------|
 | Registro valido | Distancia 5km, 30min, RPE 6 | Persiste associada ao corredor | Sessao criada, 201 |
+| Reenvio com mesma Idempotency-Key | Mesmo payload e mesma chave de uma tentativa anterior ja persistida | Repositorio localiza `(corredor_id, idempotency_key)` existente e nao persiste de novo | Sessao existente devolvida, 200, sem duplicata |
 | Registro com distancia invalida | Distancia 0 | Dominio rejeita antes da persistencia | 400, sessao nao criada |
 | Consulta com historico | Corredor com 10 sessoes | Filtra por corredor_id | Lista com 10 sessoes |
 | Consulta sem historico | Corredor sem sessoes | Filtra por corredor_id | Lista vazia |

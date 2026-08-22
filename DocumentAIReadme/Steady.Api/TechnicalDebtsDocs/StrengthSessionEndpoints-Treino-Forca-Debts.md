@@ -7,7 +7,8 @@
 - [4. User Stories para Implementacao](#4-user-stories-para-implementacao)
 
 ## 1. Resumo Executivo
-- **Estado Atual**: mesma estrutura e mesmo nivel de maturidade de `RunningSessionEndpoints` - guard clause no dominio + `DomainFactory.TryCreate` + repository escopado por corredor. Coberto por `tests/Steady.Api.Tests/StrengthSessionEndpointTests.cs`.
+- **Estado Atual**: mesma estrutura e mesmo nivel de maturidade de `RunningSessionEndpoints` - guard clause no dominio + `DomainFactory.TryCreate` + repository escopado por corredor. Coberto por `tests/Steady.Api.Tests/StrengthSessionEndpointTests.cs`, `tests/Steady.Api.Tests/IdempotencyTests.cs`.
+- **Risco de duplicata por reenvio - resolvido**: mesmo mecanismo e mesma resolucao documentados em [RunningSessionEndpoints Debts](./RunningSessionEndpoints-Treino-Corrida-Debts.md#1-resumo-executivo) - chave de idempotencia (ADR-003) elimina o risco de uma sessao de "Perna Pesada" duplicada distorcer o gatilho de sobrecarga. Nao e mais um debito em aberto.
 - **Principais Problemas**: mesma inconsistencia de `Location` no `201 Created` observada em `RunningSessionEndpoints`; ausencia de tratamento de excecao generica; e um risco especifico desta rota - os enums `MuscleGroup`/`Intensity` sao persistidos como `string` no banco (`HasConversion<string>()`), o que cria acoplamento silencioso entre o nome do enum em C# e o dado ja gravado no PostgreSQL.
 - **Impacto no Negocio**: risco medio de longo prazo - renomear um valor de enum (`MuscleGroup`/`Intensity`) sem migracao de dados quebra silenciosamente a leitura de sessoes ja persistidas (o valor salvo como texto deixa de bater com o enum em C#).
 

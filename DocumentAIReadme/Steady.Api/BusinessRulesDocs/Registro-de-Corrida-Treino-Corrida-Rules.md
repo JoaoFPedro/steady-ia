@@ -48,9 +48,12 @@ journey
 
 **O que faz**: Recebe os dados de uma corrida realizada e salva permanentemente, associada ao corredor autenticado.
 
-**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #1, e `specs/STORY-002/spec.bdd.md`, regras #1-#5):
+**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #1, `specs/STORY-002/spec.bdd.md`, regras #1-#5, e `specs/STORY-003/spec.bdd.md` para a idempotencia, fundamentada em [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)):
 - **Autenticacao obrigatoria**: so e possivel registrar uma corrida com um login valido do Google. Sem isso, o sistema recusa a requisicao antes de qualquer processamento.
   - *Exemplo*: um app que nao envie o token de login recebe recusa imediata (nao chega a salvar nada).
+- **Reenvio da fila offline nao cria treino duplicado**: cada corrida enfileirada pelo app leva uma chave unica gerada no momento em que entra na fila local; reenviar o mesmo item (ex.: apos perder a conexao no meio do envio) devolve o registro ja salvo em vez de criar uma segunda sessao.
+  - *Exemplo*: o app perde o sinal logo depois de enviar uma corrida e reenvia assim que a conexao volta - o corredor ve apenas um registro no historico, nao dois.
+  - *Por que importa*: uma corrida duplicada infla artificialmente a carga de treino e pode disparar (ou mascarar) um alerta de sobrecarga que nao reflete a realidade.
 - **Distancia deve ser maior que zero**: nao e possivel registrar uma corrida com distancia zero ou negativa.
   - *Exemplo*: tentar registrar 0 km e rejeitado com a mensagem "A distância deve ser maior que zero."
 - **Duracao deve ser maior que zero**: nao e possivel registrar uma corrida sem tempo de duracao valido.
@@ -73,7 +76,7 @@ journey
 - **Hierarquia**: nao ha niveis de acesso diferentes no MVP - todo corredor tem o mesmo conjunto de permissoes sobre seus proprios dados.
 
 ### Dados e Entrada
-- **Dados Obrigatorios**: data, distancia (km), duracao (minutos), ritmo medio (min/km), percepcao de esforco (1 a 10).
+- **Dados Obrigatorios**: data, distancia (km), duracao (minutos), ritmo medio (min/km), percepcao de esforco (1 a 10), alem da chave de idempotencia (gerada pelo app, nao digitada pelo corredor).
 - **Formatos Aceitos**: distancia e ritmo em numeros decimais; duracao e esforco em numeros inteiros; data no formato `AAAA-MM-DD`.
 - **Limitacoes de Volume**: distancia e duracao devem ser maiores que zero; nao ha limite maximo definido nesta versao.
 
@@ -138,3 +141,4 @@ graph LR
 | Distancia invalida | Distancia 0 ou negativa | Rejeita com mensagem de dominio | 400 - "A distância deve ser maior que zero." |
 | Duracao invalida | Duracao 0 ou negativa | Rejeita com mensagem de dominio | 400 - "A duração deve ser maior que zero." |
 | Esforco fora da escala | Esforco 0 ou 11 | Rejeita com mensagem de dominio | 400 - "A percepção de esforço deve estar entre 1 e 10." |
+| Reenvio do mesmo item da fila offline | Mesma chave de idempotencia de um envio ja processado | Devolve o registro ja existente, sem criar outro | 200 - sessao ja existente (nao um novo 201) |
