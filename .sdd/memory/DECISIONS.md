@@ -12,6 +12,7 @@
 | ADR-003 | Chave de idempotência para sincronização offline | 2026-08-15 | Accepted | STORY-003 |
 | ADR-004 | Estado de histórico insuficiente no contrato da avaliação de sobrecarga | 2026-08-16 | Accepted | STORY-003 |
 | ADR-005 | Destino da fila de registros pendentes ao encerrar a sessão | 2026-08-16 | Accepted | STORY-004 |
+| ADR-007 | Persistência do pedido de plano de treino | 2026-08-22 | Accepted | STORY-010 |
 
 ## Superadas
 
