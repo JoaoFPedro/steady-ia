@@ -1,7 +1,11 @@
-/** Quem está autenticado, do ponto de vista da tela Conta. */
+/** Quem está autenticado, do ponto de vista do menu de perfil. */
 export type AccountIdentity = {
   /** E-mail da conta Google — o que permite ao corredor perceber que está na conta errada. */
   email: string;
+  /** `null` em conta que não informa nome — comum em conta corporativa. */
+  name: string | null;
+  /** URL da foto no CDN do Google, não a imagem. `null` quando a conta não tem foto. */
+  photoUrl: string | null;
 };
 
 /**

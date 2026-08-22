@@ -32,7 +32,7 @@ export class FakeSession implements GoogleSession {
 
   async currentAccount(): Promise<AccountIdentity | null> {
     const { email } = this.options;
-    return email === undefined || email === null ? null : { email };
+    return email ? { email, name: null, photoUrl: null } : null;
   }
 
   async signOut(): Promise<boolean> {

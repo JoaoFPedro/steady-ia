@@ -150,12 +150,36 @@ describe('Sair da conta', () => {
 });
 
 describe('Conta autenticada', () => {
-  it('devolve o e-mail da conta autenticada', async () => {
+  it('devolve e-mail, nome e foto da conta autenticada', async () => {
     const session = new GoogleSignInSession(
-      client({ async currentUser() { return { email: 'corredor@gmail.com' }; } }),
+      client({
+        async currentUser() {
+          return { email: 'corredor@gmail.com', name: 'João Pedro', photo: 'https://foto' };
+        },
+      }),
     );
 
-    expect(await session.currentAccount()).toEqual({ email: 'corredor@gmail.com' });
+    expect(await session.currentAccount()).toEqual({
+      email: 'corredor@gmail.com',
+      name: 'João Pedro',
+      photoUrl: 'https://foto',
+    });
+  });
+
+  it('repassa nome e foto ausentes como nulos, sem inventar valor', async () => {
+    const session = new GoogleSignInSession(
+      client({
+        async currentUser() {
+          return { email: 'corredor@gmail.com', name: null, photo: null };
+        },
+      }),
+    );
+
+    expect(await session.currentAccount()).toEqual({
+      email: 'corredor@gmail.com',
+      name: null,
+      photoUrl: null,
+    });
   });
 
   it('devolve null quando não há conta autenticada', async () => {

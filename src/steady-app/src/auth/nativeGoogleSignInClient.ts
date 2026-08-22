@@ -28,7 +28,10 @@ export const nativeGoogleSignInClient: GoogleSignInClient = {
   // Síncrono na biblioteca; a porta é assíncrona porque as outras são.
   async currentUser() {
     const current = GoogleSignin.getCurrentUser();
-    return current ? { email: current.user.email } : null;
+    if (!current) return null;
+
+    const { email, name, photo } = current.user;
+    return { email, name, photo };
   },
 
   async signOut() {

@@ -2,7 +2,13 @@
 
 > **Story**: [story.md](./story.md)
 > **Análise**: [analysis.md](./analysis.md)
-> **Status**: Approved (2026-08-16)
+> **Status**: Approved (2026-08-16) — **superada em parte pela [STORY-005](../STORY-005/spec.bdd.md)**
+>
+> A **regra** desta spec continua valendo integralmente: sincronizar, avisar,
+> descartar mediante confirmação, e a ordem descarte → `signOut` (ADR-005).
+> O que mudou foi a **superfície**: a tela Conta virou um menu lateral, e os
+> cenários que falam em "abrir a tela Conta" foram reescritos na STORY-005.
+> `signOutAccount.ts` e seus testes não mudaram uma linha na troca.
 > **Autor**: Jefferson (Produto & Design)
 > **Revisores**: Jefferson (Three Amigos — solo)
 

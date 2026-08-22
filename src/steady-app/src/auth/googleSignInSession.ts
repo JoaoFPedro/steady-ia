@@ -18,7 +18,7 @@ export interface GoogleSignInClient {
   /** Lança se não houver sessão. */
   getTokens(): Promise<{ idToken: string }>;
   /** `null` quando não há conta autenticada no aparelho. */
-  currentUser(): Promise<{ email: string } | null>;
+  currentUser(): Promise<{ email: string; name: string | null; photo: string | null } | null>;
   /** Lança se o encerramento falhar — quem chama decide o que fazer com isso. */
   signOut(): Promise<void>;
 }
@@ -72,7 +72,9 @@ export class GoogleSignInSession implements GoogleSession {
   async currentAccount(): Promise<AccountIdentity | null> {
     try {
       const user = await this.client.currentUser();
-      return user && user.email ? { email: user.email } : null;
+      if (!user?.email) return null;
+
+      return { email: user.email, name: user.name, photoUrl: user.photo };
     } catch {
       return null;
     }
