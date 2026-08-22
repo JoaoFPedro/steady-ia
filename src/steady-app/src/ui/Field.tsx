@@ -8,24 +8,30 @@ export function Field({
   onChangeText,
   placeholder,
   keyboardType = 'default',
+  multiline,
 }: {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   keyboardType?: 'default' | 'numeric' | 'decimal-pad';
+  /** Número de linhas do textarea. Ausente = campo de uma linha só. */
+  multiline?: number;
 }) {
   return (
     <View style={s.field}>
       <Text style={s.label}>{label}</Text>
       <TextInput
-        style={s.input}
+        style={[s.input, multiline !== undefined && s.inputMultiline]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={textAlpha.ghost}
         keyboardType={keyboardType}
         selectionColor={color.accent}
+        multiline={multiline !== undefined}
+        numberOfLines={multiline}
+        textAlignVertical={multiline !== undefined ? 'top' : 'center'}
       />
     </View>
   );
@@ -47,5 +53,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: textAlpha.divider,
     borderRadius: radius.md,
+  },
+  inputMultiline: {
+    minHeight: 76,
+    paddingTop: space[3],
+    paddingBottom: space[3],
   },
 });

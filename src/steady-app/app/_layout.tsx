@@ -57,12 +57,18 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="index" options={{ title: 'Steady' }} />
+        {/* Dashboard e Planejamento (STORY-006) vivem dentro do grupo de abas.
+            Cada aba desenha o próprio cabeçalho — a barra do Stack aqui
+            duplicaria o topo e faria o menu lateral da Dashboard deslizar por
+            baixo dela, em vez de cobrir a tela. */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="log/run" options={{ title: 'Registrar corrida' }} />
         <Stack.Screen name="log/strength" options={{ title: 'Registrar musculação' }} />
         <Stack.Screen name="log/pain" options={{ title: 'Registrar dor' }} />
         <Stack.Screen name="history" options={{ title: 'Histórico' }} />
-        <Stack.Screen name="account" options={{ title: 'Conta' }} />
+        <Stack.Screen name="planning/new" options={{ title: 'Criar planejamento' }} />
+        {/* `PlanningDocument` desenha o próprio cabeçalho — mesmo motivo do `(tabs)` acima. */}
+        <Stack.Screen name="planning/plan" options={{ headerShown: false }} />
       </Stack>
     </>
   );

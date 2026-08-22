@@ -76,3 +76,4 @@ independente de onde o time está na implementação de outros itens.
 | ID | Título | Status | Story |
 |----|--------|--------|-------|
 | DISC-001 | Combinar musculação e corrida sem prejudicar performance | Construir | STORY-001 |
+| DISC-002 | Falta um plano de treino dentro do app | Construir | STORY-006 |

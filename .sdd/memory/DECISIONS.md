@@ -17,5 +17,6 @@
 
 | # | Título | Superada por | Data |
 |---|--------|-------------|------|
+| ADR-006 | Interpolação do longão semanal no Plano de Treino mockado | — (escopo corrigido; nenhum ADR novo, ver o próprio ADR-006) | 2026-08-17 |
 
 > Novo ADR? Use `.sdd/templates/adr.md`. Numere: ADR-001, ADR-002...
