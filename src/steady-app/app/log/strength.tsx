@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { Field } from '../../src/ui/Field';
 import { Choice } from '../../src/ui/Choice';
 import { Muted, NoticeStrip, PrimaryButton } from '../../src/ui/Nocturne';
@@ -12,11 +13,17 @@ import {
   type Intensity,
   type MuscleGroup,
 } from '../../src/training/labels';
+import { planDayFromParam } from '../../src/planning/planDayParam';
+import { plannedMuscleGroup } from '../../src/planning/plannedMuscleGroup';
 
 export default function LogStrengthScreen() {
   const { log, saving, problem } = useRecordLogger('strength');
+  /** Chegou pelo detalhamento do dia? Então a tela sabe qual treino era (STORY-012, regra 7). */
+  const planDay = planDayFromParam(useLocalSearchParams<{ planDay?: string }>().planDay);
 
-  const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | null>(null);
+  const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | null>(
+    planDay === null ? null : plannedMuscleGroup(planDay),
+  );
   const [intensity, setIntensity] = useState<Intensity | null>(null);
   const [durationMinutes, setDurationMinutes] = useState('');
 
@@ -24,6 +31,13 @@ export default function LogStrengthScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
+      {planDay !== null && (
+        <View style={s.planned}>
+          <Text style={s.plannedKicker}>Hoje no seu plano</Text>
+          <Text style={s.plannedFocus}>{planDay.focus}</Text>
+        </View>
+      )}
+
       <Muted>
         Treino de perna pesado é o que a avaliação cruza com o seu volume de corrida — por isso
         o grupo muscular importa.
@@ -75,6 +89,14 @@ export default function LogStrengthScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.bg },
+  planned: { marginBottom: space[6] },
+  plannedKicker: {
+    fontSize: type.kicker,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: color.accentRamp[400],
+  },
+  plannedFocus: { color: color.text, fontSize: type.cardTitle, marginTop: space[1] },
   content: { paddingHorizontal: space[8], paddingTop: space[6], paddingBottom: space[8] * 2 },
   form: { marginTop: space[8] },
   problem: { marginBottom: space[6] },

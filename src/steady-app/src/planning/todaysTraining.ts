@@ -1,4 +1,5 @@
 import type { WeekPlanDay } from './trainingPlanDocument';
+import { weekPlanDayFor } from './weekPlanDay';
 
 /**
  * O que o card "Plano da semana" da Dashboard mostra para o dia atual —
@@ -10,11 +11,8 @@ export type TodaysTraining = {
   description: string;
 };
 
-/** `weekPlan` é seg→dom (índice 0–6); `Date.getDay()` é dom→sáb (0–6). */
-const WEEKPLAN_INDEX_BY_JS_WEEKDAY = [6, 0, 1, 2, 3, 4, 5];
-
 export function todaysTraining(jsWeekday: number, weekPlan: WeekPlanDay[]): TodaysTraining {
-  const day = weekPlan[WEEKPLAN_INDEX_BY_JS_WEEKDAY[jsWeekday]];
+  const day = weekPlanDayFor(jsWeekday, weekPlan);
 
   return {
     title: titleOf(day),

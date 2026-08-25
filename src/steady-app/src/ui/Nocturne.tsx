@@ -15,6 +15,18 @@ export function Kicker({ children, accent }: { children: ReactNode; accent?: boo
   return <Text style={[styles.kicker, accent && styles.kickerAccent]}>{children}</Text>;
 }
 
+/**
+ * Etiqueta curta e tingida — o `.tag.tag-accent` do sistema. Carrega um dado
+ * que qualifica o bloco ao lado (quantas semanas faltam), nunca uma ação.
+ */
+export function Tag({ children }: { children: ReactNode }) {
+  return (
+    <View style={styles.tag}>
+      <Text style={styles.tagText}>{children}</Text>
+    </View>
+  );
+}
+
 /** Superfície padrão de conteúdo. */
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return <View style={[styles.card, style]}>{children}</View>;
@@ -112,6 +124,18 @@ export const styles = StyleSheet.create({
   },
   kickerAccent: {
     color: color.accentRamp[400],
+  },
+  tag: {
+    alignSelf: 'flex-start',
+    backgroundColor: color.accentRamp[800],
+    borderRadius: radius.md * 0.75,
+    paddingVertical: space[1],
+    paddingHorizontal: space[3],
+  },
+  tagText: {
+    fontSize: type.label,
+    letterSpacing: 0.2,
+    color: color.accentRamp[100],
   },
   card: {
     backgroundColor: color.surface,

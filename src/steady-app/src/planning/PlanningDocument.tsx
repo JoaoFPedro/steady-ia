@@ -1,17 +1,20 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { PrimaryButton, Rule } from '../ui/Nocturne';
 import { color, radius, space, textAlpha, type } from '../theme/nocturne';
-import type { Exercise, TrainingPlanDocument, WeekPlanDay } from './trainingPlanDocument';
+import type { TrainingPlanDocument } from './trainingPlanDocument';
 import type { PlanRequestSummary } from './planRequest';
+import type { DayStatus } from './dayCompletion';
+import { ExerciseList } from './ExerciseList';
+import { shared } from './planningStyles';
+import { SemanaSection, type RegisterKind } from './SemanaSection';
+import type { SectionId } from './planDayParam';
 import { formatRaceDate } from './raceDate';
 import {
   EQUIPMENT_ACCESS_LABEL,
   PAIN_AREA_LABEL,
   RACE_DISTANCE_LABEL,
 } from './trainingPlanRequest';
-
-type SectionId = 'dados' | 'fases' | 'semana' | 'mobilidade' | 'regras';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'dados', label: 'Seus dados' },
@@ -32,6 +35,11 @@ export function PlanningDocument({
   request,
   topInset,
   onEdit,
+  initialSection = 'dados',
+  openDay = null,
+  dayStatuses = [],
+  todayIndex = -1,
+  onRegister,
 }: {
   document: TrainingPlanDocument;
   /**
@@ -42,8 +50,21 @@ export function PlanningDocument({
   request: PlanRequestSummary;
   topInset: number;
   onEdit: () => void;
+  /**
+   * Aba de entrada. O padrão continua sendo "Seus dados" — chegar pela aba
+   * Planejamento não muda o comportamento antigo (STORY-012, regra 3). Só o
+   * card da Dashboard pede a Semana.
+   */
+  initialSection?: SectionId;
+  /** `day.day` que já chega expandido, quando a entrada foi pelo card. */
+  openDay?: string | null;
+  /** Estado de cada dia, alinhado a `weekPlan`. Vazio = nada a marcar. */
+  dayStatuses?: readonly DayStatus[];
+  todayIndex?: number;
+  onRegister?: (kind: RegisterKind, planDayIndex: number) => void;
 }) {
-  const [section, setSection] = useState<SectionId>('dados');
+  const [section, setSection] = useState<SectionId>(initialSection);
+  const body = useRef<ScrollView>(null);
 
   return (
     <View style={s.screen}>
@@ -73,10 +94,28 @@ export function PlanningDocument({
         </View>
       </View>
 
-      <ScrollView style={s.body} contentContainerStyle={s.bodyContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={body}
+        style={s.body}
+        contentContainerStyle={s.bodyContent}
+        showsVerticalScrollIndicator={false}
+      >
         {section === 'dados' && <SeusDadosSection request={request} />}
         {section === 'fases' && <FasesSection document={document} />}
-        {section === 'semana' && <SemanaSection document={document} />}
+        {section === 'semana' && (
+          <SemanaSection
+            document={document}
+            statuses={dayStatuses}
+            todayIndex={todayIndex}
+            initialOpenDay={openDay}
+            onRegister={onRegister ?? (() => {})}
+            // Sem animação: o dia precisa já estar na tela quando ela aparece,
+            // não deslizar até lá depois (regra 1).
+            onDayLayout={(y) =>
+              body.current?.scrollTo({ y: Math.max(0, y - space[6]), animated: false })
+            }
+          />
+        )}
         {section === 'mobilidade' && <MobilidadeSection document={document} />}
         {section === 'regras' && <RegrasSection document={document} />}
       </ScrollView>
@@ -127,7 +166,7 @@ function SeusDadosSection({ request }: { request: PlanRequestSummary }) {
 
   return (
     <View>
-      <Text style={s.kick}>O que você respondeu</Text>
+      <Text style={shared.kick}>O que você respondeu</Text>
       <View style={s.dataList}>
         {linhas.map((linha) => (
           <View key={linha.rotulo} style={s.dataRow}>
@@ -140,15 +179,15 @@ function SeusDadosSection({ request }: { request: PlanRequestSummary }) {
       {request.priorInjuries && (
         <>
           <Rule />
-          <Text style={s.kick}>Lesões anteriores</Text>
-          <Text style={s.paragraph}>{request.priorInjuries}</Text>
+          <Text style={shared.kick}>Lesões anteriores</Text>
+          <Text style={shared.paragraph}>{request.priorInjuries}</Text>
         </>
       )}
 
       <Rule />
       {/* Honestidade explícita: o plano abaixo ainda não é calculado a partir
           destas respostas (DISC-002 — geração fica para depois). */}
-      <Text style={s.paragraph}>
+      <Text style={shared.paragraph}>
         O plano nas abas seguintes ainda não é calculado a partir destas respostas —
         elas ficam guardadas para quando a geração entrar.
       </Text>
@@ -159,12 +198,12 @@ function SeusDadosSection({ request }: { request: PlanRequestSummary }) {
 function FasesSection({ document }: { document: TrainingPlanDocument }) {
   return (
     <View>
-      <Text style={s.kick}>Princípio central</Text>
-      <Text style={s.paragraph}>{document.principle.intro}</Text>
+      <Text style={shared.kick}>Princípio central</Text>
+      <Text style={shared.paragraph}>{document.principle.intro}</Text>
       <BulletList items={document.principle.points} />
 
       <Rule />
-      <Text style={s.kick}>Visão geral das fases</Text>
+      <Text style={shared.kick}>Visão geral das fases</Text>
       <View style={s.phaseList}>
         {document.phases.map((phase, index) => (
           <Fragment key={phase.name}>
@@ -186,12 +225,12 @@ function FasesSection({ document }: { document: TrainingPlanDocument }) {
           </Fragment>
         ))}
       </View>
-      <View style={s.callout}>
-        <Text style={s.calloutText}>{document.phaseCycleNote}</Text>
+      <View style={shared.callout}>
+        <Text style={shared.calloutText}>{document.phaseCycleNote}</Text>
       </View>
 
       <Rule />
-      <Text style={s.kick}>Progressão aproximada do longão</Text>
+      <Text style={shared.kick}>Progressão aproximada do longão</Text>
       <View>
         {document.longRunProgression.map((row) => (
           <View key={row.phase} style={s.progressionRow}>
@@ -202,85 +241,21 @@ function FasesSection({ document }: { document: TrainingPlanDocument }) {
       </View>
 
       <Rule />
-      <Text style={s.kick}>{document.taperAdjustment.title}</Text>
-      <Text style={s.paragraph}>{document.taperAdjustment.intro}</Text>
+      <Text style={shared.kick}>{document.taperAdjustment.title}</Text>
+      <Text style={shared.paragraph}>{document.taperAdjustment.intro}</Text>
       <BulletList items={document.taperAdjustment.items} />
     </View>
-  );
-}
-
-function SemanaSection({ document }: { document: TrainingPlanDocument }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  return (
-    <View>
-      <Text style={s.kick}>Estrutura semanal (seu split)</Text>
-      <View style={s.overviewTable}>
-        {document.weekOverview.map((row) => (
-          <View key={row.day} style={s.overviewRow}>
-            <Text style={s.overviewDay}>{row.day}</Text>
-            <Text style={s.overviewFocus}>{row.strengthFocus}</Text>
-            <Text style={row.runLabel ? s.overviewRun : s.overviewRunEmpty}>{row.runLabel ?? '—'}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={s.callout}>
-        <Text style={s.calloutText}>{document.weekOverviewNote}</Text>
-      </View>
-
-      <Rule />
-      <Text style={s.kick}>Detalhamento de cada dia</Text>
-      <View style={s.weekList}>
-        {document.weekPlan.map((day) => (
-          <DayRow
-            key={day.day}
-            day={day}
-            open={expanded === day.day}
-            onToggle={() => setExpanded((current) => (current === day.day ? null : day.day))}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function DayRow({ day, open, onToggle }: { day: WeekPlanDay; open: boolean; onToggle: () => void }) {
-  return (
-    <Pressable onPress={onToggle} style={s.dayRow}>
-      <View style={s.dayRowHead}>
-        <Text style={s.dayFocus} numberOfLines={open ? undefined : 1}>
-          {day.day}
-        </Text>
-        {day.hasRun && (
-          <View style={s.dayRunBadge}>
-            <Text style={s.dayRunBadgeText}>{day.runLabel}</Text>
-          </View>
-        )}
-      </View>
-
-      {open && (
-        <View style={s.dayDetail}>
-          <Text style={s.dayNote}>{day.intro}</Text>
-          {day.runNote && (
-            <View style={s.runNoteBox}>
-              <Text style={s.runNoteText}>{day.runNote}</Text>
-            </View>
-          )}
-          <ExerciseList items={day.exercises} />
-        </View>
-      )}
-    </Pressable>
   );
 }
 
 function MobilidadeSection({ document }: { document: TrainingPlanDocument }) {
   return (
     <View>
-      <Text style={s.paragraph}>Mobilidade — a cola entre os treinos.</Text>
+      <Text style={shared.paragraph}>Mobilidade — a cola entre os treinos.</Text>
       {document.mobility.map((block, index) => (
         <Fragment key={block.title}>
           <Rule />
-          <Text style={s.kick}>{block.title}</Text>
+          <Text style={shared.kick}>{block.title}</Text>
           <ExerciseList items={block.items} spaced={index === 0} />
         </Fragment>
       ))}
@@ -291,7 +266,7 @@ function MobilidadeSection({ document }: { document: TrainingPlanDocument }) {
 function RegrasSection({ document }: { document: TrainingPlanDocument }) {
   return (
     <View>
-      <Text style={s.kick}>Regras de ouro (prevenção de lesão)</Text>
+      <Text style={shared.kick}>Regras de ouro (prevenção de lesão)</Text>
       <View style={s.rulesList}>
         {document.goldenRules.map((rule) => (
           <View key={rule.number} style={s.ruleCard}>
@@ -302,21 +277,8 @@ function RegrasSection({ document }: { document: TrainingPlanDocument }) {
       </View>
 
       <Rule />
-      <Text style={s.kick}>Observação sobre ritmos</Text>
-      <Text style={s.paragraph}>{document.paceNote}</Text>
-    </View>
-  );
-}
-
-function ExerciseList({ items, spaced }: { items: Exercise[]; spaced?: boolean }) {
-  return (
-    <View style={spaced ? s.spacedTop : undefined}>
-      {items.map((item) => (
-        <View key={item.name} style={s.exerciseRow}>
-          <Text style={s.exerciseName}>{item.name}</Text>
-          {item.series !== '' && <Text style={s.exerciseSeries}>{item.series}</Text>}
-        </View>
-      ))}
+      <Text style={shared.kick}>Observação sobre ritmos</Text>
+      <Text style={shared.paragraph}>{document.paceNote}</Text>
     </View>
   );
 }
@@ -365,23 +327,7 @@ const s = StyleSheet.create({
     backgroundColor: color.bg,
   },
 
-  kick: {
-    fontSize: type.kicker,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: color.accentRamp[400],
-    marginTop: space[2],
-  },
-  paragraph: { fontSize: type.bodySm, lineHeight: 20, color: color.text, marginTop: space[3] },
-  spacedTop: { marginTop: space[3] },
 
-  callout: {
-    marginTop: space[4],
-    padding: space[4],
-    borderRadius: radius.md,
-    backgroundColor: color.accentRamp[900],
-  },
-  calloutText: { fontSize: type.bodySm, lineHeight: 19, color: color.accentRamp[300] },
 
   list: { gap: space[3], marginTop: space[4] },
   listRow: { flexDirection: 'row', gap: space[3], alignItems: 'flex-start' },
@@ -409,40 +355,8 @@ const s = StyleSheet.create({
   progressionPhase: { width: 82, fontSize: type.bodySm, color: color.text },
   progressionRange: { flex: 1, fontSize: type.meta, lineHeight: 18, color: textAlpha.muted },
 
-  overviewTable: { marginTop: space[4] },
-  overviewRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: space[3],
-    paddingVertical: space[2],
-    borderBottomWidth: 1,
-    borderBottomColor: textAlpha.rule,
-  },
-  overviewDay: { width: 64, fontSize: type.bodySm, color: color.text },
-  overviewFocus: { flex: 1, fontSize: type.meta, color: textAlpha.label },
-  overviewRun: { fontSize: type.meta, color: color.accentRamp[400] },
-  overviewRunEmpty: { fontSize: type.meta, color: textAlpha.ghost },
 
-  weekList: { marginTop: space[4], gap: space[2] },
-  dayRow: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: textAlpha.divider,
-    backgroundColor: color.surface,
-    padding: space[4],
-  },
-  dayRowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3] },
-  dayFocus: { flex: 1, fontSize: type.bodySm, color: color.text },
-  dayRunBadge: { borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 2, backgroundColor: color.accentRamp[900] },
-  dayRunBadgeText: { fontSize: type.label, color: color.accentRamp[400] },
-  dayDetail: { marginTop: space[3], paddingTop: space[3], borderTopWidth: 1, borderTopColor: textAlpha.rule },
-  dayNote: { fontSize: type.meta, lineHeight: 18, color: textAlpha.muted },
-  runNoteBox: { marginTop: space[3], padding: space[3], borderRadius: radius.sm, backgroundColor: color.accentRamp[900] },
-  runNoteText: { fontSize: type.meta, lineHeight: 17, color: color.accentRamp[300] },
 
-  exerciseRow: { paddingVertical: space[2], borderBottomWidth: 1, borderBottomColor: textAlpha.rule },
-  exerciseName: { fontSize: type.bodySm, color: color.text, flexShrink: 1 },
-  exerciseSeries: { fontSize: type.label, fontFamily: 'monospace', color: textAlpha.faint, marginTop: 2 },
 
   rulesList: { gap: space[2], marginTop: space[4] },
   ruleCard: {

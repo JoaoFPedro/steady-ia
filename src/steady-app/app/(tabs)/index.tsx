@@ -11,9 +11,10 @@ import {
   NoticeStrip,
   PrimaryButton,
   SecondaryButton,
+  Tag,
 } from '../../src/ui/Nocturne';
 import { Avatar } from '../../src/ui/Avatar';
-import { color, space, type } from '../../src/theme/nocturne';
+import { color, space, textAlpha, type } from '../../src/theme/nocturne';
 import { queryApi, recordQueue } from '../../src/services';
 import { goToLogin } from '../../src/auth/goToLogin';
 import { AccountMenu } from '../../src/account/AccountMenu';
@@ -22,6 +23,13 @@ import { loadHomeState, type HomeState } from '../../src/home/homeState';
 import { todaysTraining } from '../../src/planning/todaysTraining';
 import { TRAINING_PLAN_DOCUMENT } from '../../src/planning/trainingPlanDocument';
 import { loadPlanList } from '../../src/planning/planListState';
+import { loadLoggedSessions } from '../../src/planning/loggedSessions';
+import { planProgress } from '../../src/planning/planProgress';
+import { weekPlanIndexFor } from '../../src/planning/weekPlanDay';
+import { homeHeader } from '../../src/home/homeHeader';
+import { planProgressView } from '../../src/home/planProgressView';
+import type { LoggedSession } from '../../src/planning/dayCompletion';
+import type { PlanRequestSummary } from '../../src/planning/planRequest';
 
 const HEADER_AVATAR_SIZE = 32;
 
@@ -35,11 +43,17 @@ export default function HomeScreen() {
   const router = useRouter();
   const [state, setState] = useState<HomeState | null>(null);
   /**
-   * Chave do planejamento mais recente, ou `null` se não houver nenhum. Decide
-   * para onde "Ver plano da semana" leva (STORY-008) — agora vindo do servidor,
-   * já que a lista deixou de viver na memória do processo (STORY-010).
+   * Os planejamentos do corredor, do mais recente para o mais antigo — a ordem
+   * que `loadPlanList` garante (STORY-010). O mais recente é o plano em vigor:
+   * decide para onde "Ver plano da semana" leva (STORY-008) e alimenta a
+   * semana, a fase e a contagem do cabeçalho (STORY-011).
    */
-  const [latestPlanKey, setLatestPlanKey] = useState<string | null>(null);
+  const [plans, setPlans] = useState<readonly PlanRequestSummary[]>([]);
+  /**
+   * Tudo que já foi registrado — o servidor mais a fila local. `null` é "não
+   * consegui ler", que nunca pode virar 0% de avanço (STORY-012, regra 25).
+   */
+  const [sessions, setSessions] = useState<readonly LoggedSession[] | null>(null);
   const menu = useAccountMenu();
   // Sem a barra do Stack, o topo da tela é a barra de status: o recuo é nosso.
   const insets = useSafeAreaInsets();
@@ -61,7 +75,15 @@ export default function HomeScreen() {
       // quando de fato não existe nenhum.
       loadPlanList(recordQueue, queryApi).then((lista) => {
         if (!active) return;
-        setLatestPlanKey(lista.plans[0]?.idempotencyKey ?? null);
+        setPlans(lista.plans);
+      });
+
+      // Tolerante a falha de rede — o avanço some da tela e o resto da home
+      // continua de pé —, mas não a 401: essa leva ao login como qualquer outra.
+      loadLoggedSessions(recordQueue, queryApi).then((lidas) => {
+        if (!active) return;
+        if (lidas.status === 'sessionLost') return goToLogin(router);
+        setSessions(lidas.status === 'ok' ? lidas.sessions : null);
       });
 
       return () => {
@@ -71,12 +93,17 @@ export default function HomeScreen() {
   );
 
   const now = new Date();
-  const today = now.toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  const header = homeHeader(now, menu.account.displayName, plans);
+  const latestPlan = plans[0] ?? null;
   const training = todaysTraining(now.getDay(), TRAINING_PLAN_DOCUMENT.weekPlan);
+  const progress = planProgressView(planProgress(now, latestPlan, sessions));
+
+  // O card leva ao dia de hoje já aberto na aba Semana (STORY-012, regra 1).
+  // Sem planejamento, o destino continua sendo o formulário (regra 2).
+  const planoDaSemana = latestPlan
+    ? `/planning/plan?key=${encodeURIComponent(latestPlan.idempotencyKey)}` +
+      `&section=semana&day=${weekPlanIndexFor(now.getDay())}`
+    : '/planning/new';
 
   // O drawer mora aqui, não em `_layout.tsx` nem em `(tabs)/_layout.tsx`: no
   // Stack raiz cobriria também o login; no layout das abas vazaria para a
@@ -124,10 +151,18 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          <Text style={s.date}>{today}</Text>
+          {/* Saudação, contagem e fase: onde estou no plano, não que dia é hoje
+              (STORY-011). O dia continua decidindo o card do treino abaixo. */}
+          <View style={s.headline}>
+            <View style={s.headlineText}>
+              <Text style={s.greeting}>{header.greeting}</Text>
+              {header.line !== null && <Text style={s.headerLine}>{header.line}</Text>}
+            </View>
+            {header.tag !== null && <Tag>{header.tag}</Tag>}
+          </View>
         </View>
 
-        <OverloadHero state={state} />
+        {/* <OverloadHero state={state} /> */}
 
         {state !== null && state.pendingCount > 0 && (
           <NoticeStrip>
@@ -144,15 +179,28 @@ export default function HomeScreen() {
           <Kicker>Plano da semana</Kicker>
           <Text style={s.trainingTitle}>{training.title}</Text>
           <Muted>{training.description}</Muted>
+          {progress.status !== 'hidden' && (
+            <View style={s.progress}>
+              {progress.headline !== null && (
+                <View style={s.progressHead}>
+                  <Text style={s.progressPercent}>{progress.headline}</Text>
+                  <Text style={s.progressDetail}>{progress.detail}</Text>
+                </View>
+              )}
+              {progress.status === 'ok' && (
+                <View style={s.track}>
+                  <View style={[s.fill, { width: `${progress.percent}%` }]} />
+                </View>
+              )}
+              {progress.status === 'unavailable' && (
+                <Text style={s.progressDetail}>{progress.detail}</Text>
+              )}
+              {progress.note !== null && <Text style={s.progressNote}>{progress.note}</Text>}
+            </View>
+          )}
+
           <View style={s.spaced}>
-            <SecondaryButton
-              label="Ver plano da semana"
-              onPress={() =>
-                router.push(
-                  latestPlanKey ? `/planning/plan?key=${latestPlanKey}` : '/planning/new',
-                )
-              }
-            />
+            <SecondaryButton label="Ver plano da semana" onPress={() => router.push(planoDaSemana)} />
           </View>
         </Card>
 
@@ -251,7 +299,16 @@ const s = StyleSheet.create({
     marginBottom: space[6],
   },
   drawer: { backgroundColor: color.surface, width: '78%' },
-  date: { color: color.text, fontSize: type.cardTitle, textTransform: 'capitalize' },
+  headline: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  headlineText: { flex: 1, paddingRight: space[4] },
+  greeting: { color: color.text, fontSize: type.cardTitle },
+  headerLine: {
+    color: textAlpha.faint,
+    fontSize: type.kicker,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: space[1],
+  },
   trainingTitle: {
     color: color.text,
     fontSize: type.cardTitle,
@@ -269,5 +326,12 @@ const s = StyleSheet.create({
   noticeText: { color: color.accentRamp[400], fontSize: type.meta, lineHeight: 19 },
   noticeStrong: { color: color.text },
   spaced: { marginTop: space[6] },
+  progress: { marginTop: space[6], gap: space[2] },
+  progressHead: { flexDirection: 'row', alignItems: 'baseline', gap: space[3] },
+  progressPercent: { color: color.text, fontSize: type.cardTitle, fontWeight: '600' },
+  progressDetail: { color: textAlpha.muted, fontSize: type.meta, flex: 1 },
+  progressNote: { color: color.accentRamp[400], fontSize: type.meta, lineHeight: 17 },
+  track: { height: 4, borderRadius: 2, backgroundColor: textAlpha.rule, overflow: 'hidden' },
+  fill: { height: 4, borderRadius: 2, backgroundColor: color.accent },
   actions: { gap: space[3], marginTop: space[4] },
 });

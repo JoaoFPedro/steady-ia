@@ -77,3 +77,5 @@ independente de onde o time está na implementação de outros itens.
 |----|--------|--------|-------|
 | DISC-001 | Combinar musculação e corrida sem prejudicar performance | Construir | STORY-001 |
 | DISC-002 | Falta um plano de treino dentro do app | Construir | STORY-006 |
+| DISC-003 | O plano e o registro não se encontram | Construir | STORY-012 |
+| DISC-004 | O personal não recebe a carga realmente executada | Construir | STORY-013 |
