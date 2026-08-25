@@ -22,6 +22,52 @@ namespace Steady.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.CoachingLinkEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<Guid>("CorredorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("corredor_id");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<Guid>("PersonalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("personal_id");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorredorId")
+                        .IsUnique()
+                        .HasFilter("status = 'Active'");
+
+                    b.HasIndex("PersonalId");
+
+                    b.HasIndex("PersonalId", "CorredorId")
+                        .IsUnique()
+                        .HasFilter("status = 'Pending'");
+
+                    b.ToTable("coaching_links", (string)null);
+                });
+
             modelBuilder.Entity("Steady.Infrastructure.Persistence.CorredorEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -40,6 +86,13 @@ namespace Steady.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("google_sub");
+
+                    b.Property<string[]>("Roles")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasDefaultValue(new[] { "Corredor" })
+                        .HasColumnName("roles");
 
                     b.HasKey("Id");
 
@@ -247,6 +300,108 @@ namespace Steady.Infrastructure.Migrations
                     b.ToTable("strength_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.StrengthWorkoutExecutionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CorredorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("corredor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Date")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("date");
+
+                    b.Property<string>("DetailsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<Guid>("TrainingSheetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("training_sheet_id");
+
+                    b.Property<string>("WorkoutType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("workout_type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrainingSheetId");
+
+                    b.HasIndex("CorredorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("CorredorId", "TrainingSheetId");
+
+                    b.ToTable("strength_workout_executions", (string)null);
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.TrainingSheetEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CorredorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("corredor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("PersonalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("personal_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorredorId")
+                        .IsUnique()
+                        .HasFilter("is_active = TRUE");
+
+                    b.HasIndex("PersonalId");
+
+                    b.ToTable("training_sheets", (string)null);
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.CoachingLinkEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("PersonalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Steady.Infrastructure.Persistence.PainLogEntity", b =>
                 {
                     b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
@@ -280,6 +435,36 @@ namespace Steady.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("CorredorId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.StrengthWorkoutExecutionEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Steady.Infrastructure.Persistence.TrainingSheetEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TrainingSheetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.TrainingSheetEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("PersonalId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

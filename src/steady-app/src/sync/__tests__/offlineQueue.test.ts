@@ -19,6 +19,28 @@ describe('Fila de registros', () => {
     expect(pending[0].payload).toEqual({ distanceKm: 8 });
   });
 
+  it('mantém todos os exercícios da execução detalhada juntos em um item', async () => {
+    const storage = new InMemoryQueueStorage();
+    const queue = new RecordQueue(storage, () => 'execucao-1');
+    const payload = {
+      trainingSheetId: 'ficha-1',
+      workoutType: 'lower',
+      date: '2026-08-24',
+      exercises: [
+        { exerciseId: 'agachamento', loadKg: 60.5, note: null, skipped: false },
+        { exerciseId: 'leg-press', loadKg: null, note: 'Ocupado', skipped: true },
+      ],
+    };
+
+    await queue.enqueue('strengthWorkout', payload);
+
+    expect(await queue.pending()).toEqual([expect.objectContaining({
+      idempotencyKey: 'execucao-1',
+      kind: 'strengthWorkout',
+      payload,
+    })]);
+  });
+
   it('persiste a fila no storage, para sobreviver ao app ser fechado', async () => {
     const storage = new InMemoryQueueStorage();
 

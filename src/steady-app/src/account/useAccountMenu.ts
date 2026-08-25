@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
-import { googleSession, recordQueue, syncEngine } from '../services';
+import { googleSession, recordQueue, syncEngine, trainingSheetCache } from '../services';
 import { goToLogin } from '../auth/goToLogin';
 import { presentAccount, type AccountView } from './accountPresentation';
 import { applySignOutOutcome, pendingRecordsWarning } from './signOutFeedback';
@@ -51,15 +51,17 @@ export function useAccountMenu() {
   }, [open]);
 
   const concluir = useCallback(
-    (outcome: SignOutOutcome) =>
-      applySignOutOutcome(outcome, {
+    (outcome: SignOutOutcome) => {
+      if (outcome.status === 'signedOut') void trainingSheetCache.clear();
+      return applySignOutOutcome(outcome, {
         closeMenu: () => setOpen(false),
         goToLogin: () => goToLogin(router),
         showFailure: () => {
           setFalhouAoSair(true);
           setSaindo(false);
         },
-      }),
+      });
+    },
     [router],
   );
 

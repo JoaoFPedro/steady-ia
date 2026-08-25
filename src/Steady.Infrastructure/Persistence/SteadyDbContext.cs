@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Steady.Domain.Coaching;
 using Steady.Domain.Planning;
 
 namespace Steady.Infrastructure.Persistence;
@@ -11,6 +12,9 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
     public DbSet<StrengthSessionEntity> StrengthSessions => Set<StrengthSessionEntity>();
     public DbSet<PainLogEntity> PainLogs => Set<PainLogEntity>();
     public DbSet<PlanRequestEntity> PlanRequests => Set<PlanRequestEntity>();
+    public DbSet<CoachingLinkEntity> CoachingLinks => Set<CoachingLinkEntity>();
+    public DbSet<TrainingSheetEntity> TrainingSheets => Set<TrainingSheetEntity>();
+    public DbSet<StrengthWorkoutExecutionEntity> StrengthWorkoutExecutions => Set<StrengthWorkoutExecutionEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -23,6 +27,17 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
             // Sem índice único e sem IsRequired: e-mail repetido entre corredores é
             // estado válido, e ausência também (STORY-009, regras 1 e 2).
             entity.Property(c => c.Email).HasColumnName("email");
+            entity.Property(c => c.Roles)
+                .HasColumnName("roles")
+                .HasColumnType("text[]")
+                .HasDefaultValue(new[] { "Corredor" })
+                .HasConversion(
+                    roles => roles.ToArray(),
+                    roles => roles.ToList())
+                .Metadata.SetValueComparer(new ValueComparer<IReadOnlyList<string>>(
+                    (a, b) => a != null && b != null && a.SequenceEqual(b),
+                    roles => roles.Aggregate(0, (hash, role) => HashCode.Combine(hash, role.GetHashCode())),
+                    roles => roles.ToList()));
             entity.Property(c => c.CreatedAt).HasColumnName("created_at");
         });
 
@@ -137,6 +152,79 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
                 .WithMany()
                 .HasForeignKey(p => p.CorredorId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CoachingLinkEntity>(entity =>
+        {
+            entity.ToTable("coaching_links");
+            entity.HasKey(link => link.Id);
+            entity.Property(link => link.PersonalId).HasColumnName("personal_id");
+            entity.Property(link => link.CorredorId).HasColumnName("corredor_id");
+            entity.Property(link => link.Status).HasColumnName("status").HasConversion<string>();
+            entity.Property(link => link.RequestedAt).HasColumnName("requested_at");
+            entity.Property(link => link.AcceptedAt).HasColumnName("accepted_at");
+            entity.Property(link => link.EndedAt).HasColumnName("ended_at");
+            entity.HasIndex(link => link.PersonalId);
+            entity.HasIndex(link => link.CorredorId);
+            entity.HasIndex(link => link.CorredorId)
+                .IsUnique()
+                .HasFilter("status = 'Active'");
+            entity.HasIndex(link => new { link.PersonalId, link.CorredorId })
+                .IsUnique()
+                .HasFilter("status = 'Pending'");
+            entity.HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(link => link.PersonalId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(link => link.CorredorId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TrainingSheetEntity>(entity =>
+        {
+            entity.ToTable("training_sheets");
+            entity.HasKey(sheet => sheet.Id);
+            entity.Property(sheet => sheet.PersonalId).HasColumnName("personal_id");
+            entity.Property(sheet => sheet.CorredorId).HasColumnName("corredor_id");
+            entity.Property(sheet => sheet.DefinitionJson).HasColumnName("definition").HasColumnType("jsonb");
+            entity.Property(sheet => sheet.IsActive).HasColumnName("is_active");
+            entity.Property(sheet => sheet.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(sheet => sheet.CorredorId)
+                .IsUnique()
+                .HasFilter("is_active = TRUE");
+            entity.HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(sheet => sheet.PersonalId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(sheet => sheet.CorredorId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StrengthWorkoutExecutionEntity>(entity =>
+        {
+            entity.ToTable("strength_workout_executions");
+            entity.HasKey(execution => execution.Id);
+            entity.Property(execution => execution.CorredorId).HasColumnName("corredor_id");
+            entity.Property(execution => execution.TrainingSheetId).HasColumnName("training_sheet_id");
+            entity.Property(execution => execution.WorkoutType).HasColumnName("workout_type").HasConversion<string>();
+            entity.Property(execution => execution.Date).HasColumnName("date");
+            entity.Property(execution => execution.DetailsJson).HasColumnName("details").HasColumnType("jsonb");
+            entity.Property(execution => execution.IdempotencyKey).HasColumnName("idempotency_key");
+            entity.Property(execution => execution.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(execution => new { execution.CorredorId, execution.IdempotencyKey }).IsUnique();
+            entity.HasIndex(execution => new { execution.CorredorId, execution.TrainingSheetId });
+            entity.HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(execution => execution.CorredorId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TrainingSheetEntity>()
+                .WithMany()
+                .HasForeignKey(execution => execution.TrainingSheetId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

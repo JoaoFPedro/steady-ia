@@ -1,0 +1,27 @@
+flowchart TD
+    P[Personal autenticado] --> B[Busca corredor por e-mail]
+    B --> S[Envia solicitação]
+    S --> A{Corredor aceita?}
+    A -- Não --> X[Sem acesso aos dados]
+    A -- Sim --> V[Vínculo ativo]
+    V --> F[Personal publica ficha completa]
+    F --> T[Empurrada + Puxada + Inferiores + Corrida]
+    T --> C[Corredor sincroniza ficha ativa]
+    C --> E[Escolhe livremente um treino]
+    E --> M{Musculação?}
+    M -- Sim --> L[Preenche cargas e notas]
+    L --> Z{Há carga vazia ou zero?}
+    Z -- Sim --> Q[Confirma exercícios pulados]
+    Z -- Não --> J[Finaliza execução em um JSON]
+    Q -- Confirma --> J
+    Q -- Cancela --> L
+    M -- Não --> R[Usa formulário de corrida existente]
+    R --> J
+    J --> O{Online?}
+    O -- Não --> K[Fila local idempotente]
+    K --> Y[Sincroniza quando a conexão retorna]
+    O -- Sim --> H[API persiste execução imutável]
+    Y --> H
+    H --> D[Histórico detalhado do personal]
+    V --> W{Vínculo encerrado?}
+    W -- Sim --> N[Acesso do personal revogado]

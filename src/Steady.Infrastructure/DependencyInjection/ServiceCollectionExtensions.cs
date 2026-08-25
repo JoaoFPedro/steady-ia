@@ -28,6 +28,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStrengthSessionRepository, StrengthSessionRepository>();
         services.AddScoped<IPainLogRepository, PainLogRepository>();
         services.AddScoped<IPlanRequestRepository, PlanRequestRepository>();
+        services.AddScoped<ICoachingLinkRepository, CoachingLinkRepository>();
+        services.AddScoped<ITrainingSheetRepository, TrainingSheetRepository>();
 
         return services;
     }

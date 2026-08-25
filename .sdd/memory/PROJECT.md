@@ -28,7 +28,13 @@ Steady ajuda corredores amadores que já correm 21km (meia maratona) a treinar c
 | Registro de Desempenho | Dados reais de uma Sessão de Treino realizada (ritmo, distância, rota GPS) — imutável após criado |
 | Regra dos 10% | Princípio de treino: volume semanal não deve aumentar mais que 10% em relação à semana anterior, para prevenir lesão por overtraining |
 
-## Estado Atual — 2026-08-16
+## Estado Atual — 2026-08-24
+
+**STORY-013 implementada e revisada**: roles `Corredor`/`Personal`, vínculo com
+aceite, ficha ativa de quatro tipos, carga/nota por exercício, pulados com
+confirmação, histórico autorizado e execução offline idempotente. Migration
+`20260825004707_AddCoaching`; 143 testes .NET e 267 Jest verdes. ADR-008 e
+ADR-009 registram autorização e imutabilidade.
 
 **STORY-003 implementada e verde**: 74 testes Jest + 42 .NET (116). Todos os 17 cenários da spec marcados 🟢 e os 9 critérios de aceite fechados. ADR-004 (estado de histórico insuficiente no contrato da avaliação) criado nesta rodada.
 
@@ -43,6 +49,8 @@ Ambiente de execução local (WSL2, port proxy, dev build) documentado em `CLAUD
 | 3 | **Testar a fila offline no aparelho** (registrar → Wi-Fi off → registrar → Wi-Fi on) | Único caminho sem cobertura automatizada e o maior risco da story — a suposição crítica #2 do DISC-001 depende dela |
 | 4 | **Telas sem teste de renderização** | `@testing-library/react-native` não instala: exige `react-dom@19.2.8`, incompatível com o `react@19.2.3` do Expo SDK 57. Revisitar quando o SDK avançar |
 | 5 | **Divergência herdada de `PainLog`** — dor não vinculada a Sessão de Treino, contra o AC da STORY-001 | Decisão do `/spec` foi manter independente; cabe ao `/sync` alinhar o AC da STORY-001 ao modelo real |
+| 6 | **Rate limiting da busca de corredor por e-mail** | A ADR-008 aceita resposta explícita de inexistência para o MVP; limitar enumeração antes de produção pública |
+| 7 | **Cobertura Jest global em 58,93%** | A lógica de coaching tem 75,51%; telas legadas seguem sem harness de renderização no Expo SDK 57 |
 
 ## Links
 

@@ -4,4 +4,7 @@ namespace Steady.Api.Auth;
 public sealed class CurrentCorredor
 {
     public Guid Id { get; set; }
+    public IReadOnlyList<string> Roles { get; set; } = [];
+
+    public bool HasRole(string role) => Roles.Contains(role, StringComparer.Ordinal);
 }

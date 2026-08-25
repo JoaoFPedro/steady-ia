@@ -51,6 +51,22 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         await dbContext.Database.MigrateAsync();
     }
 
+    public async Task<HttpClient> CreatePersonalClientAsync(string googleSub, string email)
+    {
+        var client = CreateClient().AsCorredorComEmail(googleSub, email);
+
+        // Provisiona a conta pelo mesmo filtro usado em produção.
+        await client.GetAsync("/api/plan-requests");
+
+        using var scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<SteadyDbContext>();
+        var account = await dbContext.Corredores.SingleAsync(c => c.GoogleSub == googleSub);
+        account.Roles = ["Corredor", "Personal"];
+        await dbContext.SaveChangesAsync();
+
+        return client;
+    }
+
     async Task IAsyncLifetime.DisposeAsync()
     {
         await _postgres.DisposeAsync();

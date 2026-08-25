@@ -21,6 +21,7 @@ public sealed class CorredorRepository(SteadyDbContext dbContext) : ICorredorRep
             Id = Guid.NewGuid(),
             GoogleSub = googleSub,
             Email = email,
+            Roles = ["Corredor"],
             CreatedAt = DateTime.UtcNow
         };
 
@@ -43,6 +44,23 @@ public sealed class CorredorRepository(SteadyDbContext dbContext) : ICorredorRep
             return await SincronizarEmailAsync(vencedor, email, cancellationToken);
         }
     }
+
+    public async Task<CorredorEntity?> FindRunnerByEmailAsync(
+        string email, CancellationToken cancellationToken)
+    {
+        // A coleção é exposta como IReadOnlyList para não vazar mutabilidade, mas o
+        // provider do PostgreSQL não traduz Enumerable.Contains nesse tipo. O e-mail
+        // reduz o conjunto no banco; a checagem do papel ocorre sobre os poucos
+        // resultados (e e-mail duplicado continua sendo um estado válido).
+        var accounts = await dbContext.Corredores
+            .Where(account => account.Email == email)
+            .ToListAsync(cancellationToken);
+
+        return accounts.FirstOrDefault(account => account.Roles.Contains("Corredor"));
+    }
+
+    public Task<CorredorEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        dbContext.Corredores.FirstOrDefaultAsync(account => account.Id == id, cancellationToken);
 
     /// <summary>
     /// Mantém o e-mail alinhado com o que o provedor informou no acesso atual.

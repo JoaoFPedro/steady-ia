@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { HeroCard, Kicker, Muted, NoticeStrip, PrimaryButton } from '../src/ui/Nocturne';
 import { color, space, type } from '../src/theme/nocturne';
-import { googleSession, isGoogleConfigured } from '../src/services';
+import { googleSession, isGoogleConfigured, trainingSheetCache } from '../src/services';
 
 /**
  * Entrada do app. Login exclusivamente pelo Google — a Constituição do projeto
@@ -19,6 +19,9 @@ export default function LoginScreen() {
     setEntrando(true);
     setFalhou(false);
 
+    // Um login interativo pode escolher outra conta Google. O cache da ficha
+    // anterior não pode atravessar essa troca de identidade.
+    await trainingSheetCache.clear();
     const token = await googleSession.signIn();
 
     setEntrando(false);

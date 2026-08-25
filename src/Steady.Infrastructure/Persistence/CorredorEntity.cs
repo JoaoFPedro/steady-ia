@@ -14,5 +14,11 @@ public sealed class CorredorEntity
     /// </summary>
     public string? Email { get; set; }
 
+    /// <summary>
+    /// Capacidades da conta. Contas são corredores por padrão; a role Personal é
+    /// provisionada administrativamente e nunca por endpoint público (ADR-008).
+    /// </summary>
+    public IReadOnlyList<string> Roles { get; set; } = ["Corredor"];
+
     public DateTime CreatedAt { get; set; }
 }

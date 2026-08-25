@@ -34,6 +34,8 @@ api.MapPainLogEndpoints();
 api.MapOverloadAssessmentEndpoints();
 api.MapTrainingHistoryEndpoints();
 api.MapPlanRequestEndpoints();
+api.MapCoachingLinkEndpoints();
+api.MapTrainingSheetEndpoints();
 
 app.Run();
 

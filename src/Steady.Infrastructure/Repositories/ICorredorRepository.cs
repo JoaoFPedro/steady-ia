@@ -10,4 +10,6 @@ public interface ICorredorRepository
     /// localizar o corredor, e nulo não apaga o que já estava guardado (STORY-009).
     /// </summary>
     Task<CorredorEntity> GetOrCreateBySubAsync(string googleSub, string? email, CancellationToken cancellationToken);
+    Task<CorredorEntity?> FindRunnerByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<CorredorEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 }

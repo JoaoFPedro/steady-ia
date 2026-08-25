@@ -1,11 +1,14 @@
 import * as Crypto from 'expo-crypto';
 import { HttpQueryApi } from './api/httpQueryApi';
 import { HttpRecordApi } from './api/httpRecordApi';
+import { HttpCoachingApi } from './api/httpCoachingApi';
 import { GoogleSignInSession } from './auth/googleSignInSession';
 import { configureGoogleSignIn, nativeGoogleSignInClient } from './auth/nativeGoogleSignInClient';
 import { AsyncStorageQueue } from './sync/asyncStorageQueue';
 import { RecordQueue } from './sync/recordQueue';
 import { SyncEngine } from './sync/syncEngine';
+import { AsyncStorageTrainingSheet } from './coaching/asyncStorageTrainingSheet';
+import { TrainingSheetCache } from './coaching/trainingSheetCache';
 
 /**
  * Composition root — onde as peças se encontram uma única vez.
@@ -49,3 +52,10 @@ export const recordApi = new HttpRecordApi(API_BASE_URL, googleSession, fetch as
 export const syncEngine = new SyncEngine(recordQueue, recordApi);
 
 export const queryApi = new HttpQueryApi(API_BASE_URL, googleSession, fetch as never);
+
+export const coachingApi = new HttpCoachingApi(API_BASE_URL, googleSession, fetch as never);
+
+export const trainingSheetCache = new TrainingSheetCache(
+  new AsyncStorageTrainingSheet(),
+  coachingApi,
+);

@@ -2,6 +2,7 @@ import { RecordQueue } from '../recordQueue';
 import { SyncEngine } from '../syncEngine';
 import { InMemoryQueueStorage } from './support/inMemoryQueueStorage';
 import { FakeRecordApi } from './support/fakeApi';
+import { ENDPOINT_BY_KIND } from '../types';
 
 /**
  * Cenário da spec: "Reenvio do mesmo registro não cria duplicata".
@@ -10,6 +11,10 @@ import { FakeRecordApi } from './support/fakeApi';
  * corrida e faz o ADR-001 disparar um alerta de sobrecarga falso.
  */
 describe('Idempotência no reenvio', () => {
+  it('mapeia a execução detalhada para o endpoint idempotente da ficha', () => {
+    expect(ENDPOINT_BY_KIND.strengthWorkout).toBe('/api/coaching/strength-executions');
+  });
+
   it('reenvia com a MESMA chave gerada quando o registro entrou na fila', async () => {
     const storage = new InMemoryQueueStorage();
     const queue = new RecordQueue(storage, () => 'chave-do-item');
