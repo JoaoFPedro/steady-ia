@@ -9,6 +9,7 @@ import { planDayIndexFromParam, sectionFromParam } from '../../src/planning/plan
 import type { TrainingPlanDocument } from '../../src/planning/trainingPlanDocument';
 import { loadPlanList } from '../../src/planning/planListState';
 import { loadLoggedSessions } from '../../src/planning/loggedSessions';
+import { todayRegistrationStatus } from '../../src/planning/registerAvailability';
 import { weekStatuses } from '../../src/planning/weekStatuses';
 import { weekPlanIndexFor } from '../../src/planning/weekPlanDay';
 import type { DayStatus, LoggedSession } from '../../src/planning/dayCompletion';
@@ -131,6 +132,8 @@ export default function PlanningPlanScreen() {
   const abrir = planDayIndexFromParam(day, document.weekPlan);
   const hoje = weekPlanIndexFor(new Date().getDay());
   const statuses = weekStatuses(new Date(), request, sessions, document.weekPlan);
+  // O botão de hoje não passa pela janela do plano: ver `todayRegistrationStatus`.
+  const hojeStatus = todayRegistrationStatus(new Date(), sessions, document.weekPlan, hoje);
 
   return (
     <PlanningDocument
@@ -142,6 +145,7 @@ export default function PlanningPlanScreen() {
       openDay={abrir === null ? null : document.weekPlan[abrir].day}
       dayStatuses={statuses}
       todayIndex={hoje}
+      todayStatus={hojeStatus}
       sheet={sheet}
       sheetStale={sheetStale}
       sheetLoading={sheetLoading}

@@ -43,15 +43,40 @@ export async function loadLoggedSessions(
   );
 
   // Plano e dor também moram na fila, e nenhum dos dois cumpre dia de treino.
-  const naFila = enfileirados
-    .filter((item) => item.kind === 'running' || item.kind === 'strength')
-    .map((item): LoggedSession => ({
-      date: (item.payload as { date: string }).date,
-      kind: item.kind as LoggedSession['kind'],
-    }));
+  const naFila = enfileirados.flatMap(toLoggedSessions);
 
   // Sem deduplicar: um registro pode estar nos dois lados até o sync confirmar a
   // remoção, e o estado do dia é binário por modalidade — contar duas vezes dá
   // no mesmo (regra 18).
   return { status: 'ok', sessions: [...doServidor, ...naFila] };
+}
+
+/**
+ * Um item da fila pode valer zero, uma ou duas sessões. `strengthWorkout` é a
+ * musculação registrada pela ficha do personal e vale o mesmo que a avulsa;
+ * `combinedWorkout` carrega musculação e corrida do mesmo dia numa unidade só
+ * (ADR-011), então cumpre as duas modalidades. Ignorá-los deixava o dia aberto
+ * justamente para quem registra pelo caminho principal do app.
+ */
+function toLoggedSessions(item: { kind: string; payload: unknown }): LoggedSession[] {
+  if (item.kind === 'running' || item.kind === 'strength') {
+    return [{ date: (item.payload as { date: string }).date, kind: item.kind }];
+  }
+
+  if (item.kind === 'strengthWorkout') {
+    return [{ date: (item.payload as { date: string }).date, kind: 'strength' }];
+  }
+
+  if (item.kind === 'combinedWorkout') {
+    const { strength, running } = item.payload as {
+      strength: { date: string };
+      running: { date: string };
+    };
+    return [
+      { date: strength.date, kind: 'strength' },
+      { date: running.date, kind: 'running' },
+    ];
+  }
+
+  return [];
 }

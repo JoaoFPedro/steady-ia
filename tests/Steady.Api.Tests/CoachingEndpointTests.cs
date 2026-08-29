@@ -395,4 +395,233 @@ public sealed class CoachingEndpointTests(CustomWebApplicationFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    // STORY-017 — tempo e observação opcionais no exercício.
+
+    [Fact]
+    public async Task Ficha_publicada_devolve_tempo_e_observacao_do_exercicio()
+    {
+        var (personal, corredor, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+
+        await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets",
+            ValidSheet() with
+            {
+                Push = [new ExercisePrescriptionBody("Prancha", 3, 1, 40, "não travar o cotovelo")]
+            });
+        var active = await corredor.GetFromJsonAsync<TrainingSheetResponse>(
+            "/api/coaching/training-sheet/active");
+
+        var exercise = active!.Workouts.Single(workout => workout.Type == "push").Exercises.Single();
+        exercise.DurationSeconds.Should().Be(40);
+        exercise.Observation.Should().Be("não travar o cotovelo");
+    }
+
+    [Fact]
+    public async Task Exercicio_sem_tempo_nem_observacao_volta_ausente()
+    {
+        var (personal, corredor, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+
+        await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets", ValidSheet());
+        var active = await corredor.GetFromJsonAsync<TrainingSheetResponse>(
+            "/api/coaching/training-sheet/active");
+
+        var exercise = active!.Workouts.Single(workout => workout.Type == "push").Exercises.Single();
+        exercise.DurationSeconds.Should().BeNull();
+        exercise.Observation.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task Tempo_zero_ou_negativo_e_recusado(int durationSeconds)
+    {
+        var (personal, _, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+
+        var response = await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets",
+            ValidSheet() with
+            {
+                Push = [new ExercisePrescriptionBody("Prancha", 3, 1, durationSeconds, null)]
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Observacao_acima_do_limite_e_recusada()
+    {
+        var (personal, _, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+
+        var response = await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets",
+            ValidSheet() with
+            {
+                Push = [new ExercisePrescriptionBody("Supino reto", 4, 6, null, new string('A', 201))]
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // Execução pela ficha precisa contar como treino do dia (correção da
+    // STORY-018): sem isso o dia nunca fecha e o histórico do corredor não a mostra.
+
+    [Fact]
+    public async Task Execucao_pela_ficha_aparece_no_historico_do_corredor()
+    {
+        var (personal, corredor, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+        await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets", ValidSheet());
+        var sheet = await corredor.GetFromJsonAsync<TrainingSheetResponse>(
+            "/api/coaching/training-sheet/active");
+        var exercise = sheet!.Workouts.Single(workout => workout.Type == "push").Exercises.Single();
+
+        corredor.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var registered = await corredor.PostAsJsonAsync(
+            "/api/coaching/strength-executions",
+            new StrengthWorkoutExecutionBody(
+                sheet.Id, "push", "2026-08-29",
+                [new ExerciseExecutionBody(exercise.Id, 40m, null, false)]));
+        registered.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var history = await corredor.GetFromJsonAsync<List<TrainingSessionResponse>>(
+            "/api/training-sessions");
+
+        var session = history!.Should().ContainSingle(item => item.Type == "Musculacao").Subject;
+        session.Date.Should().Be(new DateOnly(2026, 8, 29));
+        session.WorkoutType.Should().Be("push");
+        session.DurationMinutes.Should().BeNull("a execução pela ficha não registra duração");
+    }
+
+    [Fact]
+    public async Task Historico_do_corredor_nao_traz_execucao_de_outro_corredor()
+    {
+        var (personal, corredor, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+        await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets", ValidSheet());
+        var sheet = await corredor.GetFromJsonAsync<TrainingSheetResponse>(
+            "/api/coaching/training-sheet/active");
+        var exercise = sheet!.Workouts.Single(workout => workout.Type == "push").Exercises.Single();
+        corredor.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        await corredor.PostAsJsonAsync(
+            "/api/coaching/strength-executions",
+            new StrengthWorkoutExecutionBody(
+                sheet.Id, "push", "2026-08-29",
+                [new ExerciseExecutionBody(exercise.Id, 40m, null, false)]));
+
+        var outro = factory.CreateClient().AsCorredorComEmail(
+            $"outro-{Guid.NewGuid():N}", $"outro-{Guid.NewGuid():N}@example.com");
+        var history = await outro.GetFromJsonAsync<List<TrainingSessionResponse>>(
+            "/api/training-sessions");
+
+        history!.Should().BeEmpty();
+    }
+
+    // STORY-019 — o personal vê o nome do corredor, não o e-mail.
+
+    [Fact]
+    public async Task Personal_ve_o_nome_do_corredor_vinculado()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var email = $"corredor-{suffix}@example.com";
+        var corredor = factory.CreateClient().AsCorredorComNome($"runner-{suffix}", email, "Ana Prado");
+        await corredor.GetAsync("/api/plan-requests");
+
+        var personal = await factory.CreatePersonalClientAsync(
+            $"coach-{suffix}", $"personal-{suffix}@example.com");
+        var search = await personal.GetFromJsonAsync<RunnerSearchResponse>(
+            $"/api/coaching/runners/search?email={Uri.EscapeDataString(email)}");
+        search!.Name.Should().Be("Ana Prado");
+
+        var requested = await personal.PostAsJsonAsync(
+            "/api/coaching/links", new CreateCoachingLinkBody(search.CorredorId));
+        var link = (await requested.Content.ReadFromJsonAsync<CoachingLinkResponse>())!;
+        await corredor.PostAsync($"/api/coaching/links/{link.Id}/accept", null);
+
+        var linked = await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>("/api/coaching/runners");
+
+        linked!.Single().Name.Should().Be("Ana Prado");
+        linked.Single().Email.Should().Be(email, "o e-mail continua disponível como identificador");
+    }
+
+    [Fact]
+    public async Task Corredor_sem_claim_de_nome_fica_sem_nome()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var email = $"corredor-{suffix}@example.com";
+        var corredor = factory.CreateClient().AsCorredorComNome($"runner-{suffix}", email, null);
+        await corredor.GetAsync("/api/plan-requests");
+
+        var personal = await factory.CreatePersonalClientAsync(
+            $"coach-{suffix}", $"personal-{suffix}@example.com");
+        var search = await personal.GetFromJsonAsync<RunnerSearchResponse>(
+            $"/api/coaching/runners/search?email={Uri.EscapeDataString(email)}");
+
+        search!.Name.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Nome_e_atualizado_quando_o_corredor_volta_a_entrar()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var email = $"corredor-{suffix}@example.com";
+        var sub = $"runner-{suffix}";
+
+        // Primeiro acesso sem nome — como as contas que já existiam antes desta story.
+        await factory.CreateClient().AsCorredorComNome(sub, email, null).GetAsync("/api/plan-requests");
+        // Acesso seguinte já traz o claim.
+        await factory.CreateClient().AsCorredorComNome(sub, email, "Ana Prado").GetAsync("/api/plan-requests");
+
+        var personal = await factory.CreatePersonalClientAsync(
+            $"coach-{suffix}", $"personal-{suffix}@example.com");
+        var search = await personal.GetFromJsonAsync<RunnerSearchResponse>(
+            $"/api/coaching/runners/search?email={Uri.EscapeDataString(email)}");
+
+        search!.Name.Should().Be("Ana Prado");
+    }
+
+    [Fact]
+    public async Task Personal_ve_no_historico_o_treino_que_o_corredor_registrou_pela_ficha()
+    {
+        var (personal, corredor, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+        await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets", ValidSheet());
+        var sheet = await corredor.GetFromJsonAsync<TrainingSheetResponse>(
+            "/api/coaching/training-sheet/active");
+        var exercise = sheet!.Workouts.Single(workout => workout.Type == "push").Exercises.Single();
+
+        corredor.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var registered = await corredor.PostAsJsonAsync(
+            "/api/coaching/strength-executions",
+            new StrengthWorkoutExecutionBody(
+                sheet.Id, "push", "2026-08-29",
+                [new ExerciseExecutionBody(exercise.Id, 42.5m, "pesado hoje", false)]));
+        registered.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var history = await personal.GetFromJsonAsync<CoachingHistoryResponse>(
+            $"/api/coaching/runners/{runner.CorredorId}/history");
+
+        var execution = history!.StrengthExecutions.Should().ContainSingle().Subject;
+        execution.Date.Should().Be("2026-08-29");
+        execution.WorkoutType.Should().Be("push");
+        var registeredExercise = execution.Exercises.Should().ContainSingle().Subject;
+        registeredExercise.Name.Should().Be("Supino reto");
+        registeredExercise.LoadKg.Should().Be(42.5m);
+        registeredExercise.Note.Should().Be("pesado hoje");
+    }
 }

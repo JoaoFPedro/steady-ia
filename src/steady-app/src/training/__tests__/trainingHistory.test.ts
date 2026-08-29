@@ -19,6 +19,7 @@ const corrida: TrainingSessionSummary = {
   perceivedEffort: 7,
   muscleGroup: null,
   intensity: null,
+  workoutType: null,
 };
 
 const musculacao: TrainingSessionSummary = {
@@ -30,6 +31,7 @@ const musculacao: TrainingSessionSummary = {
   perceivedEffort: null,
   muscleGroup: 'PernaPosterior',
   intensity: 'Pesado',
+  workoutType: null,
 };
 
 describe('histórico de treinos', () => {
@@ -93,5 +95,29 @@ describe('histórico de treinos', () => {
     const api = new FakeQueryApi().willListHistory({ status: 'unauthenticated' });
 
     expect(await loadTrainingHistory(api)).toEqual({ status: 'sessionLost' });
+  });
+
+  // Correção da STORY-018: a execução da ficha não tem duração nem grupo
+  // muscular — o rótulo vem do treino da ficha, e "0 min" seria mentira.
+
+  it('execução da ficha aparece pelo nome do treino, sem duração inventada', async () => {
+    const api = new FakeQueryApi().willListHistory({ status: 'ok', data: [{
+      id: 'c3',
+      kind: 'strength',
+      date: '2026-08-29',
+      durationMinutes: null,
+      distanceKm: null,
+      perceivedEffort: null,
+      muscleGroup: null,
+      intensity: null,
+      workoutType: 'push',
+    }] });
+
+    const view = await loadTrainingHistory(api);
+
+    expect(view).toEqual({
+      status: 'loaded',
+      items: [{ id: 'c3', kicker: 'Musculação', title: 'Empurrada', date: '29 de agosto' }],
+    });
   });
 });

@@ -40,16 +40,30 @@ function toItem(session: TrainingSessionSummary): HistoryItem {
   };
 }
 
+/** Nomes dos treinos da ficha do personal, para a execução que não tem grupo muscular. */
+const WORKOUT_LABELS: Record<string, string> = {
+  push: 'Empurrada',
+  pull: 'Puxada',
+  lower: 'Inferiores',
+};
+
 function describe(session: TrainingSessionSummary): string {
-  const duration = `${session.durationMinutes} min`;
+  // A execução da ficha não registra duração: "0 min" seria mentira, então a
+  // parte simplesmente não aparece.
+  const duration = session.durationMinutes === null ? null : `${session.durationMinutes} min`;
 
   if (session.kind === 'running') {
     return session.distanceKm === null
-      ? duration
+      ? duration ?? ''
       : `${formatKm(session.distanceKm)} km · ${duration}`;
   }
 
-  return [muscleGroupLabel(session.muscleGroup), intensityLabel(session.intensity), duration]
+  return [
+    session.workoutType === null ? null : WORKOUT_LABELS[session.workoutType] ?? null,
+    muscleGroupLabel(session.muscleGroup),
+    intensityLabel(session.intensity),
+    duration,
+  ]
     .filter((part): part is string => part !== null)
     .join(' · ');
 }

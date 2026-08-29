@@ -4,6 +4,7 @@ import { NoticeStrip, PrimaryButton, Rule } from '../ui/Nocturne';
 import { color, radius, space, textAlpha, type } from '../theme/nocturne';
 import type { TrainingPlanDocument, WeekPlanDay } from './trainingPlanDocument';
 import type { DayStatus } from './dayCompletion';
+import { canRegisterDay } from './registerAvailability';
 import { ExerciseList } from './ExerciseList';
 import { shared } from './planningStyles';
 import type { TrainingSheet, WorkoutType } from '../coaching/types';
@@ -35,6 +36,7 @@ export function SemanaSection({
   document,
   statuses,
   todayIndex,
+  todayStatus,
   initialOpenDay,
   sheet,
   sheetStale,
@@ -47,6 +49,11 @@ export function SemanaSection({
   statuses: readonly DayStatus[];
   /** Índice de hoje em `weekPlan`, ou `-1` quando a semana não é a de hoje. */
   todayIndex: number;
+  /**
+   * Estado de hoje para o botão de registro. Vem separado de `statuses` porque
+   * aquele passa pela janela do plano e este não (`todayRegistrationStatus`).
+   */
+  todayStatus: DayStatus;
   /** `day.day` que já chega expandido — o caminho vindo do card da Dashboard. */
   initialOpenDay: string | null;
   sheet: TrainingSheet | null;
@@ -110,6 +117,7 @@ export function SemanaSection({
             index={index}
             status={statuses[index] ?? 'semMarca'}
             isToday={index === todayIndex}
+            todayStatus={todayStatus}
             sheet={sheet}
             sheetLoading={sheetLoading}
             open={expanded === day.day}
@@ -130,6 +138,7 @@ function DayRow({
   index,
   status,
   isToday,
+  todayStatus,
   sheet,
   sheetLoading,
   open,
@@ -141,6 +150,7 @@ function DayRow({
   index: number;
   status: DayStatus;
   isToday: boolean;
+  todayStatus: DayStatus;
   sheet: TrainingSheet | null;
   sheetLoading: boolean;
   open: boolean;
@@ -193,7 +203,9 @@ function DayRow({
           {prescription.strength !== null && (
             <ExerciseList items={prescription.strength.exercises.map((exercise) => ({
               name: exercise.name,
-              series: `${exercise.sets}x${exercise.repetitions} repetições`,
+              series: exercise.durationSeconds === null
+                ? `${exercise.sets}x${exercise.repetitions} repetições`
+                : `${exercise.sets}x${exercise.repetitions} repetições · ${exercise.durationSeconds}s`,
             }))} />
           )}
 
@@ -201,7 +213,11 @@ function DayRow({
               então um botão em outro dia gravaria a data errada (regra 6). */}
           {isToday && (prescription.strength !== null || prescription.run !== null) && (
             <View style={s.actions}>
-              <PrimaryButton label="Registrar Treino" onPress={() => onRegister(index)} />
+              <PrimaryButton
+                label={canRegisterDay(todayStatus) ? 'Registrar Treino' : 'Treino registrado'}
+                disabled={!canRegisterDay(todayStatus)}
+                onPress={() => onRegister(index)}
+              />
             </View>
           )}
         </View>

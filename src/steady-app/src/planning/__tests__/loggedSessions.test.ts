@@ -18,16 +18,17 @@ describe('Sessões que contam para o plano', () => {
     perceivedEffort: kind === 'running' ? 5 : null,
     muscleGroup: kind === 'strength' ? 'PernaFrontal' : null,
     intensity: kind === 'strength' ? 'Pesado' : null,
+    workoutType: null,
   });
 
   const naFila = (date: string, kind: string) => ({
     idempotencyKey: `${kind}-${date}`,
     kind,
-    payload: { date },
+    payload: { date } as unknown,
     queuedAt: `${date}T10:00:00.000Z`,
   });
 
-  const fila = (itens: ReturnType<typeof naFila>[]) => ({ pending: async () => itens });
+  const fila = (itens: { kind: string; payload: unknown }[]) => ({ pending: async () => itens });
   const historico = (resultado: unknown) => ({ trainingHistory: async () => resultado as never });
 
   it('junta o que veio do servidor com o que ainda está na fila', async () => {
@@ -74,5 +75,52 @@ describe('Sessões que contam para o plano', () => {
       status: 'ok',
       sessions: [],
     });
+  });
+
+  // Correção da STORY-018: o registro feito pela ficha do personal enfileira
+  // `strengthWorkout` (ou `combinedWorkout`) e escapava da conta — o dia nunca
+  // fechava para quem registra pelo caminho principal do app.
+
+  it('musculação registrada pela ficha conta como treino do dia', async () => {
+    const sessoes = await loadLoggedSessions(
+      fila([naFila('2026-08-29', 'strengthWorkout')]),
+      historico({ status: 'ok', data: [] }),
+    );
+
+    expect(sessoes).toEqual({
+      status: 'ok',
+      sessions: [{ date: '2026-08-29', kind: 'strength' }],
+    });
+  });
+
+  it('registro combinado conta as duas modalidades do dia', async () => {
+    const combinado = {
+      idempotencyKey: 'combined-2026-08-29',
+      kind: 'combinedWorkout',
+      payload: { strength: { date: '2026-08-29' }, running: { date: '2026-08-29' } },
+      queuedAt: '2026-08-29T10:00:00.000Z',
+    };
+
+    const sessoes = await loadLoggedSessions(
+      fila([combinado]),
+      historico({ status: 'ok', data: [] }),
+    );
+
+    expect(sessoes).toEqual({
+      status: 'ok',
+      sessions: [
+        { date: '2026-08-29', kind: 'strength' },
+        { date: '2026-08-29', kind: 'running' },
+      ],
+    });
+  });
+
+  it('plano e dor continuam sem cumprir dia de treino', async () => {
+    const sessoes = await loadLoggedSessions(
+      fila([naFila('2026-08-29', 'plan'), naFila('2026-08-29', 'pain')]),
+      historico({ status: 'ok', data: [] }),
+    );
+
+    expect(sessoes).toEqual({ status: 'ok', sessions: [] });
   });
 });

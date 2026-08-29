@@ -23,11 +23,14 @@ export type TrainingSessionSummary = {
   kind: 'running' | 'strength';
   /** ISO `yyyy-mm-dd`, como a API devolve. */
   date: string;
-  durationMinutes: number;
+  /** Ausente na execução da ficha, que não registra duração. */
+  durationMinutes: number | null;
   distanceKm: number | null;
   perceivedEffort: number | null;
   muscleGroup: string | null;
   intensity: string | null;
+  /** Presente só na execução da ficha: `push`, `pull` ou `lower`. */
+  workoutType: string | null;
 };
 
 export type QueryResult<T> =

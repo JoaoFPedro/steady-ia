@@ -11,11 +11,17 @@ public static class TrainingHistoryEndpoints
         group.MapGet("/training-sessions", async (
             IRunningSessionRepository runningRepository,
             IStrengthSessionRepository strengthRepository,
+            ITrainingSheetRepository sheetRepository,
             CurrentCorredor currentCorredor,
             CancellationToken cancellationToken) =>
         {
             var runningEntities = await runningRepository.GetByCorredorIdAsync(currentCorredor.Id, cancellationToken);
             var strengthEntities = await strengthRepository.GetByCorredorIdAsync(currentCorredor.Id, cancellationToken);
+            // A musculação feita pela ficha do personal vive em outra tabela
+            // (`StrengthWorkoutExecution`, ADR-009) e não aparecia aqui: o
+            // corredor não a via no histórico e o dia do plano nunca fechava.
+            var executionEntities = await sheetRepository.GetExecutionsForRunnerAsync(
+                currentCorredor.Id, cancellationToken);
 
             var sessions = runningEntities
                 .Select(e => new TrainingSessionResponse(
@@ -24,6 +30,10 @@ public static class TrainingHistoryEndpoints
                 .Concat(strengthEntities.Select(e => new TrainingSessionResponse(
                     e.Id, "Musculacao", e.Date, e.DurationMinutes,
                     null, null, null, e.MuscleGroup.ToString(), e.Intensity.ToString())))
+                .Concat(executionEntities.Select(e => new TrainingSessionResponse(
+                    e.Id, "Musculacao", DateOnly.ParseExact(e.Date, "yyyy-MM-dd"),
+                    null, null, null, null, null, null,
+                    e.WorkoutType.ToString().ToLowerInvariant())))
                 .OrderByDescending(s => s.Date)
                 .ToList();
 

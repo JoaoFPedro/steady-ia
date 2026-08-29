@@ -168,4 +168,13 @@ public sealed class TrainingSheetRepository(
             .ThenByDescending(item => item.CreatedAt)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<StrengthWorkoutExecutionEntity>> GetExecutionsForRunnerAsync(
+        Guid corredorId, CancellationToken cancellationToken) =>
+        // Filtro por CorredorId na query, nunca em memória (ADR-002).
+        await dbContext.StrengthWorkoutExecutions
+            .Where(item => item.CorredorId == corredorId)
+            .OrderByDescending(item => item.Date)
+            .ThenByDescending(item => item.CreatedAt)
+            .ToListAsync(cancellationToken);
 }

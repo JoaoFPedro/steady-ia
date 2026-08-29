@@ -40,6 +40,7 @@ export function PlanningDocument({
   openDay = null,
   dayStatuses = [],
   todayIndex = -1,
+  todayStatus = 'semMarca',
   sheet = null,
   sheetStale = false,
   sheetLoading = false,
@@ -65,6 +66,8 @@ export function PlanningDocument({
   /** Estado de cada dia, alinhado a `weekPlan`. Vazio = nada a marcar. */
   dayStatuses?: readonly DayStatus[];
   todayIndex?: number;
+  /** Estado de hoje para o botão de registro — sem o corte da janela do plano. */
+  todayStatus?: DayStatus;
   sheet?: TrainingSheet | null;
   sheetStale?: boolean;
   sheetLoading?: boolean;
@@ -114,6 +117,7 @@ export function PlanningDocument({
             document={document}
             statuses={dayStatuses}
             todayIndex={todayIndex}
+            todayStatus={todayStatus}
             initialOpenDay={openDay}
             sheet={sheet}
             sheetStale={sheetStale}

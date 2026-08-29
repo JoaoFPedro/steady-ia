@@ -26,6 +26,7 @@ type SessionBody = {
   perceivedEffort?: unknown;
   muscleGroup?: unknown;
   intensity?: unknown;
+  workoutType?: unknown;
 };
 
 /**
@@ -126,11 +127,12 @@ function toSessions(body: unknown): TrainingSessionSummary[] {
     id: String(item.id),
     kind: item.type === 'Corrida' ? 'running' : 'strength',
     date: String(item.date),
-    durationMinutes: Number(item.durationMinutes),
+    durationMinutes: numberOrNull(item.durationMinutes),
     distanceKm: numberOrNull(item.distanceKm),
     perceivedEffort: numberOrNull(item.perceivedEffort),
     muscleGroup: stringOrNull(item.muscleGroup),
     intensity: stringOrNull(item.intensity),
+    workoutType: stringOrNull(item.workoutType),
   }));
 }
 

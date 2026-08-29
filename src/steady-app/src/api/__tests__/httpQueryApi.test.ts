@@ -136,6 +136,7 @@ describe('histórico de treinos', () => {
           perceivedEffort: 7,
           muscleGroup: null,
           intensity: null,
+          workoutType: null,
         },
         {
           id: 'b2',
@@ -146,6 +147,7 @@ describe('histórico de treinos', () => {
           perceivedEffort: null,
           muscleGroup: 'PernaPosterior',
           intensity: 'Pesado',
+          workoutType: null,
         },
       ],
     });

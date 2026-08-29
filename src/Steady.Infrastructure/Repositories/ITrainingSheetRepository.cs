@@ -33,4 +33,10 @@ public interface ITrainingSheetRepository
         CancellationToken cancellationToken);
     Task<IReadOnlyList<StrengthWorkoutExecutionEntity>> GetHistoryAsync(
         Guid personalId, Guid corredorId, CancellationToken cancellationToken);
+    /// <summary>
+    /// As execuções do próprio corredor. Diferente de <see cref="GetHistoryAsync"/>,
+    /// que é a leitura do personal e exige vínculo: aqui o dono é quem pergunta.
+    /// </summary>
+    Task<IReadOnlyList<StrengthWorkoutExecutionEntity>> GetExecutionsForRunnerAsync(
+        Guid corredorId, CancellationToken cancellationToken);
 }
