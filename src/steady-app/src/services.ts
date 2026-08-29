@@ -9,6 +9,8 @@ import { RecordQueue } from './sync/recordQueue';
 import { SyncEngine } from './sync/syncEngine';
 import { AsyncStorageTrainingSheet } from './coaching/asyncStorageTrainingSheet';
 import { TrainingSheetCache } from './coaching/trainingSheetCache';
+import { AsyncStorageCombinedDraft } from './coaching/asyncStorageCombinedDraft';
+import { CombinedWorkoutDrafts } from './coaching/combinedWorkoutDraft';
 
 /**
  * Composition root — onde as peças se encontram uma única vez.
@@ -58,4 +60,9 @@ export const coachingApi = new HttpCoachingApi(API_BASE_URL, googleSession, fetc
 export const trainingSheetCache = new TrainingSheetCache(
   new AsyncStorageTrainingSheet(),
   coachingApi,
+);
+
+export const combinedWorkoutDrafts = new CombinedWorkoutDrafts(
+  new AsyncStorageCombinedDraft(),
+  recordQueue,
 );

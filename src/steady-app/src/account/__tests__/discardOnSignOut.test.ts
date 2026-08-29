@@ -34,6 +34,24 @@ function setup(events?: string[]) {
 }
 
 describe('Descarte da fila ao sair', () => {
+  it('conta e descarta a musculação que ainda aguarda a corrida', async () => {
+    const { queue, syncEngine } = setup();
+    const session = new FakeSession();
+    let pendingDraft = true;
+    const draft = {
+      hasPending: async () => pendingDraft,
+      clear: async () => { pendingDraft = false; },
+    };
+
+    expect(await attemptSignOut(queue, syncEngine, session, draft)).toEqual({
+      status: 'pendingRecords', count: 1,
+    });
+    expect(session.signedOut).toBe(false);
+
+    expect(await discardAndSignOut(queue, session, draft)).toEqual({ status: 'signedOut' });
+    expect(pendingDraft).toBe(false);
+  });
+
   it('descarta os pendentes e encerra a sessão quando o corredor confirma', async () => {
     const { queue } = setup();
     const session = new FakeSession();

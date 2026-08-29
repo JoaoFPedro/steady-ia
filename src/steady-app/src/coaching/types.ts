@@ -11,10 +11,24 @@ export type ExercisePrescription = {
   suggestedLoadKg: number | null;
 };
 
+/** Faixa opcional: `max` ausente = alvo exato (ADR-012, STORY-015). */
+export type NumericRange = { min: number; max: number | null };
+
+export type RunPrescription = {
+  description: string;
+  distanceKm: NumericRange | null;
+  durationMinutes: NumericRange | null;
+  perceivedEffort: NumericRange | null;
+};
+
 export type WorkoutPrescription = {
   type: WorkoutType;
   exercises: ExercisePrescription[];
-  description: string | null;
+  runDescriptions: {
+    tuesday: RunPrescription;
+    thursday: RunPrescription;
+    saturday: RunPrescription;
+  } | null;
 };
 
 export type TrainingSheet = {
@@ -36,11 +50,21 @@ export type RunnerSearch = { corredorId: string; email: string; available: boole
 export type LinkedRunner = { linkId: string; corredorId: string; email: string };
 
 export type ExerciseDraft = { name: string; sets: number; repetitions: number };
+
+/** Espelha `RunPrescriptionBody` da API — campos numéricos opcionais e independentes. */
+export type RunPrescriptionDraft = {
+  description: string;
+  distanceKm: NumericRange | null;
+  durationMinutes: NumericRange | null;
+  perceivedEffort: NumericRange | null;
+};
 export type TrainingSheetDraft = {
   push: ExerciseDraft[];
   pull: ExerciseDraft[];
   lower: ExerciseDraft[];
-  runDescription: string;
+  tuesdayRun: RunPrescriptionDraft;
+  thursdayRun: RunPrescriptionDraft;
+  saturdayRun: RunPrescriptionDraft;
 };
 
 export type StrengthHistoryItem = {

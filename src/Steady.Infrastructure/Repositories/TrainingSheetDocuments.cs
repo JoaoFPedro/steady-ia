@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Steady.Domain.Coaching;
+using Steady.Domain.Common;
 
 namespace Steady.Infrastructure.Repositories;
 
@@ -8,11 +9,29 @@ public static class TrainingSheetDocuments
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private sealed record ExerciseDocument(Guid Id, string Name, int Sets, int Repetitions);
+
+    /// <summary>Espelha <see cref="NumericRange{T}"/>. Ausente no JSON = campo não prescrito.</summary>
+    private sealed record NumericRangeDocument<T>(T Min, T? Max) where T : struct;
+
+    private sealed record RunPrescriptionDocument(
+        string Description,
+        NumericRangeDocument<double>? DistanceKm,
+        NumericRangeDocument<int>? DurationMinutes,
+        NumericRangeDocument<int>? PerceivedEffort);
+
     private sealed record SheetDocument(
         IReadOnlyList<ExerciseDocument> Push,
         IReadOnlyList<ExerciseDocument> Pull,
         IReadOnlyList<ExerciseDocument> Lower,
-        string RunDescription);
+        RunPrescriptionDocument? TuesdayRun = null,
+        RunPrescriptionDocument? ThursdayRun = null,
+        RunPrescriptionDocument? SaturdayRun = null,
+        /// <summary>Ficha publicada pela STORY-013, antes dos campos numéricos (ADR-012).</summary>
+        string? TuesdayRunDescription = null,
+        string? ThursdayRunDescription = null,
+        string? SaturdayRunDescription = null,
+        /// <summary>Ficha publicada antes da STORY-013 (ADR-010), com uma única descrição.</summary>
+        string? RunDescription = null);
     private sealed record ExerciseExecutionDocument(
         Guid ExerciseId,
         string Name,
@@ -29,11 +48,14 @@ public static class TrainingSheetDocuments
                 .Select(item => new ExerciseDocument(item.Id, item.Name, item.Sets, item.Repetitions))
                 .ToArray();
 
+        var run = (RunningWorkout)sheet.Workout(WorkoutType.Run);
         var document = new SheetDocument(
             Exercises(sheet.Workout(WorkoutType.Push)),
             Exercises(sheet.Workout(WorkoutType.Pull)),
             Exercises(sheet.Workout(WorkoutType.Lower)),
-            ((RunningWorkout)sheet.Workout(WorkoutType.Run)).Description);
+            ToDocument(run.Tuesday),
+            ToDocument(run.Thursday),
+            ToDocument(run.Saturday));
 
         return JsonSerializer.Serialize(document, JsonOptions);
     }
@@ -53,7 +75,38 @@ public static class TrainingSheetDocuments
             Strength(WorkoutType.Push, document.Push),
             Strength(WorkoutType.Pull, document.Pull),
             Strength(WorkoutType.Lower, document.Lower),
-            RunningWorkout.Create(document.RunDescription));
+            RunningWorkout.Create(
+                FromDocument(document.TuesdayRun, document.TuesdayRunDescription, document.RunDescription),
+                FromDocument(document.ThursdayRun, document.ThursdayRunDescription, document.RunDescription),
+                FromDocument(document.SaturdayRun, document.SaturdayRunDescription, document.RunDescription)));
+    }
+
+    private static RunPrescriptionDocument ToDocument(RunPrescription prescription) => new(
+        prescription.Description,
+        ToDocument(prescription.DistanceKm),
+        ToDocument(prescription.DurationMinutes),
+        ToDocument(prescription.PerceivedEffort));
+
+    private static NumericRangeDocument<T>? ToDocument<T>(NumericRange<T>? range)
+        where T : struct, IComparable<T> =>
+        range is { } value ? new NumericRangeDocument<T>(value.Min, value.Max) : null;
+
+    /// <summary>
+    /// Prioriza o formato novo (com campos numéricos). Sem ele, cai para os
+    /// formatos legados da ADR-010/STORY-013 — que só carregam descrição
+    /// (ADR-012).
+    /// </summary>
+    private static RunPrescription FromDocument(
+        RunPrescriptionDocument? current, string? legacyDayDescription, string? legacySingleDescription)
+    {
+        if (current is not null)
+            return RunPrescription.Create(
+                current.Description,
+                current.DistanceKm?.Min, current.DistanceKm?.Max,
+                current.DurationMinutes?.Min, current.DurationMinutes?.Max,
+                current.PerceivedEffort?.Min, current.PerceivedEffort?.Max);
+
+        return RunPrescription.Create(legacyDayDescription ?? legacySingleDescription ?? string.Empty);
     }
 
     public static string Serialize(StrengthWorkoutExecution execution) =>
@@ -82,4 +135,3 @@ public static class TrainingSheetDocuments
             .ToArray();
     }
 }
-

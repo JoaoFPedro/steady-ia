@@ -1,4 +1,5 @@
 using Steady.Domain.Coaching;
+using Steady.Domain.Training;
 using Steady.Infrastructure.Persistence;
 
 namespace Steady.Infrastructure.Repositories;
@@ -7,6 +8,10 @@ public sealed record ActiveTrainingSheet(
     TrainingSheetEntity Entity,
     TrainingSheet Sheet,
     IReadOnlyDictionary<Guid, decimal?> SuggestedLoads);
+public sealed record CombinedWorkoutSaveResult(
+    StrengthWorkoutExecutionEntity Strength,
+    RunningSessionEntity Running,
+    bool Created);
 
 public interface ITrainingSheetRepository
 {
@@ -20,7 +25,12 @@ public interface ITrainingSheetRepository
         StrengthWorkoutExecution execution,
         Guid idempotencyKey,
         CancellationToken cancellationToken);
+    Task<CombinedWorkoutSaveResult> AddCombinedExecutionAsync(
+        Guid corredorId,
+        StrengthWorkoutExecution strength,
+        RunningSession running,
+        Guid idempotencyKey,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<StrengthWorkoutExecutionEntity>> GetHistoryAsync(
         Guid personalId, Guid corredorId, CancellationToken cancellationToken);
 }
-

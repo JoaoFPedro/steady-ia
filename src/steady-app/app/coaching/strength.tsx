@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Field } from '../../src/ui/Field';
 import { Card, Kicker, Muted, NoticeStrip, PrimaryButton } from '../../src/ui/Nocturne';
 import { color, space, type } from '../../src/theme/nocturne';
-import { trainingSheetCache } from '../../src/services';
+import { combinedWorkoutDrafts, trainingSheetCache } from '../../src/services';
 import { useRecordLogger } from '../../src/features/useRecordLogger';
 import { todayIso } from '../../src/features/date';
 import { prepareStrengthExecution, type ExerciseInput } from '../../src/coaching/workoutExecution';
@@ -18,7 +18,8 @@ const LABELS = { push: 'Empurrada', pull: 'Puxada', lower: 'Inferiores' } as con
 
 export default function DetailedStrengthScreen() {
   const router = useRouter();
-  const rawType = useLocalSearchParams<{ type?: string }>().type;
+  const params = useLocalSearchParams<{ type?: string; planDay?: string; runPrescription?: string }>();
+  const rawType = params.type;
   const workoutType: StrengthType = TYPES.includes(rawType as StrengthType) ? rawType as StrengthType : 'push';
   const { log, saving, problem } = useRecordLogger('strengthWorkout');
   const [sheetId, setSheetId] = useState<string | null>(null);
@@ -69,7 +70,7 @@ export default function DetailedStrengthScreen() {
     }
     setLocalProblem(null);
     if (prepared.status === 'ready') {
-      void log(prepared.payload);
+      savePrepared(prepared.payload);
       return;
     }
 
@@ -78,7 +79,37 @@ export default function DetailedStrengthScreen() {
       `${prepared.skippedExerciseNames.join(', ')} será entendido como não realizado neste treino. Deseja salvar mesmo assim?`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Confirmar e salvar', onPress: () => void log(prepared.payload) },
+        { text: 'Confirmar e salvar', onPress: () => savePrepared(prepared.payload) },
+      ],
+    );
+  }
+
+  function savePrepared(payload: Parameters<typeof combinedWorkoutDrafts.hold>[0]) {
+    if (!params.runPrescription) {
+      void log(payload);
+      return;
+    }
+
+    Alert.alert(
+      'Registrar corrida?',
+      'Este dia também tem uma corrida prescrita. Você deseja registrá-la agora?',
+      [
+        { text: 'Não', onPress: () => void log(payload) },
+        {
+          text: 'Sim',
+          onPress: () => {
+            void combinedWorkoutDrafts.hold(payload).then(() => {
+              router.replace({
+                pathname: '/log/run',
+                params: {
+                  combined: '1',
+                  planDay: params.planDay ?? '',
+                  prescription: params.runPrescription ?? '',
+                },
+              });
+            }).catch(() => setLocalProblem('Não foi possível guardar a musculação antes da corrida.'));
+          },
+        },
       ],
     );
   }

@@ -6,10 +6,20 @@ import { Card, Kicker, Muted, NoticeStrip, PrimaryButton, Rule, SecondaryButton 
 import { color, radius, space, textAlpha, type } from '../../src/theme/nocturne';
 import { coachingApi } from '../../src/services';
 import type { CoachingHistory, ExerciseDraft, TrainingSheetDraft } from '../../src/coaching/types';
+import {
+  buildRunPrescriptionDraft,
+  type RunPrescriptionFormInput,
+} from '../../src/coaching/runPrescriptionForm';
 import { goToLogin } from '../../src/auth/goToLogin';
 
 type DraftInput = { name: string; sets: string; repetitions: string };
 const emptyExercise = (): DraftInput => ({ name: '', sets: '', repetitions: '' });
+const emptyRun = (): RunPrescriptionFormInput => ({
+  description: '',
+  distanceMin: '', distanceMax: '',
+  durationMin: '', durationMax: '',
+  effortMin: '', effortMax: '',
+});
 
 export default function PersonalRunnerScreen() {
   const router = useRouter();
@@ -19,10 +29,14 @@ export default function PersonalRunnerScreen() {
   const [push, setPush] = useState<DraftInput[]>([emptyExercise()]);
   const [pull, setPull] = useState<DraftInput[]>([emptyExercise()]);
   const [lower, setLower] = useState<DraftInput[]>([emptyExercise()]);
-  const [runDescription, setRunDescription] = useState('');
+  const [tuesdayRun, setTuesdayRun] = useState<RunPrescriptionFormInput>(emptyRun());
+  const [thursdayRun, setThursdayRun] = useState<RunPrescriptionFormInput>(emptyRun());
+  const [saturdayRun, setSaturdayRun] = useState<RunPrescriptionFormInput>(emptyRun());
   const [history, setHistory] = useState<CoachingHistory | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Os forms de treino só aparecem depois de um toque deliberado — a tela não abre já pedindo 15 campos. */
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -38,8 +52,24 @@ export default function PersonalRunnerScreen() {
     const convert = (items: DraftInput[]): ExerciseDraft[] => items.map((item) => ({
       name: item.name.trim(), sets: Number(item.sets), repetitions: Number(item.repetitions),
     }));
+
+    const tuesday = buildRunPrescriptionDraft(tuesdayRun);
+    const thursday = buildRunPrescriptionDraft(thursdayRun);
+    const saturday = buildRunPrescriptionDraft(saturdayRun);
+    const firstProblem = [tuesday, thursday, saturday].find((result) => !result.ok);
+    if (firstProblem && !firstProblem.ok) {
+      setMessage(firstProblem.message);
+      return;
+    }
+    if (!tuesday.ok || !thursday.ok || !saturday.ok) return;
+
     const draft: TrainingSheetDraft = {
-      push: convert(push), pull: convert(pull), lower: convert(lower), runDescription: runDescription.trim(),
+      push: convert(push),
+      pull: convert(pull),
+      lower: convert(lower),
+      tuesdayRun: tuesday.draft,
+      thursdayRun: thursday.draft,
+      saturdayRun: saturday.draft,
     };
     setBusy(true);
     const result = await coachingApi.publishTrainingSheet(corredorId, draft);
@@ -66,20 +96,37 @@ export default function PersonalRunnerScreen() {
 
       <Card style={s.block}>
         <Kicker>Nova ficha</Kicker>
-        <ExerciseSection title="Empurrada" items={push} onChange={setPush} />
-        <ExerciseSection title="Puxada" items={pull} onChange={setPull} />
-        <ExerciseSection title="Inferiores" items={lower} onChange={setLower} />
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Corrida</Text>
-          <Field
-            label="Descrição"
-            value={runDescription}
-            onChangeText={setRunDescription}
-            multiline={3}
-            placeholder="Moderada/fartlek leve, pace x, tempo estimado y"
-          />
-        </View>
-        <PrimaryButton label={busy ? 'Publicando…' : 'Publicar ficha completa'} disabled={busy} onPress={() => void publish()} />
+        {!showForm ? (
+          <PrimaryButton label="Criar Ficha" onPress={() => setShowForm(true)} />
+        ) : (
+          <>
+            <ExerciseSection title="Empurrada" items={push} onChange={setPush} />
+            <ExerciseSection title="Puxada" items={pull} onChange={setPull} />
+            <ExerciseSection title="Inferiores" items={lower} onChange={setLower} />
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Corrida</Text>
+              <RunPrescriptionSection
+                title="Terça-feira"
+                descriptionPlaceholder="Moderada/fartlek leve, pace e duração"
+                value={tuesdayRun}
+                onChange={setTuesdayRun}
+              />
+              <RunPrescriptionSection
+                title="Quinta-feira"
+                descriptionPlaceholder="Intervalado ou tempo run, pace e duração"
+                value={thursdayRun}
+                onChange={setThursdayRun}
+              />
+              <RunPrescriptionSection
+                title="Sábado"
+                descriptionPlaceholder="Longão, pace e distância"
+                value={saturdayRun}
+                onChange={setSaturdayRun}
+              />
+            </View>
+            <PrimaryButton label={busy ? 'Publicando…' : 'Publicar ficha completa'} disabled={busy} onPress={() => void publish()} />
+          </>
+        )}
       </Card>
 
       <View style={s.block}>
@@ -93,7 +140,7 @@ export default function PersonalRunnerScreen() {
                 <Text style={s.historyTitle}>{execution.workoutType.toUpperCase()} · {execution.date}</Text>
                 {execution.exercises.map((exercise) => (
                   <View key={exercise.exerciseId} style={s.historyExercise}>
-                    <Text style={s.exerciseName}>{exercise.name} · {exercise.sets}x{exercise.repetitions}</Text>
+                    <Text style={s.exerciseName}>´{exercise.name} · {exercise.sets}x{exercise.repetitions} repetições´</Text>
                     <Text style={exercise.skipped ? s.skipped : s.load}>
                       {exercise.skipped ? 'Não realizado' : `${exercise.loadKg} kg`}
                     </Text>
@@ -147,6 +194,59 @@ function ExerciseSection({
   );
 }
 
+/**
+ * Distância, duração e esforço são opcionais e independentes (ADR-012): o
+ * personal continua podendo publicar só a descrição, como antes desta story.
+ */
+function RunPrescriptionSection({
+  title, descriptionPlaceholder, value, onChange,
+}: {
+  title: string;
+  descriptionPlaceholder: string;
+  value: RunPrescriptionFormInput;
+  onChange: (value: RunPrescriptionFormInput) => void;
+}) {
+  function update(field: keyof RunPrescriptionFormInput, text: string) {
+    onChange({ ...value, [field]: text });
+  }
+  return (
+    <View style={s.runDraft}>
+      <Text style={s.runDraftTitle}>{title}</Text>
+      <Field
+        label="Descrição"
+        value={value.description}
+        onChangeText={(text) => update('description', text)}
+        multiline={3}
+        placeholder={descriptionPlaceholder}
+      />
+      <View style={s.row}>
+        <View style={s.third}>
+          <Field label="Km (min)" value={value.distanceMin} onChangeText={(text) => update('distanceMin', text)} keyboardType="numeric" placeholder="8" />
+        </View>
+        <View style={s.third}>
+          <Field label="Km (máx.)" value={value.distanceMax} onChangeText={(text) => update('distanceMax', text)} keyboardType="numeric" placeholder="10" />
+        </View>
+      </View>
+      <View style={s.row}>
+        <View style={s.third}>
+          <Field label="Min. (min)" value={value.durationMin} onChangeText={(text) => update('durationMin', text)} keyboardType="numeric" placeholder="45" />
+        </View>
+        <View style={s.third}>
+          <Field label="Min. (máx.)" value={value.durationMax} onChangeText={(text) => update('durationMax', text)} keyboardType="numeric" placeholder="55" />
+        </View>
+      </View>
+      <View style={s.row}>
+        <View style={s.third}>
+          <Field label="Esforço (min)" value={value.effortMin} onChangeText={(text) => update('effortMin', text)} keyboardType="numeric" placeholder="5" />
+        </View>
+        <View style={s.third}>
+          <Field label="Esforço (máx.)" value={value.effortMax} onChangeText={(text) => update('effortMax', text)} keyboardType="numeric" placeholder="6" />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.bg },
   content: { paddingHorizontal: space[8], paddingTop: space[6], paddingBottom: space[8] * 2 },
@@ -158,6 +258,9 @@ const s = StyleSheet.create({
   exerciseDraft: { marginBottom: space[2] },
   row: { flexDirection: 'row', gap: space[4] },
   half: { flex: 1 },
+  third: { flex: 1 },
+  runDraft: { marginTop: space[4] },
+  runDraftTitle: { color: color.text, fontSize: type.bodySm, marginBottom: space[2] },
   add: { alignSelf: 'flex-start', borderRadius: radius.md, borderWidth: 1, borderColor: textAlpha.divider, padding: space[3], marginBottom: space[6] },
   addText: { color: color.accentRamp[300], fontSize: type.meta },
   empty: { color: textAlpha.muted, marginTop: space[4], fontSize: type.meta },

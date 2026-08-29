@@ -1,15 +1,23 @@
 import { TrainingSheetCache, type TrainingSheetStorage } from '../trainingSheetCache';
-import type { CoachingApi, TrainingSheet } from '../types';
+import type { CoachingApi, RunPrescription, TrainingSheet } from '../types';
+
+const run = (description: string): RunPrescription => ({
+  description, distanceKm: null, durationMinutes: null, perceivedEffort: null,
+});
 
 const sheet = (id: string): TrainingSheet => ({
   id,
   corredorId: 'runner-1',
   createdAt: '2026-08-24T12:00:00Z',
   workouts: [
-    { type: 'push', description: null, exercises: [] },
-    { type: 'pull', description: null, exercises: [] },
-    { type: 'lower', description: null, exercises: [] },
-    { type: 'run', description: 'Fartlek leve', exercises: [] },
+    { type: 'push', runDescriptions: null, exercises: [] },
+    { type: 'pull', runDescriptions: null, exercises: [] },
+    { type: 'lower', runDescriptions: null, exercises: [] },
+    {
+      type: 'run',
+      runDescriptions: { tuesday: run('Leve'), thursday: run('Forte'), saturday: run('Longão') },
+      exercises: [],
+    },
   ],
 });
 

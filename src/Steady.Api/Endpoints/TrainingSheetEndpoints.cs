@@ -5,6 +5,7 @@ using Steady.Api.Common;
 using Steady.Api.Contracts;
 using Steady.Api.Logging;
 using Steady.Domain.Coaching;
+using Steady.Domain.Training;
 using Steady.Infrastructure.Persistence;
 using Steady.Infrastructure.Repositories;
 
@@ -40,7 +41,7 @@ public static class TrainingSheetEndpoints
                     entity.Id, current.Id, corredorId);
                 var active = await sheets.GetActiveAsync(corredorId, cancellationToken);
                 return Results.Created(
-                    $"/api/coaching/training-sheets/{entity.Id}", Respond(active!));
+                    $"/api/coaching/training-sheets/{entity.Id}", TrainingSheetMapping.Respond(active!));
             }
             catch (UnauthorizedAccessException)
             {
@@ -54,7 +55,7 @@ public static class TrainingSheetEndpoints
             CancellationToken cancellationToken) =>
         {
             var active = await sheets.GetActiveAsync(current.Id, cancellationToken);
-            return active is null ? Results.NotFound() : Results.Ok(Respond(active));
+            return active is null ? Results.NotFound() : Results.Ok(TrainingSheetMapping.Respond(active));
         });
 
         group.MapPost("/coaching/strength-executions", async (
@@ -67,7 +68,7 @@ public static class TrainingSheetEndpoints
             if (idempotencyKey is null)
                 return Idempotency.MissingKey();
 
-            if (!TryWorkoutType(body.WorkoutType, out var workoutType) || workoutType == WorkoutType.Run)
+            if (!TrainingSheetMapping.TryWorkoutType(body.WorkoutType, out var workoutType) || workoutType == WorkoutType.Run)
                 return Error("Tipo de treino de musculação desconhecido.");
 
             if (!DateOnly.TryParseExact(
@@ -90,6 +91,60 @@ public static class TrainingSheetEndpoints
             var response = Respond(saved.Entity);
             return saved.Created
                 ? Results.Created($"/api/coaching/strength-executions/{saved.Entity.Id}", response)
+                : Results.Ok(response);
+        });
+
+        group.MapPost("/coaching/combined-executions", async (
+            CombinedWorkoutExecutionBody body,
+            [FromHeader(Name = Idempotency.HeaderName)] Guid? idempotencyKey,
+            ITrainingSheetRepository sheets,
+            CurrentCorredor current,
+            CancellationToken cancellationToken) =>
+        {
+            if (idempotencyKey is null)
+                return Idempotency.MissingKey();
+
+            if (!TrainingSheetMapping.TryWorkoutType(body.Strength.WorkoutType, out var workoutType) ||
+                workoutType == WorkoutType.Run)
+                return Error("Tipo de treino de musculação desconhecido.");
+
+            if (!DateOnly.TryParseExact(
+                    body.Strength.Date, DateFormat, CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var strengthDate))
+                return Error($"A data deve estar no formato {DateFormat}.");
+
+            var sheetEntity = await sheets.GetByIdForRunnerAsync(
+                body.Strength.TrainingSheetId, current.Id, cancellationToken);
+            if (sheetEntity is null)
+                return Results.NotFound();
+
+            var sheet = TrainingSheetDocuments.DeserializeSheet(
+                sheetEntity.Id, sheetEntity.DefinitionJson);
+            var prescribed = ((StrengthWorkout)sheet.Workout(workoutType)).Exercises;
+            if (!TryCreateExecution(
+                    body.Strength, prescribed, workoutType, strengthDate,
+                    out var strength, out var strengthError))
+                return strengthError!;
+
+            if (!DomainFactory.TryCreate(() => RunningSession.Create(
+                    body.Running.Date,
+                    body.Running.DistanceKm,
+                    body.Running.DurationMinutes,
+                    body.Running.AveragePaceMinPerKm,
+                    body.Running.PerceivedEffort),
+                out var running, out var runningError))
+                return runningError!;
+
+            var saved = await sheets.AddCombinedExecutionAsync(
+                current.Id, strength!, running!, idempotencyKey.Value, cancellationToken);
+            var response = new
+            {
+                Strength = Respond(saved.Strength),
+                Running = Respond(saved.Running)
+            };
+
+            return saved.Created
+                ? Results.Created("/api/coaching/combined-executions", response)
                 : Results.Ok(response);
         });
 
@@ -134,7 +189,8 @@ public static class TrainingSheetEndpoints
         out IResult? error)
     {
         sheet = null;
-        if (body.Push is null || body.Pull is null || body.Lower is null || body.RunDescription is null)
+        if (body.Push is null || body.Pull is null || body.Lower is null ||
+            body.TuesdayRun is null || body.ThursdayRun is null || body.SaturdayRun is null)
         {
             error = Error("A ficha exige Empurrada, Puxada, Inferiores e Corrida.");
             return false;
@@ -142,19 +198,18 @@ public static class TrainingSheetEndpoints
 
         if (!DomainFactory.TryCreate(() => TrainingSheet.Create(
                 Guid.NewGuid(),
-                StrengthWorkout.Create(WorkoutType.Push, CreateExercises(body.Push)),
-                StrengthWorkout.Create(WorkoutType.Pull, CreateExercises(body.Pull)),
-                StrengthWorkout.Create(WorkoutType.Lower, CreateExercises(body.Lower)),
-                RunningWorkout.Create(body.RunDescription)),
+                StrengthWorkout.Create(WorkoutType.Push, TrainingSheetMapping.CreateExercises(body.Push)),
+                StrengthWorkout.Create(WorkoutType.Pull, TrainingSheetMapping.CreateExercises(body.Pull)),
+                StrengthWorkout.Create(WorkoutType.Lower, TrainingSheetMapping.CreateExercises(body.Lower)),
+                RunningWorkout.Create(
+                    TrainingSheetMapping.CreateRunPrescription(body.TuesdayRun),
+                    TrainingSheetMapping.CreateRunPrescription(body.ThursdayRun),
+                    TrainingSheetMapping.CreateRunPrescription(body.SaturdayRun))),
             out sheet, out error))
             return false;
 
         return true;
     }
-
-    private static ExercisePrescription[] CreateExercises(IReadOnlyList<ExercisePrescriptionBody> bodies) =>
-        bodies.Select(item => ExercisePrescription.Create(
-            Guid.NewGuid(), item.Name, item.Sets, item.Repetitions)).ToArray();
 
     private static bool TryCreateExecution(
         StrengthWorkoutExecutionBody body,
@@ -191,29 +246,13 @@ public static class TrainingSheetEndpoints
             out execution, out error);
     }
 
-    private static TrainingSheetResponse Respond(ActiveTrainingSheet active) => new(
-        active.Entity.Id,
-        active.Entity.CorredorId,
-        active.Entity.CreatedAt,
-        active.Sheet.Workouts.Select(workout => workout switch
-        {
-            StrengthWorkout strength => new WorkoutPrescriptionResponse(
-                Write(strength.Type),
-                strength.Exercises.Select(item => new ExercisePrescriptionResponse(
-                    item.Id,
-                    item.Name,
-                    item.Sets,
-                    item.Repetitions,
-                    active.SuggestedLoads.GetValueOrDefault(item.Id))).ToArray(),
-                null),
-            RunningWorkout run => new WorkoutPrescriptionResponse("run", [], run.Description),
-            _ => throw new InvalidOperationException("Tipo de treino desconhecido.")
-        }).ToArray());
+    private static TrainingSheetResponse Respond(ActiveTrainingSheet active) =>
+        TrainingSheetMapping.Respond(active);
 
     private static StrengthWorkoutExecutionResponse Respond(StrengthWorkoutExecutionEntity entity) => new(
         entity.Id,
         entity.TrainingSheetId,
-        Write(entity.WorkoutType),
+        TrainingSheetMapping.Write(entity.WorkoutType),
         entity.Date,
         TrainingSheetDocuments.DeserializeExecution(entity.DetailsJson)
             .Select(item => new ExerciseExecutionResponse(
@@ -226,16 +265,13 @@ public static class TrainingSheetEndpoints
                 item.Skipped)).ToArray(),
         entity.CreatedAt);
 
-    private static bool TryWorkoutType(string value, out WorkoutType type) =>
-        Enum.TryParse(value switch
-        {
-            "push" => nameof(WorkoutType.Push),
-            "pull" => nameof(WorkoutType.Pull),
-            "lower" => nameof(WorkoutType.Lower),
-            "run" => nameof(WorkoutType.Run),
-            _ => value
-        }, ignoreCase: true, out type);
+    private static RunningSessionResponse Respond(RunningSessionEntity entity) => new(
+        entity.Id,
+        entity.Date,
+        entity.DistanceKm,
+        entity.DurationMinutes,
+        entity.AveragePaceMinPerKm,
+        entity.PerceivedEffort);
 
-    private static string Write(WorkoutType type) => type.ToString().ToLowerInvariant();
     private static IResult Error(string message) => Results.BadRequest(new { error = message });
 }

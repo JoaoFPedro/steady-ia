@@ -2,6 +2,11 @@ import type { GoogleSession } from '../auth/googleSession';
 import type { RecordQueue } from '../sync/recordQueue';
 import type { SyncEngine } from '../sync/syncEngine';
 
+export interface PendingCombinedDraft {
+  hasPending(): Promise<boolean>;
+  clear(): Promise<void>;
+}
+
 /**
  * O que aconteceu com a tentativa de sair, do ponto de vista do corredor.
  *
@@ -28,12 +33,13 @@ export async function attemptSignOut(
   queue: RecordQueue,
   syncEngine: SyncEngine,
   session: GoogleSession,
+  combinedDraft?: PendingCombinedDraft,
 ): Promise<SignOutOutcome> {
   // Oportunista: falhar aqui é o caso normal de quem está sem sinal, e o número
   // de pendentes logo abaixo já conta a história inteira.
   await syncEngine.sync().catch(() => {});
 
-  const pending = await queue.count();
+  const pending = await queue.count() + ((await combinedDraft?.hasPending()) ? 1 : 0);
   if (pending > 0) return { status: 'pendingRecords', count: pending };
 
   return endSession(session);
@@ -50,8 +56,10 @@ export async function attemptSignOut(
 export async function discardAndSignOut(
   queue: RecordQueue,
   session: GoogleSession,
+  combinedDraft?: PendingCombinedDraft,
 ): Promise<SignOutOutcome> {
   await queue.clear();
+  await combinedDraft?.clear();
 
   return endSession(session);
 }

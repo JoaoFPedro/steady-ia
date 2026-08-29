@@ -1,0 +1,76 @@
+flowchart TD
+    START[Corredor finaliza o treino do dia] --> QUEUE[Registro entra na fila local com chave de idempotencia]
+    QUEUE --> ACK[Confirmacao imediata ao corredor]
+    ACK --> ONLINE{Ha conexao?}
+    ONLINE -- Nao --> PEND[PendenteDeSincronizacao: nenhuma revisao no aparelho]
+    PEND --> RETRY[Fila sincroniza quando a conexao retorna]
+    RETRY --> SYNC
+    ONLINE -- Sim --> SYNC[API persiste a execucao imutavel uma unica vez]
+
+    SYNC --> DUP{Chave ja processada?}
+    DUP -- Sim --> ONE[Devolve execucao e revisao existentes sem duplicar]
+    DUP -- Nao --> RESOLVE[Resolve prescricao aplicavel a data]
+
+    RESOLVE --> SRC{Quais fontes prescrevem esse dia?}
+    SRC -- Nenhuma --> NOPRESC[Sem prescricao: nenhuma revisao]
+    SRC -- Uma fonte --> COMPARE
+    SRC -- Plano e ficha --> CONFL{Faixas numericas comparaveis se cruzam?}
+    CONFL -- Nao --> CONFLICT[ConflitoDePrescricao: nenhuma fonte prevalece]
+    CONFL -- Sim --> COMPARE[Comparacao determinista campo a campo]
+
+    CONFLICT --> NOREC[Nenhuma recomendacao gerada]
+    NOREC --> POPUP[Pop-up de conflito na Dashboard]
+    POPUP --> HISTC[Conflito permanece no historico do treino]
+
+    COMPARE --> SNAP[Guarda snapshot: valores, diferencas e versoes aplicadas]
+    SNAP --> CLASS{Alguma diferenca excede a tolerancia vigente?}
+    CLASS -- Nao --> ADHER[Aderente: sem revisao, sem card, sem chamada de IA]
+    CLASS -- Sim --> DIVERG[Divergente]
+
+    DIVERG --> POLICY[Politica de seguranca versionada]
+    POLICY --> PAIN{Existe PainLog na data da execucao?}
+    PAIN -- Sim --> REC1[Acao autorizada: PriorizarRecuperacao]
+    PAIN -- Nao --> ENOUGH{Ha campo comparavel e regra aplicavel?}
+    ENOUGH -- Nao --> INSUF[DadosInsuficientes: nenhuma acao, sem chamada de IA]
+    ENOUGH -- Sim --> LOAD{Carga executada maior ou igual a 110 por cento da prescrita?}
+    LOAD -- Sim --> REC2[Acao autorizada: ReduzirCarga]
+    LOAD -- Nao --> REC3[Acao autorizada: Manter]
+
+    REC1 --> REVIEW[Cria WorkoutReview vinculada a execucao]
+    REC2 --> REVIEW
+    REC3 --> REVIEW
+    INSUF --> REVIEW
+
+    REVIEW --> NEEDAI{Ha acao autorizada a explicar?}
+    NEEDAI -- Nao --> READY
+    NEEDAI -- Sim --> CTX[Monta contexto minimizado: so fatos e acao autorizada]
+    CTX --> AI[Claude API com saida estruturada, 15s, fora da transacao]
+
+    AI --> OUT{Saida valida contra os fatos e a acao?}
+    OUT -- Falha ou timeout --> UNAVAIL[Explicacao Indisponivel]
+    OUT -- Contradiz acao, diagnostica ou inventa numero --> REJECT[Saida descartada e incidente auditado sem dado do corredor]
+    REJECT --> UNAVAIL
+    OUT -- Sim --> TEXT[Explicacao validada persistida na revisao]
+
+    UNAVAIL --> BTN[Botao Tentar novamente: uma requisicao por toque]
+    BTN --> CTX
+    TEXT --> READY[Revisao disponivel]
+
+    READY --> DASH[Dashboard mostra somente a revisao mais recente]
+    READY --> HIST[Historico do treino guarda todas as revisoes]
+    DASH --> UND[Corredor toca em Entendi]
+    UND --> STATE[Revisao passa a Entendida com data e hora]
+    STATE --> IMMUT[Plano, ficha e execucao permanecem inalterados]
+
+    STATE --> COH[Coerencia inicia como Desconhecida]
+    COH --> NEXT{Proximo treino elegivel sincronizado?}
+    NEXT -- Nao --> UNKNOWN[Permanece Desconhecida: ausencia nunca e recuperacao]
+    NEXT -- Sim --> MATCH{Satisfaz a politica da acao apresentada?}
+    MATCH -- Sim --> OK[Coerente com a versao da politica registrada]
+    MATCH -- Nao --> NOK[NaoCoerente: registro seguinte segue valido e imutavel]
+
+    READY --> LINK{Personal com vinculo ativo?}
+    LINK -- Nao --> DENY[Acesso negado: nenhum fato, texto, acao ou metrica]
+    LINK -- Sim --> COACH[Personal ve comparacao, explicacao, acao, Entendi e coerencia]
+    COACH --> ENDED{Vinculo encerrado?}
+    ENDED -- Sim --> DENY

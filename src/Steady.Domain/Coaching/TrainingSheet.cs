@@ -1,3 +1,5 @@
+using Steady.Domain.Common;
+
 namespace Steady.Domain.Coaching;
 
 public enum WorkoutType
@@ -44,6 +46,75 @@ public sealed record ExercisePrescription
     }
 }
 
+/// <summary>
+/// Prescrição de corrida de um dia (ADR-012). A descrição livre é obrigatória
+/// e continua sendo a instrução que o corredor lê primeiro; os três campos
+/// numéricos são opcionais e independentes entre si — o que o personal deixar
+/// em branco fica ausente, nunca inferido da descrição.
+/// </summary>
+public sealed record RunPrescription
+{
+    public string Description { get; }
+    public NumericRange<double>? DistanceKm { get; }
+    public NumericRange<int>? DurationMinutes { get; }
+    public NumericRange<int>? PerceivedEffort { get; }
+
+    private RunPrescription(
+        string description,
+        NumericRange<double>? distanceKm,
+        NumericRange<int>? durationMinutes,
+        NumericRange<int>? perceivedEffort)
+    {
+        Description = description;
+        DistanceKm = distanceKm;
+        DurationMinutes = durationMinutes;
+        PerceivedEffort = perceivedEffort;
+    }
+
+    public static RunPrescription Create(
+        string description,
+        double? distanceKmMin = null,
+        double? distanceKmMax = null,
+        int? durationMinutesMin = null,
+        int? durationMinutesMax = null,
+        int? perceivedEffortMin = null,
+        int? perceivedEffortMax = null)
+    {
+        var normalizedDescription = description?.Trim() ?? string.Empty;
+        if (normalizedDescription.Length == 0)
+            throw new ArgumentException("A descrição da corrida é obrigatória.", nameof(description));
+
+        return new RunPrescription(
+            normalizedDescription,
+            BuildRange(distanceKmMin, distanceKmMax, min => min <= 0
+                ? throw new ArgumentOutOfRangeException(
+                    nameof(distanceKmMin), min, "A distância deve ser maior que zero.")
+                : min),
+            BuildRange(durationMinutesMin, durationMinutesMax, min => min <= 0
+                ? throw new ArgumentOutOfRangeException(
+                    nameof(durationMinutesMin), min, "A duração deve ser maior que zero.")
+                : min),
+            BuildRange(perceivedEffortMin, perceivedEffortMax, min => min is < 1 or > 10
+                ? throw new ArgumentOutOfRangeException(
+                    nameof(perceivedEffortMin), min, "A percepção de esforço deve estar entre 1 e 10.")
+                : min));
+    }
+
+    private static NumericRange<T>? BuildRange<T>(T? min, T? max, Func<T, T> validateMin)
+        where T : struct, IComparable<T>
+    {
+        if (min is null)
+        {
+            if (max is not null)
+                throw new ArgumentException("O máximo exige um mínimo correspondente.", nameof(max));
+
+            return null;
+        }
+
+        return NumericRange<T>.Create(validateMin(min.Value), max);
+    }
+}
+
 public abstract class WorkoutPrescription
 {
     public WorkoutType Type { get; }
@@ -76,17 +147,30 @@ public sealed class StrengthWorkout : WorkoutPrescription
 
 public sealed class RunningWorkout : WorkoutPrescription
 {
-    public string Description { get; }
+    public RunPrescription Tuesday { get; }
+    public RunPrescription Thursday { get; }
+    public RunPrescription Saturday { get; }
 
-    private RunningWorkout(string description) : base(WorkoutType.Run) => Description = description;
-
-    public static RunningWorkout Create(string description)
+    private RunningWorkout(
+        RunPrescription tuesday,
+        RunPrescription thursday,
+        RunPrescription saturday) : base(WorkoutType.Run)
     {
-        var normalized = description?.Trim() ?? string.Empty;
-        if (normalized.Length == 0)
-            throw new ArgumentException("A descrição da corrida é obrigatória.", nameof(description));
+        Tuesday = tuesday;
+        Thursday = thursday;
+        Saturday = saturday;
+    }
 
-        return new RunningWorkout(normalized);
+    public static RunningWorkout Create(
+        RunPrescription tuesday,
+        RunPrescription thursday,
+        RunPrescription saturday)
+    {
+        ArgumentNullException.ThrowIfNull(tuesday);
+        ArgumentNullException.ThrowIfNull(thursday);
+        ArgumentNullException.ThrowIfNull(saturday);
+
+        return new RunningWorkout(tuesday, thursday, saturday);
     }
 }
 
@@ -128,4 +212,3 @@ public sealed class TrainingSheet
         return strength.Exercises.Single(exercise => exercise.Id == exerciseId);
     }
 }
-

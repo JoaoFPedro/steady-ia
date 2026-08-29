@@ -12,13 +12,15 @@
  * rua, mas fazer dele a única ação do app que exige sinal quebraria a
  * expectativa que a STORY-003 estabeleceu.
  */
-export type RecordKind = 'running' | 'strength' | 'strengthWorkout' | 'pain' | 'plan';
+export type RecordKind =
+  | 'running' | 'strength' | 'strengthWorkout' | 'combinedWorkout' | 'pain' | 'plan';
 
 /** Rota da API para cada tipo de registro (STORY-002). */
 export const ENDPOINT_BY_KIND: Record<RecordKind, string> = {
   running: '/api/running-sessions',
   strength: '/api/strength-sessions',
   strengthWorkout: '/api/coaching/strength-executions',
+  combinedWorkout: '/api/coaching/combined-executions',
   pain: '/api/pain-logs',
   plan: '/api/plan-requests',
 };

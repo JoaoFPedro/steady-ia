@@ -13,7 +13,10 @@ public sealed class TrainingSheetTests
         StrengthWorkout.Create(WorkoutType.Push, [Exercise("Supino reto")]),
         StrengthWorkout.Create(WorkoutType.Pull, [Exercise("Remada curvada")]),
         StrengthWorkout.Create(WorkoutType.Lower, [Exercise()]),
-        RunningWorkout.Create("Moderada com fartlek leve, pace X, tempo estimado Y"));
+        RunningWorkout.Create(
+            RunPrescription.Create("Moderada com fartlek leve"),
+            RunPrescription.Create("Intervalado ou tempo run"),
+            RunPrescription.Create("Longão em ritmo confortável")));
 
     [Fact]
     public void Ficha_valida_contem_exatamente_os_quatro_tipos()
@@ -57,9 +60,24 @@ public sealed class TrainingSheetTests
     }
 
     [Fact]
-    public void Treino_de_corrida_exige_descricao()
+    public void Treino_de_corrida_guarda_as_tres_prescricoes_no_mesmo_tipo()
     {
-        Assert.Throws<ArgumentException>(() => RunningWorkout.Create("  "));
+        var corrida = RunningWorkout.Create(
+            RunPrescription.Create("Moderada com fartlek leve"),
+            RunPrescription.Create("Intervalado ou tempo run"),
+            RunPrescription.Create("Longão em ritmo confortável"));
+
+        Assert.Equal(WorkoutType.Run, corrida.Type);
+        Assert.Equal("Moderada com fartlek leve", corrida.Tuesday.Description);
+        Assert.Equal("Intervalado ou tempo run", corrida.Thursday.Description);
+        Assert.Equal("Longão em ritmo confortável", corrida.Saturday.Description);
+    }
+
+    [Fact]
+    public void Treino_de_corrida_exige_as_tres_prescricoes()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            RunningWorkout.Create(null!, RunPrescription.Create("quinta"), RunPrescription.Create("sábado")));
     }
 
     [Fact]
@@ -83,4 +101,3 @@ public sealed class TrainingSheetTests
         Assert.Same(agachamento, ficha.Exercise(WorkoutType.Lower, agachamento.Id));
     }
 }
-

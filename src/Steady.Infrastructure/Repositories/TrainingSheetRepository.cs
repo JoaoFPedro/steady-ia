@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Steady.Domain.Coaching;
+using Steady.Domain.Training;
 using Steady.Infrastructure.Persistence;
 
 namespace Steady.Infrastructure.Repositories;
@@ -103,6 +104,58 @@ public sealed class TrainingSheetRepository(
         return new SaveResult<StrengthWorkoutExecutionEntity>(entity, Created: true);
     }
 
+    public async Task<CombinedWorkoutSaveResult> AddCombinedExecutionAsync(
+        Guid corredorId,
+        StrengthWorkoutExecution strength,
+        RunningSession running,
+        Guid idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        var existingStrength = await dbContext.StrengthWorkoutExecutions.FirstOrDefaultAsync(
+            item => item.CorredorId == corredorId && item.IdempotencyKey == idempotencyKey,
+            cancellationToken);
+        var existingRunning = await dbContext.RunningSessions.FirstOrDefaultAsync(
+            item => item.CorredorId == corredorId && item.IdempotencyKey == idempotencyKey,
+            cancellationToken);
+
+        if (existingStrength is not null && existingRunning is not null)
+            return new CombinedWorkoutSaveResult(existingStrength, existingRunning, Created: false);
+
+        if (existingStrength is not null || existingRunning is not null)
+            throw new InvalidOperationException("Registro combinado parcialmente persistido.");
+
+        var strengthEntity = new StrengthWorkoutExecutionEntity
+        {
+            Id = Guid.NewGuid(),
+            CorredorId = corredorId,
+            TrainingSheetId = strength.TrainingSheetId,
+            WorkoutType = strength.WorkoutType,
+            Date = strength.Date.ToString("yyyy-MM-dd"),
+            DetailsJson = TrainingSheetDocuments.Serialize(strength),
+            IdempotencyKey = idempotencyKey,
+            CreatedAt = DateTime.UtcNow
+        };
+        var runningEntity = new RunningSessionEntity
+        {
+            Id = Guid.NewGuid(),
+            CorredorId = corredorId,
+            IdempotencyKey = idempotencyKey,
+            Date = running.Date,
+            DistanceKm = running.DistanceKm,
+            DurationMinutes = running.DurationMinutes,
+            AveragePaceMinPerKm = running.AveragePaceMinPerKm,
+            PerceivedEffort = running.PerceivedEffort
+        };
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        dbContext.StrengthWorkoutExecutions.Add(strengthEntity);
+        dbContext.RunningSessions.Add(runningEntity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new CombinedWorkoutSaveResult(strengthEntity, runningEntity, Created: true);
+    }
+
     public async Task<IReadOnlyList<StrengthWorkoutExecutionEntity>> GetHistoryAsync(
         Guid personalId, Guid corredorId, CancellationToken cancellationToken)
     {
@@ -116,4 +169,3 @@ public sealed class TrainingSheetRepository(
             .ToListAsync(cancellationToken);
     }
 }
-

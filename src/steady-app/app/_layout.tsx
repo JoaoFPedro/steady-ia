@@ -3,7 +3,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { color } from '../src/theme/nocturne';
-import { configureAuth, googleSession, syncEngine } from '../src/services';
+import { combinedWorkoutDrafts, configureAuth, googleSession, syncEngine } from '../src/services';
 import { startAutoSync } from '../src/sync/autoSync';
 import { netInfoConnectivity } from '../src/sync/netInfoConnectivity';
 
@@ -33,7 +33,10 @@ export default function RootLayout() {
 
   // Enquanto o app estiver aberto, a fila se esvazia sozinha na volta da
   // conexão — o corredor não precisa reabrir nada nem registrar de novo.
-  useEffect(() => startAutoSync(netInfoConnectivity, syncEngine), []);
+  useEffect(() => {
+    void combinedWorkoutDrafts.recover().then(() => syncEngine.sync()).catch(() => {});
+    return startAutoSync(netInfoConnectivity, syncEngine);
+  }, []);
 
   if (verificando) {
     return (
@@ -70,6 +73,7 @@ export default function RootLayout() {
         {/* `PlanningDocument` desenha o próprio cabeçalho — mesmo motivo do `(tabs)` acima. */}
         <Stack.Screen name="planning/plan" options={{ headerShown: false }} />
         <Stack.Screen name="coaching/strength" options={{ title: 'Registrar ficha' }} />
+        <Stack.Screen name="coaching/select" options={{ title: 'Registrar Treino' }} />
         <Stack.Screen name="personal/runner" options={{ title: 'Corredor' }} />
       </Stack>
     </>

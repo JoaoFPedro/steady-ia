@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
-import { googleSession, recordQueue, syncEngine, trainingSheetCache } from '../services';
+import { combinedWorkoutDrafts, googleSession, recordQueue, syncEngine, trainingSheetCache } from '../services';
 import { goToLogin } from '../auth/goToLogin';
 import { presentAccount, type AccountView } from './accountPresentation';
 import { applySignOutOutcome, pendingRecordsWarning } from './signOutFeedback';
@@ -75,7 +75,7 @@ export function useAccountMenu() {
           {
             text: 'Sair mesmo assim',
             style: 'destructive',
-            onPress: async () => concluir(await discardAndSignOut(recordQueue, googleSession)),
+            onPress: async () => concluir(await discardAndSignOut(recordQueue, googleSession, combinedWorkoutDrafts)),
           },
         ],
         // Tocar fora do diálogo no Android não dispara botão nenhum: sem isto o
@@ -92,7 +92,7 @@ export function useAccountMenu() {
     setSaindo(true);
     setFalhouAoSair(false);
 
-    const outcome = await attemptSignOut(recordQueue, syncEngine, googleSession);
+    const outcome = await attemptSignOut(recordQueue, syncEngine, googleSession, combinedWorkoutDrafts);
 
     // A decisão passa a ser do corredor: `saindo` só é liberado no diálogo.
     if (outcome.status === 'pendingRecords') return confirmarDescarte(outcome.count);

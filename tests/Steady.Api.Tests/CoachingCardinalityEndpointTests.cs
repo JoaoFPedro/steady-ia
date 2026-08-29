@@ -13,7 +13,9 @@ public sealed class CoachingCardinalityEndpointTests(CustomWebApplicationFactory
         Push: [new ExercisePrescriptionBody("Supino reto", 4, 6)],
         Pull: [new ExercisePrescriptionBody("Remada curvada", 4, 8)],
         Lower: [new ExercisePrescriptionBody("Agachamento livre", 4, 6)],
-        RunDescription: "Moderada com fartlek leve, pace X, tempo estimado Y");
+        TuesdayRun: new RunPrescriptionBody("Moderada com fartlek leve", null, null, null),
+        ThursdayRun: new RunPrescriptionBody("Intervalado ou tempo run", null, null, null),
+        SaturdayRun: new RunPrescriptionBody("Longão em ritmo confortável", null, null, null));
 
     private async Task<(HttpClient Client, Guid Id)> RunnerAsync(string prefix)
     {
