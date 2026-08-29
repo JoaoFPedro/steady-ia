@@ -2,13 +2,14 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card, Kicker, Muted, NoticeStrip, PrimaryButton } from '../../src/ui/Nocturne';
+import { Card, Kicker, Muted, NoticeStrip, PrimaryButton, SecondaryButton } from '../../src/ui/Nocturne';
 import { color, space, textAlpha, type } from '../../src/theme/nocturne';
 import { loadPlanList, type PlanListState } from '../../src/planning/planListState';
 import { formatRaceDate } from '../../src/planning/raceDate';
 import { RACE_DISTANCE_LABEL } from '../../src/planning/trainingPlanRequest';
 import { goToLogin } from '../../src/auth/goToLogin';
-import { queryApi, recordQueue } from '../../src/services';
+import { coachingApi, queryApi, recordQueue } from '../../src/services';
+import type { CoachingLink } from '../../src/coaching/types';
 
 /**
  * A aba **é** a lista de planejamentos criados (STORY-008), agora vinda do
@@ -20,6 +21,21 @@ export default function PlanningScreen() {
   const router = useRouter();
   const [state, setState] = useState<PlanListState>({ status: 'ok', plans: [] });
   const [loading, setLoading] = useState(true);
+  const [pendingLinks, setPendingLinks] = useState<CoachingLink[]>([]);
+  const [activeLink, setActiveLink] = useState<CoachingLink | null>(null);
+  const [coachingMessage, setCoachingMessage] = useState<string | null>(null);
+
+  const loadCoachingLinks = useCallback(async () => {
+    const [pending, active] = await Promise.all([
+      coachingApi.pendingLinks(), coachingApi.activeLink(),
+    ]);
+    if (pending.status === 'unauthenticated' || active.status === 'unauthenticated') {
+      goToLogin(router);
+      return;
+    }
+    setPendingLinks(pending.status === 'ok' ? pending.data : []);
+    setActiveLink(active.status === 'ok' ? active.data : null);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -32,12 +48,32 @@ export default function PlanningScreen() {
         setState(novo);
         setLoading(false);
       });
+      void loadCoachingLinks();
 
       return () => {
         ativo = false;
       };
-    }, [router]),
+    }, [loadCoachingLinks, router]),
   );
+
+  async function acceptLink(link: CoachingLink) {
+    const result = await coachingApi.acceptLink(link.id);
+    if (result.status === 'unauthenticated') return goToLogin(router);
+    setCoachingMessage(result.status === 'ok'
+      ? 'Vínculo aceito. A ficha aparecerá quando o personal publicar.'
+      : result.status === 'conflict' || result.status === 'rejected'
+        ? result.message : 'Não foi possível aceitar o vínculo.');
+    await loadCoachingLinks();
+  }
+
+  async function endLink() {
+    if (activeLink === null) return;
+    const result = await coachingApi.endLink(activeLink.id);
+    if (result.status === 'unauthenticated') return goToLogin(router);
+    setCoachingMessage(result.status === 'ok'
+      ? 'Vínculo encerrado.' : 'Não foi possível encerrar o vínculo.');
+    await loadCoachingLinks();
+  }
 
   const maisRecente = state.plans[0]?.idempotencyKey;
 
@@ -49,6 +85,20 @@ export default function PlanningScreen() {
     >
       <Kicker accent>Planejamento</Kicker>
       <Text style={s.title}>Seus planejamentos</Text>
+
+      {coachingMessage !== null && (
+        <View style={s.spaced}><NoticeStrip><Text style={s.noticeText}>{coachingMessage}</Text></NoticeStrip></View>
+      )}
+
+      {pendingLinks.map((link) => (
+        <Card key={link.id} style={s.spaced}>
+          <Kicker>Solicitação de vínculo</Kicker>
+          <Muted>Aceite somente se reconhecer o personal.</Muted>
+          <View style={s.button}>
+            <PrimaryButton label="Aceitar vínculo" onPress={() => void acceptLink(link)} />
+          </View>
+        </Card>
+      ))}
 
       {/* "Não consegui carregar" nunca vira "você não tem nenhum": são estados
           diferentes, e só um deles convida a criar (ADR-004, spec regra 14). */}
@@ -105,6 +155,11 @@ export default function PlanningScreen() {
       <View style={s.spaced}>
         <PrimaryButton label="Criar planejamento" onPress={() => router.push('/planning/new')} />
       </View>
+      {activeLink !== null && (
+        <View style={s.spaced}>
+          <SecondaryButton label="Encerrar vínculo com o personal" onPress={() => void endLink()} />
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -121,4 +176,5 @@ const s = StyleSheet.create({
   listItemTitle: { color: color.text, fontSize: type.cardTitle, fontWeight: '600' },
   chevron: { color: textAlpha.ghost, fontSize: type.cardTitle, marginLeft: space[4] },
   noticeText: { color: color.accentRamp[400], fontSize: type.meta, lineHeight: 19 },
+  button: { marginTop: space[4] },
 });

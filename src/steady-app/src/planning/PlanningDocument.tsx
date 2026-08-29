@@ -7,8 +7,9 @@ import type { PlanRequestSummary } from './planRequest';
 import type { DayStatus } from './dayCompletion';
 import { ExerciseList } from './ExerciseList';
 import { shared } from './planningStyles';
-import { SemanaSection, type RegisterKind } from './SemanaSection';
+import { SemanaSection } from './SemanaSection';
 import type { SectionId } from './planDayParam';
+import type { TrainingSheet } from '../coaching/types';
 import { formatRaceDate } from './raceDate';
 import {
   EQUIPMENT_ACCESS_LABEL,
@@ -39,6 +40,9 @@ export function PlanningDocument({
   openDay = null,
   dayStatuses = [],
   todayIndex = -1,
+  sheet = null,
+  sheetStale = false,
+  sheetLoading = false,
   onRegister,
 }: {
   document: TrainingPlanDocument;
@@ -61,7 +65,10 @@ export function PlanningDocument({
   /** Estado de cada dia, alinhado a `weekPlan`. Vazio = nada a marcar. */
   dayStatuses?: readonly DayStatus[];
   todayIndex?: number;
-  onRegister?: (kind: RegisterKind, planDayIndex: number) => void;
+  sheet?: TrainingSheet | null;
+  sheetStale?: boolean;
+  sheetLoading?: boolean;
+  onRegister?: (planDayIndex: number) => void;
 }) {
   const [section, setSection] = useState<SectionId>(initialSection);
   const body = useRef<ScrollView>(null);
@@ -108,6 +115,9 @@ export function PlanningDocument({
             statuses={dayStatuses}
             todayIndex={todayIndex}
             initialOpenDay={openDay}
+            sheet={sheet}
+            sheetStale={sheetStale}
+            sheetLoading={sheetLoading}
             onRegister={onRegister ?? (() => {})}
             // Sem animação: o dia precisa já estar na tela quando ela aparece,
             // não deslizar até lá depois (regra 1).

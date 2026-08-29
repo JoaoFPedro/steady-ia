@@ -5,22 +5,34 @@ flowchart TD
     A -- Não --> X[Sem acesso aos dados]
     A -- Sim --> V[Vínculo ativo]
     V --> F[Personal publica ficha completa]
-    F --> T[Empurrada + Puxada + Inferiores + Corrida]
-    T --> C[Corredor sincroniza ficha ativa]
-    C --> E[Escolhe livremente um treino]
-    E --> M{Musculação?}
-    M -- Sim --> L[Preenche cargas e notas]
+    F --> T[Empurrada + Puxada + Inferiores + card Corrida]
+    T --> I[Corrida contém inputs de terça, quinta e sábado]
+    I --> C[Corredor sincroniza ficha ativa]
+    C --> P1[Abre Planejamento e a seção Semana]
+    P1 --> P2[Detalhamento do dia recebe treino da ficha]
+    P2 --> E[Clica em Registrar treino]
+    E --> M{Qual treino foi feito?}
+    M -- Musculação --> L[Preenche cargas e notas]
     L --> Z{Há carga vazia ou zero?}
     Z -- Sim --> Q[Confirma exercícios pulados]
-    Z -- Não --> J[Finaliza execução em um JSON]
+    Z -- Não --> J[Prepara execução de musculação]
     Q -- Confirma --> J
     Q -- Cancela --> L
-    M -- Não --> R[Usa formulário de corrida existente]
-    R --> J
-    J --> O{Online?}
+    M -- Corrida --> R[Usa formulário de corrida existente]
+    J --> G{Dia possui corrida?}
+    G -- Não --> U[Finaliza somente musculação]
+    G -- Sim --> A1{Também registrar corrida?}
+    A1 -- Não --> U
+    A1 -- Sim --> D1[Guarda musculação como rascunho local]
+    D1 --> R
+    R --> R1{Corrida concluída?}
+    R1 -- Não --> U
+    R1 -- Sim --> C1[Finaliza comando combinado]
+    U --> O{Online?}
+    C1 --> O
     O -- Não --> K[Fila local idempotente]
     K --> Y[Sincroniza quando a conexão retorna]
-    O -- Sim --> H[API persiste execução imutável]
+    O -- Sim --> H[API persiste uma ou duas execuções atomicamente]
     Y --> H
     H --> D[Histórico detalhado do personal]
     V --> W{Vínculo encerrado?}

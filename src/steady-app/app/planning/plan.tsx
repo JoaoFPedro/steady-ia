@@ -6,16 +6,16 @@ import { Muted } from '../../src/ui/Nocturne';
 import { color, space } from '../../src/theme/nocturne';
 import { PlanningDocument } from '../../src/planning/PlanningDocument';
 import { planDayIndexFromParam, sectionFromParam } from '../../src/planning/planDayParam';
-import type { RegisterKind } from '../../src/planning/SemanaSection';
-import { TRAINING_PLAN_DOCUMENT } from '../../src/planning/trainingPlanDocument';
+import type { TrainingPlanDocument } from '../../src/planning/trainingPlanDocument';
 import { loadPlanList } from '../../src/planning/planListState';
 import { loadLoggedSessions } from '../../src/planning/loggedSessions';
 import { weekStatuses } from '../../src/planning/weekStatuses';
 import { weekPlanIndexFor } from '../../src/planning/weekPlanDay';
-import type { DayStatus } from '../../src/planning/dayCompletion';
+import type { DayStatus, LoggedSession } from '../../src/planning/dayCompletion';
 import type { PlanRequestSummary } from '../../src/planning/planRequest';
 import { goToLogin } from '../../src/auth/goToLogin';
-import { queryApi, recordQueue } from '../../src/services';
+import { queryApi, recordQueue, steadyTrainingPlanCache, trainingSheetCache } from '../../src/services';
+import type { TrainingSheet } from '../../src/coaching/types';
 
 /**
  * Documento de **um** planejamento. A rota carrega a chave de idempotência do
@@ -37,8 +37,18 @@ export default function PlanningPlanScreen() {
     day?: string;
   }>();
   const [request, setRequest] = useState<PlanRequestSummary | null>(null);
-  const [statuses, setStatuses] = useState<readonly DayStatus[]>([]);
+  const [sessions, setSessions] = useState<readonly LoggedSession[] | null>(null);
+  const [sheet, setSheet] = useState<TrainingSheet | null>(null);
+  const [sheetStale, setSheetStale] = useState(false);
+  const [sheetLoading, setSheetLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  /**
+   * O plano do Steady, lido da API com cache offline (ADR-013, STORY-016) — não
+   * mais a constante local. `documentFailed` distingue "ainda carregando" de
+   * "falhou sem cache", para nunca aparecer como uma semana vazia (ADR-004).
+   */
+  const [document, setDocument] = useState<TrainingPlanDocument | null>(null);
+  const [documentFailed, setDocumentFailed] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -58,10 +68,26 @@ export default function PlanningPlanScreen() {
         if (!ativo) return;
         if (lidas.status === 'sessionLost') return goToLogin(router);
 
-        const sessoes = lidas.status === 'ok' ? lidas.sessions : null;
-        setStatuses(
-          weekStatuses(new Date(), encontrado, sessoes, TRAINING_PLAN_DOCUMENT.weekPlan),
-        );
+        setSessions(lidas.status === 'ok' ? lidas.sessions : null);
+      });
+
+      trainingSheetCache.load().then((loaded) => {
+        if (!ativo) return;
+        if (loaded.status === 'unauthenticated') return goToLogin(router);
+        setSheet(loaded.status === 'ok' ? loaded.data : null);
+        setSheetStale(loaded.status === 'ok' && loaded.stale);
+        setSheetLoading(false);
+      });
+
+      steadyTrainingPlanCache.load().then((loaded) => {
+        if (!ativo) return;
+        if (loaded.status === 'unauthenticated') return goToLogin(router);
+        if (loaded.status === 'ok') {
+          setDocument(loaded.data);
+          setDocumentFailed(false);
+        } else {
+          setDocumentFailed(true);
+        }
       });
 
       return () => {
@@ -87,22 +113,41 @@ export default function PlanningPlanScreen() {
     );
   }
 
-  const abrir = planDayIndexFromParam(day);
+  if (document === null) {
+    return (
+      <View style={[s.centered, { paddingTop: insets.top + space[8] }]}>
+        {documentFailed ? (
+          <>
+            <Text style={s.missing}>Não foi possível carregar seu plano.</Text>
+            <Muted>Verifique sua conexão e tente novamente.</Muted>
+          </>
+        ) : (
+          <Muted>Carregando…</Muted>
+        )}
+      </View>
+    );
+  }
+
+  const abrir = planDayIndexFromParam(day, document.weekPlan);
   const hoje = weekPlanIndexFor(new Date().getDay());
+  const statuses = weekStatuses(new Date(), request, sessions, document.weekPlan);
 
   return (
     <PlanningDocument
-      document={TRAINING_PLAN_DOCUMENT}
+      document={document}
       request={request}
       topInset={insets.top}
       onEdit={() => router.push('/planning/new')}
       initialSection={sectionFromParam(section)}
-      openDay={abrir === null ? null : TRAINING_PLAN_DOCUMENT.weekPlan[abrir].day}
+      openDay={abrir === null ? null : document.weekPlan[abrir].day}
       dayStatuses={statuses}
       todayIndex={hoje}
-      onRegister={(kind: RegisterKind, planDayIndex: number) =>
-        router.push(`/log/${kind === 'running' ? 'run' : 'strength'}?planDay=${planDayIndex}`)
-      }
+      sheet={sheet}
+      sheetStale={sheetStale}
+      sheetLoading={sheetLoading}
+      onRegister={(planDayIndex: number) => router.push({
+        pathname: '/coaching/select', params: { planDay: planDayIndex },
+      })}
     />
   );
 }

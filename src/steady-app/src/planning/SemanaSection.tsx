@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Rule, SecondaryButton } from '../ui/Nocturne';
+import { NoticeStrip, PrimaryButton, Rule } from '../ui/Nocturne';
 import { color, radius, space, textAlpha, type } from '../theme/nocturne';
 import type { TrainingPlanDocument, WeekPlanDay } from './trainingPlanDocument';
 import type { DayStatus } from './dayCompletion';
-import { dayRequirements } from './dayRequirements';
 import { ExerciseList } from './ExerciseList';
 import { shared } from './planningStyles';
+import type { TrainingSheet, WorkoutType } from '../coaching/types';
+import { dailyPrescription } from '../coaching/dailyPrescription';
+import { runPrescriptionSummary } from '../coaching/runPrescriptionSummary';
 
 /**
  * A aba Semana — a estrutura semanal e o detalhamento de cada dia
@@ -16,7 +18,12 @@ import { shared } from './planningStyles';
  * Saiu de `PlanningDocument.tsx` porque o arquivo já passava de 300 linhas
  * (FF-003) antes desta story e é aqui que ela cresce.
  */
-export type RegisterKind = 'running' | 'strength';
+const LABELS: Record<WorkoutType, string> = {
+  push: 'Empurrada',
+  pull: 'Puxada',
+  lower: 'Inferiores',
+  run: 'Corrida',
+};
 
 const MARCA: Record<Exclude<DayStatus, 'semMarca'>, { texto: string; estilo: object }> = {
   cumprido: { texto: 'Feito', estilo: { color: color.accent } },
@@ -29,6 +36,9 @@ export function SemanaSection({
   statuses,
   todayIndex,
   initialOpenDay,
+  sheet,
+  sheetStale,
+  sheetLoading,
   onRegister,
   onDayLayout,
 }: {
@@ -39,7 +49,10 @@ export function SemanaSection({
   todayIndex: number;
   /** `day.day` que já chega expandido — o caminho vindo do card da Dashboard. */
   initialOpenDay: string | null;
-  onRegister: (kind: RegisterKind, planDayIndex: number) => void;
+  sheet: TrainingSheet | null;
+  sheetStale: boolean;
+  sheetLoading: boolean;
+  onRegister: (planDayIndex: number) => void;
   /** Onde o dia expandido ficou, para a tela poder rolar até ele. */
   onDayLayout?: (y: number) => void;
 }) {
@@ -81,6 +94,11 @@ export function SemanaSection({
 
       <Rule />
       <Text style={shared.kick}>Detalhamento de cada dia</Text>
+      {sheetStale && (
+        <NoticeStrip>
+          <Text style={s.notice}>Sem conexão. Exibindo a última ficha salva neste aparelho.</Text>
+        </NoticeStrip>
+      )}
       <View
         style={s.weekList}
         onLayout={(evento) => avisarQuandoSouber('lista', evento.nativeEvent.layout.y)}
@@ -92,6 +110,8 @@ export function SemanaSection({
             index={index}
             status={statuses[index] ?? 'semMarca'}
             isToday={index === todayIndex}
+            sheet={sheet}
+            sheetLoading={sheetLoading}
             open={expanded === day.day}
             onToggle={() => setExpanded((atual) => (atual === day.day ? null : day.day))}
             onRegister={onRegister}
@@ -110,6 +130,8 @@ function DayRow({
   index,
   status,
   isToday,
+  sheet,
+  sheetLoading,
   open,
   onToggle,
   onRegister,
@@ -119,13 +141,21 @@ function DayRow({
   index: number;
   status: DayStatus;
   isToday: boolean;
+  sheet: TrainingSheet | null;
+  sheetLoading: boolean;
   open: boolean;
   onToggle: () => void;
-  onRegister: (kind: RegisterKind, planDayIndex: number) => void;
+  onRegister: (planDayIndex: number) => void;
   onLayout?: (y: number) => void;
 }) {
-  const previsto = dayRequirements(day);
+  const prescription = dailyPrescription(sheet, index);
+  const runSummary = prescription.run === null ? null : runPrescriptionSummary(prescription.run);
   const marca = status === 'semMarca' ? null : MARCA[status];
+  const weekday = day.day.split(' — ')[0];
+  const labels = [
+    prescription.strength === null ? null : LABELS[prescription.strength.type],
+    prescription.run === null ? null : 'Corrida',
+  ].filter(Boolean).join(' + ');
 
   return (
     <Pressable
@@ -135,39 +165,43 @@ function DayRow({
     >
       <View style={s.dayRowHead}>
         <Text style={s.dayFocus} numberOfLines={open ? undefined : 1}>
-          {day.day}
+          {labels === '' ? weekday : `${weekday} — ${labels}`}
         </Text>
         {marca !== null && <Text style={[s.dayMark, marca.estilo]}>{marca.texto}</Text>}
-        {day.hasRun && (
+        {prescription.run !== null && (
           <View style={s.dayRunBadge}>
-            <Text style={s.dayRunBadgeText}>{day.runLabel}</Text>
+            <Text style={s.dayRunBadgeText}>Corrida</Text>
           </View>
         )}
       </View>
 
       {open && (
         <View style={s.dayDetail}>
-          <Text style={s.dayNote}>{day.intro}</Text>
-          {day.runNote && (
+          {sheetLoading ? (
+            <Text style={s.dayNote}>Carregando ficha…</Text>
+          ) : sheet === null && index !== 6 ? (
+            <Text style={s.dayNote}>Seu personal ainda não publicou este treino.</Text>
+          ) : index === 6 ? (
+            <Text style={s.dayNote}>Descanso.</Text>
+          ) : null}
+          {prescription.run !== null && (
             <View style={s.runNoteBox}>
-              <Text style={s.runNoteText}>{day.runNote}</Text>
+              <Text style={s.runNoteText}>{prescription.run.description}</Text>
+              {runSummary !== null && <Text style={s.runNoteSummary}>{runSummary}</Text>}
             </View>
           )}
-          <ExerciseList items={day.exercises} />
+          {prescription.strength !== null && (
+            <ExerciseList items={prescription.strength.exercises.map((exercise) => ({
+              name: exercise.name,
+              series: `${exercise.sets}x${exercise.repetitions} repetições`,
+            }))} />
+          )}
 
           {/* Só hoje: o registro grava sempre com a data de hoje (`todayIso`),
               então um botão em outro dia gravaria a data errada (regra 6). */}
-          {isToday && (previsto.strength || previsto.run) && (
+          {isToday && (prescription.strength !== null || prescription.run !== null) && (
             <View style={s.actions}>
-              {previsto.strength && (
-                <SecondaryButton
-                  label="Registrar musculação"
-                  onPress={() => onRegister('strength', index)}
-                />
-              )}
-              {previsto.run && (
-                <SecondaryButton label="Registrar corrida" onPress={() => onRegister('running', index)} />
-              )}
+              <PrimaryButton label="Registrar Treino" onPress={() => onRegister(index)} />
             </View>
           )}
         </View>
@@ -177,6 +211,7 @@ function DayRow({
 }
 
 const s = StyleSheet.create({
+  notice: { color: color.accentRamp[300], fontSize: type.meta, lineHeight: 19 },
   overviewTable: { marginTop: space[4] },
   overviewRow: {
     flexDirection: 'row',
@@ -229,6 +264,7 @@ const s = StyleSheet.create({
     backgroundColor: color.accentRamp[900],
   },
   runNoteText: { fontSize: type.meta, lineHeight: 17, color: color.accentRamp[300] },
+  runNoteSummary: { fontSize: type.meta, lineHeight: 17, color: textAlpha.muted, marginTop: space[1] },
 
   actions: { marginTop: space[4], gap: space[3] },
 });

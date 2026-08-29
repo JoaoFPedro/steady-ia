@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Field } from '../../src/ui/Field';
@@ -15,17 +15,25 @@ import {
 } from '../../src/training/labels';
 import { planDayFromParam } from '../../src/planning/planDayParam';
 import { plannedMuscleGroup } from '../../src/planning/plannedMuscleGroup';
+import { useWeekPlan } from '../../src/planning/useWeekPlan';
 
 export default function LogStrengthScreen() {
   const { log, saving, problem } = useRecordLogger('strength');
+  const weekPlan = useWeekPlan();
+  const param = useLocalSearchParams<{ planDay?: string }>().planDay;
   /** Chegou pelo detalhamento do dia? Então a tela sabe qual treino era (STORY-012, regra 7). */
-  const planDay = planDayFromParam(useLocalSearchParams<{ planDay?: string }>().planDay);
+  const planDay = weekPlan === null ? null : planDayFromParam(param, weekPlan);
 
-  const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | null>(
-    planDay === null ? null : plannedMuscleGroup(planDay),
-  );
+  const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | null>(null);
   const [intensity, setIntensity] = useState<Intensity | null>(null);
   const [durationMinutes, setDurationMinutes] = useState('');
+
+  // O plano chega depois da montagem (leitura assíncrona da API/cache); o
+  // efeito preenche o grupo sugerido só se o corredor ainda não escolheu nada.
+  useEffect(() => {
+    if (planDay !== null && muscleGroup === null) setMuscleGroup(plannedMuscleGroup(planDay));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planDay]);
 
   const complete = muscleGroup !== null && intensity !== null && durationMinutes !== '';
 

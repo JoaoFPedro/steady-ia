@@ -79,3 +79,6 @@ independente de onde o time está na implementação de outros itens.
 | DISC-002 | Falta um plano de treino dentro do app | Construir | STORY-006 |
 | DISC-003 | O plano e o registro não se encontram | Construir | STORY-012 |
 | DISC-004 | O personal não recebe a carga realmente executada | Construir | STORY-013 |
+| DISC-005 | Revisão de aderência após o treino | Construir | STORY-014 |
+| DISC-006 | A prescrição de corrida não é mensurável | Construir | STORY-015 |
+| DISC-007 | O plano existe na tela, não no Steady | Construir | STORY-016 |

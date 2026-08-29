@@ -2,7 +2,7 @@
 
 > **Story**: [story.md](./story.md)
 > **Discovery**: [../../.discovery/DISC-004-historico-de-carga-para-o-personal/](../../.discovery/DISC-004-historico-de-carga-para-o-personal/)
-> **Status**: Implementada e revisada em 2026-08-24
+> **Status**: Implementada e revisada em 2026-08-25
 > **Autor**: Jefferson com Codex
 
 ---
@@ -24,10 +24,10 @@ detalhado enquanto o vínculo estiver ativo.
    precisa aceitar a solicitação.
 4. Toda ficha publicada contém exatamente quatro treinos: `Empurrada`,
    `Puxada`, `Inferiores` e `Corrida`.
-5. Empurrada, Puxada e Inferiores contêm exercícios. Corrida contém uma única
-   descrição livre e usa o formulário de corrida existente na execução.
-6. O plano semanal apenas sugere uma ficha. O corredor pode executar qualquer
-   uma em qualquer dia.
+5. Empurrada, Puxada e Inferiores contêm exercícios. O único card Corrida
+   contém três descrições livres obrigatórias: terça, quinta e sábado.
+6. A ficha ativa é a fonte canônica do planejamento. Seus treinos substituem os
+   exercícios estáticos em Semana → Detalhamento de cada dia.
 7. A execução de musculação é salva de uma vez como um único conjunto. Carga
    vazia ou zero significa exercício pulado somente depois de confirmação.
 8. O personal vê o histórico detalhado; o corredor vê a ficha ativa e a carga
@@ -49,7 +49,9 @@ detalhado enquanto o vínculo estiver ativo.
 | Carga executada | Quilogramas, até duas casas decimais, entre `0,01` e `999,99` |
 | Carga vazia ou `0` | Não é carga; registra `Pulado` após confirmação |
 | Nota | Texto livre opcional, no máximo 200 caracteres; começa vazia em cada execução |
-| Corrida | Uma descrição livre obrigatória na prescrição; execução usa os campos reais já existentes |
+| Corrida de terça | Descrição livre obrigatória; execução usa os campos reais já existentes |
+| Corrida de quinta | Descrição livre obrigatória; execução usa os campos reais já existentes |
+| Corrida de sábado | Descrição livre obrigatória; execução usa os campos reais já existentes |
 
 ---
 
@@ -80,7 +82,7 @@ Scenario: Personal publica a ficha completa
   And preenchi um treino Empurrada com exercícios válidos
   And preenchi um treino Puxada com exercícios válidos
   And preenchi um treino Inferiores com exercícios válidos
-  And preenchi um treino Corrida com uma descrição
+  And preenchi no card Corrida as prescrições de terça, quinta e sábado
   When publico a ficha
   Then ela se torna a ficha ativa do corredor imediatamente
   And as cargas dos exercícios começam vazias
@@ -125,9 +127,9 @@ Scenario: Corredor escolhe uma ficha diferente da sugestão do dia
 
 ```gherkin
 Scenario: Execução de corrida reutiliza o registro existente
-  Given que a ficha Corrida diz "Moderada com fartlek leve, pace X, tempo estimado Y"
-  When escolho executar Corrida
-  Then vejo essa descrição como prescrição
+  Given que a ficha Corrida diz "Moderada com fartlek leve" para terça
+  When abro a corrida de terça no detalhamento diário
+  Then vejo "Moderada com fartlek leve" como prescrição
   And registro distância, duração, ritmo e esforço reais no formulário existente
   And o personal vê a corrida realizada no histórico do vínculo
 ```
@@ -247,6 +249,214 @@ Scenario: Treino escolhido livremente mantém a regra de progresso por modalidad
 
 ---
 
+## Cenários — Planejamento diário com a ficha ativa
+
+```gherkin
+Scenario: Personal preenche três corridas no mesmo card
+  Given que estou criando a ficha de um corredor vinculado
+  When preencho no card Corrida as prescrições de terça, quinta e sábado
+  Then continuo vendo um único card Corrida
+  And a publicação envia as três prescrições como partes do mesmo treino Run
+```
+
+```gherkin
+Scenario Outline: Cada dia mostra o treino criado correspondente
+  Given que o corredor possui uma ficha ativa completa
+  When abre <dia> em Planejamento → Semana → Detalhamento de cada dia
+  Then vê <forca>
+  And vê <corrida>
+  And não vê os exercícios estáticos anteriores
+
+  Examples:
+    | dia     | forca      | corrida           |
+    | segunda | Inferiores | nenhuma           |
+    | terça   | Empurrada  | corrida de terça  |
+    | quarta  | Empurrada  | nenhuma           |
+    | quinta  | Puxada     | corrida de quinta |
+    | sexta   | Inferiores | nenhuma           |
+    | sábado  | nenhuma    | corrida de sábado |
+    | domingo | nenhuma    | nenhuma           |
+```
+
+```gherkin
+Scenario: Registro diário começa por uma única escolha de treino
+  Given que o detalhamento de segunda mostra o treino Inferiores da ficha ativa
+  When toco em "Registrar treino"
+  Then escolho qual treino da ficha realmente executei
+  When escolho Inferiores
+  Then abro a execução Inferiores vinculada à ficha ativa
+  And posso registrar carga e nota por exercício
+  And não abro o registro genérico de musculação
+  And o detalhamento não exibe botões diretos de Puxada, Inferiores ou Registrar corrida
+```
+
+```gherkin
+Scenario: Corredor volta ao mesmo dia depois da execução
+  Given que iniciei uma execução pelo detalhamento de quinta
+  When concluo ou volto da execução
+  Then o planejamento reabre na seção Semana
+  And quinta permanece expandida
+```
+
+```gherkin
+Scenario: Ficha em cache alimenta o detalhamento sem conexão
+  Given que a ficha ativa foi carregada anteriormente
+  And a API está indisponível
+  When abro o detalhamento de um dia
+  Then vejo o treino da última ficha salva
+  And vejo que o conteúdo pode estar desatualizado
+```
+
+```gherkin
+Scenario: Detalhamento sem ficha não inventa prescrição
+  Given que o personal ainda não publicou uma ficha ativa
+  When abro Planejamento → Semana → Detalhamento de cada dia
+  Then vejo que o treino ainda não foi publicado
+  And não vejo os exercícios estáticos como prescrição
+```
+
+```gherkin
+Scenario: Solicitação de vínculo continua acessível em Planejamento
+  Given que recebi uma solicitação de vínculo
+  And ainda não possuo ficha ativa
+  When abro Planejamento
+  Then consigo reconhecer e aceitar a solicitação
+  And a barra principal não possui uma aba Treinos
+```
+
+```gherkin
+Scenario: Ficha legada com uma corrida continua legível
+  Given que existe uma ficha persistida com apenas runDescription
+  When a ficha é carregada após a evolução do contrato
+  Then o texto legado é aplicado às corridas de terça, quinta e sábado
+  And uma nova publicação grava as três prescrições separadamente
+```
+
+```gherkin
+Scenario Outline: Ficha sem uma das corridas obrigatórias é recusada
+  Given que preenchi Empurrada, Puxada e Inferiores corretamente
+  And deixei vazia a corrida de <dia>
+  When tento publicar a ficha
+  Then a publicação é recusada
+  And vejo que a corrida de <dia> é obrigatória
+
+  Examples:
+    | dia    |
+    | terça  |
+    | quinta |
+    | sábado |
+```
+
+## Cenários — Registro combinado de musculação e corrida
+
+```gherkin
+Scenario: Dia sem corrida envia somente o treino escolhido
+  Given que hoje é segunda e o detalhamento não prescreve corrida
+  When toco em "Registrar treino"
+  And escolho e concluo Inferiores
+  Then a execução de musculação entra sozinha na fila
+  And não sou perguntado sobre corrida
+```
+
+```gherkin
+Scenario Outline: Dia de corrida pergunta se haverá registro complementar
+  Given que hoje é <dia> e existe uma corrida prescrita para o dia
+  When escolho e concluo um treino de musculação
+  Then o Steady pergunta se também registrarei a corrida de <dia>
+
+  Examples:
+    | dia    |
+    | terça  |
+    | quinta |
+    | sábado |
+```
+
+```gherkin
+Scenario: Corredor recusa a corrida complementar
+  Given que concluí a musculação em um dia de corrida
+  When respondo que não registrarei a corrida
+  Then somente a musculação entra na fila offline
+  And o fluxo de registro termina
+```
+
+```gherkin
+Scenario: Corredor conclui musculação e corrida como uma unidade
+  Given que concluí a musculação em um dia de corrida
+  And aceitei registrar também a corrida
+  When informo distância, duração, ritmo e esforço válidos
+  And concluo a corrida
+  Then musculação e corrida entram juntas na fila como um item combinedWorkout
+  And o item possui uma única chave de idempotência
+  And nenhuma execução individual foi enfileirada separadamente
+```
+
+```gherkin
+Scenario: Cancelar a corrida envia a musculação isolada
+  Given que a musculação está guardada como rascunho local
+  And abri o formulário da corrida complementar
+  When volto ou cancelo sem concluir a corrida
+  Then o rascunho é convertido em um item strengthWorkout
+  And somente a musculação entra na fila
+```
+
+```gherkin
+Scenario: Reiniciar o app recupera musculação sem corrida concluída
+  Given que a musculação está guardada como rascunho local
+  And o app é encerrado antes da conclusão da corrida
+  When o app inicia novamente
+  Then o rascunho é recuperado como um item strengthWorkout
+  And os dados da musculação não são perdidos
+```
+
+```gherkin
+Scenario: Escolher Corrida inicialmente não cria segunda pergunta
+  Given que hoje possui uma corrida prescrita
+  When toco em "Registrar treino" e escolho Corrida
+  Then abro diretamente o formulário com a prescrição do dia
+  And não sou perguntado se registrarei outra corrida
+  And ao concluir somente a corrida entra na fila
+```
+
+```gherkin
+Scenario: API persiste registro combinado atomicamente
+  Given que um item combinedWorkout válido contém musculação e corrida
+  When a fila o envia com uma chave de idempotência inédita
+  Then a API persiste as duas execuções na mesma transação
+  And o personal vê ambas no histórico
+```
+
+```gherkin
+Scenario: Reenvio do registro combinado não duplica nenhuma execução
+  Given que um item combinedWorkout já foi persistido
+  When a fila reenvia o mesmo payload com a mesma chave de idempotência
+  Then a API retorna o resultado existente
+  And existe uma única musculação e uma única corrida
+```
+
+```gherkin
+Scenario: Falha em uma parte reverte todo o registro combinado
+  Given que um item combinedWorkout contém musculação válida e corrida inválida
+  When a API valida ou tenta persistir o comando
+  Then o comando é recusado
+  And nenhuma das duas execuções é persistida
+```
+
+```gherkin
+Scenario: Falha transitória preserva o registro combinado na fila
+  Given que musculação e corrida estão juntas em um item combinedWorkout
+  When a API falha temporariamente antes de confirmar a transação
+  Then nenhuma execução parcial fica persistida
+  And o item completo permanece na fila com a mesma chave de idempotência
+```
+
+```gherkin
+Scenario: Encerrar sessão descarta também o rascunho combinado
+  Given que existe musculação guardada aguardando a corrida complementar
+  When confirmo o descarte dos registros ao sair da conta
+  Then a fila pendente e o rascunho combinado são removidos
+  And nenhum dado atravessa para a próxima conta
+```
+
 ## Cenários — Error Cases
 
 ```gherkin
@@ -364,7 +574,9 @@ Scenario: Sessão perdida durante acesso protegido leva ao login
 | Vínculo e autorização | Domínio, repository e endpoints: transições, cardinalidade e isolamento por corredor |
 | Publicação da ficha | Domínio e API: quatro tipos obrigatórios, validações e substituição atômica |
 | Execução de musculação | Domínio, API e app: validação, pulados, sugestão e JSON atômico |
-| Corrida prescrita | API e app: descrição da ficha ligada ao registro real existente |
+| Corrida prescrita | Domínio, documento JSON, API e app: três descrições no mesmo Run e compatibilidade legada |
+| Planejamento diário | App: mapeamento dia → ficha, ausência de fallback estático, destinos e retorno ao dia |
+| Registro combinado | App e API: rascunho, fallback isolado, fila única, transação, rollback e idempotência |
 | Offline e idempotência | App e API: fila mantém a execução inteira e servidor deduplica reenvios |
 | Histórico do personal | Repository e endpoints: ordem cronológica e vínculo ativo obrigatório |
 | UI e navegação | Teste de funções de apresentação; validação manual de telas enquanto a limitação do SDK permanecer |
@@ -392,5 +604,8 @@ mapping final deve listar arquivos e status RED/GREEN reais.
 - Criar ADR para roles, vínculo autorizado e isolamento das consultas do
   personal, ampliando a fronteira definida pela ADR-002.
 - Criar ADR para ficha ativa substituível versus execuções imutáveis.
+- Aplicar ADR-010 para três prescrições no mesmo card Corrida e leitura
+  compatível do documento legado.
+- Aplicar ADR-011 para rascunho local e persistência atômica do registro combinado.
 - O blueprint deste fluxo está em `blueprint.mermaid` e deve orientar o
   fatiamento da implementação.

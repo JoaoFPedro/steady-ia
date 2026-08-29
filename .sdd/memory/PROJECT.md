@@ -28,13 +28,18 @@ Steady ajuda corredores amadores que já correm 21km (meia maratona) a treinar c
 | Registro de Desempenho | Dados reais de uma Sessão de Treino realizada (ritmo, distância, rota GPS) — imutável após criado |
 | Regra dos 10% | Princípio de treino: volume semanal não deve aumentar mais que 10% em relação à semana anterior, para prevenir lesão por overtraining |
 
-## Estado Atual — 2026-08-24
+## Estado Atual — 2026-08-25
 
 **STORY-013 implementada e revisada**: roles `Corredor`/`Personal`, vínculo com
 aceite, ficha ativa de quatro tipos, carga/nota por exercício, pulados com
 confirmação, histórico autorizado e execução offline idempotente. Migration
-`20260825004707_AddCoaching`; 143 testes .NET e 267 Jest verdes. ADR-008 e
-ADR-009 registram autorização e imutabilidade.
+`20260825004707_AddCoaching`; 150 testes .NET e 282 Jest verdes. A ficha ativa
+agora alimenta o detalhamento diário do Planejamento e o único card Corrida
+possui prescrições para terça, quinta e sábado. ADR-008, ADR-009 e ADR-010
+registram autorização, imutabilidade e o contrato das corridas. O detalhamento
+tem uma única ação `Registrar Treino`; a escolha acontece no fluxo e, nos dias
+de corrida, musculação e corrida podem ser sincronizadas atomicamente como uma
+única unidade idempotente (ADR-011), com fallback seguro para musculação isolada.
 
 **STORY-003 implementada e verde**: 74 testes Jest + 42 .NET (116). Todos os 17 cenários da spec marcados 🟢 e os 9 critérios de aceite fechados. ADR-004 (estado de histórico insuficiente no contrato da avaliação) criado nesta rodada.
 

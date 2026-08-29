@@ -30,7 +30,6 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
       <Tabs.Screen name="planning" options={{ title: 'Planejamento' }} />
-      <Tabs.Screen name="workouts" options={{ title: 'Treinos' }} />
       <Tabs.Screen name="personal" options={{ title: 'Personal', href: isPersonal ? undefined : null }} />
     </Tabs>
   );
