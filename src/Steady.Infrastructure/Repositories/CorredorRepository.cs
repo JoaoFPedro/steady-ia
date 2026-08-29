@@ -3,7 +3,9 @@ using Steady.Infrastructure.Persistence;
 
 namespace Steady.Infrastructure.Repositories;
 
-public sealed class CorredorRepository(SteadyDbContext dbContext) : ICorredorRepository
+public sealed class CorredorRepository(
+    SteadyDbContext dbContext,
+    ITrainingPlanRepository trainingPlans) : ICorredorRepository
 {
     public async Task<CorredorEntity> GetOrCreateBySubAsync(
         string googleSub,
@@ -16,12 +18,17 @@ public sealed class CorredorRepository(SteadyDbContext dbContext) : ICorredorRep
         if (existing is not null)
             return await SincronizarEmailAsync(existing, email, cancellationToken);
 
+        // A versão vigente no momento do provisionamento fica fixa nesta conta
+        // (ADR-013) — publicar uma versão nova depois não a realoca.
+        var currentPlan = await trainingPlans.GetCurrentVersionAsync(cancellationToken);
+
         var corredor = new CorredorEntity
         {
             Id = Guid.NewGuid(),
             GoogleSub = googleSub,
             Email = email,
             Roles = ["Corredor"],
+            TrainingPlanVersionId = currentPlan.Id,
             CreatedAt = DateTime.UtcNow
         };
 

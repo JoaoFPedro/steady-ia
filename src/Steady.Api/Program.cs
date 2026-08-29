@@ -36,6 +36,7 @@ api.MapTrainingHistoryEndpoints();
 api.MapPlanRequestEndpoints();
 api.MapCoachingLinkEndpoints();
 api.MapTrainingSheetEndpoints();
+api.MapTrainingPlanEndpoints();
 
 app.Run();
 

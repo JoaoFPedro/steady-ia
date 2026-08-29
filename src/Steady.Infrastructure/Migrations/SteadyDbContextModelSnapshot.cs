@@ -94,10 +94,16 @@ namespace Steady.Infrastructure.Migrations
                         .HasDefaultValue(new[] { "Corredor" })
                         .HasColumnName("roles");
 
+                    b.Property<Guid>("TrainingPlanVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("training_plan_version_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GoogleSub")
                         .IsUnique();
+
+                    b.HasIndex("TrainingPlanVersionId");
 
                     b.ToTable("corredores", (string)null);
                 });
@@ -349,6 +355,41 @@ namespace Steady.Infrastructure.Migrations
                     b.ToTable("strength_workout_executions", (string)null);
                 });
 
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.TrainingPlanVersionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_current");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsCurrent")
+                        .IsUnique()
+                        .HasFilter("is_current = TRUE");
+
+                    b.HasIndex("Version")
+                        .IsUnique();
+
+                    b.ToTable("training_plan_versions", (string)null);
+                });
+
             modelBuilder.Entity("Steady.Infrastructure.Persistence.TrainingSheetEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -398,6 +439,15 @@ namespace Steady.Infrastructure.Migrations
                     b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
                         .WithMany()
                         .HasForeignKey("PersonalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.CorredorEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.TrainingPlanVersionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TrainingPlanVersionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

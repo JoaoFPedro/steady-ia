@@ -15,13 +15,13 @@ import {
 } from '../../src/ui/Nocturne';
 import { Avatar } from '../../src/ui/Avatar';
 import { color, space, textAlpha, type } from '../../src/theme/nocturne';
-import { queryApi, recordQueue } from '../../src/services';
+import { queryApi, recordQueue, steadyTrainingPlanCache } from '../../src/services';
 import { goToLogin } from '../../src/auth/goToLogin';
 import { AccountMenu } from '../../src/account/AccountMenu';
 import { useAccountMenu } from '../../src/account/useAccountMenu';
 import { loadHomeState, type HomeState } from '../../src/home/homeState';
 import { todaysTraining } from '../../src/planning/todaysTraining';
-import { TRAINING_PLAN_DOCUMENT } from '../../src/planning/trainingPlanDocument';
+import type { WeekPlanDay } from '../../src/planning/trainingPlanDocument';
 import { loadPlanList } from '../../src/planning/planListState';
 import { loadLoggedSessions } from '../../src/planning/loggedSessions';
 import { planProgress } from '../../src/planning/planProgress';
@@ -54,6 +54,14 @@ export default function HomeScreen() {
    * consegui ler", que nunca pode virar 0% de avanço (STORY-012, regra 25).
    */
   const [sessions, setSessions] = useState<readonly LoggedSession[] | null>(null);
+  /**
+   * O plano do Steady, lido da API com cache offline (ADR-013, STORY-016).
+   * `null` cobre tanto "ainda carregando" quanto "falhou sem cache" — a
+   * distinção mora em `weekPlanFailed`; nenhum dos dois inventa um dia de
+   * treino a partir da constante antiga.
+   */
+  const [weekPlan, setWeekPlan] = useState<readonly WeekPlanDay[] | null>(null);
+  const [weekPlanFailed, setWeekPlanFailed] = useState(false);
   const menu = useAccountMenu();
   // Sem a barra do Stack, o topo da tela é a barra de status: o recuo é nosso.
   const insets = useSafeAreaInsets();
@@ -86,6 +94,17 @@ export default function HomeScreen() {
         setSessions(lidas.status === 'ok' ? lidas.sessions : null);
       });
 
+      steadyTrainingPlanCache.load().then((loaded) => {
+        if (!active) return;
+        if (loaded.status === 'unauthenticated') return goToLogin(router);
+        if (loaded.status === 'ok') {
+          setWeekPlan(loaded.data.weekPlan);
+          setWeekPlanFailed(false);
+        } else {
+          setWeekPlanFailed(true);
+        }
+      });
+
       return () => {
         active = false;
       };
@@ -95,8 +114,10 @@ export default function HomeScreen() {
   const now = new Date();
   const header = homeHeader(now, menu.account.displayName, plans);
   const latestPlan = plans[0] ?? null;
-  const training = todaysTraining(now.getDay(), TRAINING_PLAN_DOCUMENT.weekPlan);
-  const progress = planProgressView(planProgress(now, latestPlan, sessions));
+  const training = weekPlan === null ? null : todaysTraining(now.getDay(), weekPlan);
+  const progress = planProgressView(
+    weekPlan === null ? { status: 'none' } : planProgress(now, latestPlan, sessions, weekPlan),
+  );
 
   // O card leva ao dia de hoje já aberto na aba Semana (STORY-012, regra 1).
   // Sem planejamento, o destino continua sendo o formulário (regra 2).
@@ -177,8 +198,16 @@ export default function HomeScreen() {
 
         <Card style={s.spaced}>
           <Kicker>Plano da semana</Kicker>
-          <Text style={s.trainingTitle}>{training.title}</Text>
-          <Muted>{training.description}</Muted>
+          {training !== null ? (
+            <>
+              <Text style={s.trainingTitle}>{training.title}</Text>
+              <Muted>{training.description}</Muted>
+            </>
+          ) : (
+            <Muted>
+              {weekPlanFailed ? 'Não foi possível carregar seu plano.' : 'Carregando plano…'}
+            </Muted>
+          )}
           {progress.status !== 'hidden' && (
             <View style={s.progress}>
               {progress.headline !== null && (

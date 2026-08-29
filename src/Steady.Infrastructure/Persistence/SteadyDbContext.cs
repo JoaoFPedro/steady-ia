@@ -15,6 +15,7 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
     public DbSet<CoachingLinkEntity> CoachingLinks => Set<CoachingLinkEntity>();
     public DbSet<TrainingSheetEntity> TrainingSheets => Set<TrainingSheetEntity>();
     public DbSet<StrengthWorkoutExecutionEntity> StrengthWorkoutExecutions => Set<StrengthWorkoutExecutionEntity>();
+    public DbSet<TrainingPlanVersionEntity> TrainingPlanVersions => Set<TrainingPlanVersionEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,7 +39,25 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
                     (a, b) => a != null && b != null && a.SequenceEqual(b),
                     roles => roles.Aggregate(0, (hash, role) => HashCode.Combine(hash, role.GetHashCode())),
                     roles => roles.ToList()));
+            entity.Property(c => c.TrainingPlanVersionId).HasColumnName("training_plan_version_id");
             entity.Property(c => c.CreatedAt).HasColumnName("created_at");
+            entity.HasOne<TrainingPlanVersionEntity>()
+                .WithMany()
+                .HasForeignKey(c => c.TrainingPlanVersionId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TrainingPlanVersionEntity>(entity =>
+        {
+            entity.ToTable("training_plan_versions");
+            entity.HasKey(v => v.Id);
+            entity.Property(v => v.Version).HasColumnName("version");
+            entity.HasIndex(v => v.Version).IsUnique();
+            entity.Property(v => v.DefinitionJson).HasColumnName("definition").HasColumnType("jsonb");
+            entity.Property(v => v.IsCurrent).HasColumnName("is_current");
+            // Só uma versão vigente por vez — mesmo padrão da ficha ativa (is_active em training_sheets).
+            entity.HasIndex(v => v.IsCurrent).IsUnique().HasFilter("is_current = TRUE");
+            entity.Property(v => v.CreatedAt).HasColumnName("created_at");
         });
 
         modelBuilder.Entity<RunningSessionEntity>(entity =>

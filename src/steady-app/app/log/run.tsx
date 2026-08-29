@@ -1,26 +1,74 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Field } from '../../src/ui/Field';
 import { Muted, NoticeStrip, PrimaryButton } from '../../src/ui/Nocturne';
 import { color, space, type } from '../../src/theme/nocturne';
 import { useRecordLogger } from '../../src/features/useRecordLogger';
 import { todayIso } from '../../src/features/date';
 import { planDayFromParam } from '../../src/planning/planDayParam';
+import { useWeekPlan } from '../../src/planning/useWeekPlan';
+import { combinedWorkoutDrafts, syncEngine } from '../../src/services';
+import { outcomeOf } from '../../src/features/logRecord';
+import { goToLogin } from '../../src/auth/goToLogin';
 
 export default function LogRunScreen() {
+  const router = useRouter();
   const { log, saving, problem } = useRecordLogger('running');
   /** Só contexto: distância, ritmo e esforço são medidas do que aconteceu (regra 9). */
-  const params = useLocalSearchParams<{ planDay?: string; prescription?: string }>();
-  const planDay = planDayFromParam(params.planDay);
+  const params = useLocalSearchParams<{ planDay?: string; prescription?: string; combined?: string }>();
+  const weekPlan = useWeekPlan();
+  const planDay = weekPlan === null ? null : planDayFromParam(params.planDay, weekPlan);
+  const combined = params.combined === '1';
+  const completed = useRef(false);
 
   const [distanceKm, setDistanceKm] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
   const [averagePace, setAveragePace] = useState('');
   const [perceivedEffort, setPerceivedEffort] = useState('');
+  const [combinedSaving, setCombinedSaving] = useState(false);
+  const [combinedProblem, setCombinedProblem] = useState<string | null>(null);
+
+  useEffect(() => () => {
+    if (!combined || completed.current) return;
+    void combinedWorkoutDrafts.finishStrengthOnly().then(() => syncEngine.sync()).catch(() => {});
+  }, [combined]);
 
   const complete =
     distanceKm !== '' && durationMinutes !== '' && averagePace !== '' && perceivedEffort !== '';
+
+  const payload = () => ({
+    date: todayIso(),
+    distanceKm: Number(distanceKm.replace(',', '.')),
+    durationMinutes: Number(durationMinutes),
+    averagePaceMinPerKm: Number(averagePace.replace(',', '.')),
+    perceivedEffort: Number(perceivedEffort),
+  });
+
+  async function submit() {
+    if (!combined) return log(payload());
+
+    setCombinedSaving(true);
+    setCombinedProblem(null);
+    try {
+      await combinedWorkoutDrafts.completeWithRun(payload());
+      completed.current = true;
+      const outcome = outcomeOf(await syncEngine.sync(), 'combinedWorkout');
+      if (outcome.status === 'rejected') {
+        setCombinedProblem(outcome.message);
+        return;
+      }
+      if (outcome.status === 'sessionLost') {
+        goToLogin(router);
+        return;
+      }
+      router.back();
+    } catch {
+      setCombinedProblem('Não foi possível guardar os dois treinos. Tente novamente.');
+    } finally {
+      setCombinedSaving(false);
+    }
+  }
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
@@ -75,29 +123,21 @@ export default function LogRunScreen() {
         />
       </View>
 
-      {problem && (
+      {(problem ?? combinedProblem) && (
         <View style={s.problem}>
           <NoticeStrip>
             <Text style={s.problemText}>
               <Text style={s.problemStrong}>Não foi salvo. </Text>
-              {problem}
+              {problem ?? combinedProblem}
             </Text>
           </NoticeStrip>
         </View>
       )}
 
       <PrimaryButton
-        label={saving ? 'Registrando…' : 'Registrar corrida'}
-        disabled={!complete || saving}
-        onPress={() =>
-          log({
-            date: todayIso(),
-            distanceKm: Number(distanceKm.replace(',', '.')),
-            durationMinutes: Number(durationMinutes),
-            averagePaceMinPerKm: Number(averagePace.replace(',', '.')),
-            perceivedEffort: Number(perceivedEffort),
-          })
-        }
+        label={(saving || combinedSaving) ? 'Registrando…' : 'Registrar corrida'}
+        disabled={!complete || saving || combinedSaving}
+        onPress={() => void submit()}
       />
     </ScrollView>
   );

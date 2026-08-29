@@ -20,5 +20,12 @@ public sealed class CorredorEntity
     /// </summary>
     public IReadOnlyList<string> Roles { get; set; } = ["Corredor"];
 
+    /// <summary>
+    /// Versão do plano do Steady vigente no provisionamento (ADR-013). Fixa
+    /// desde a criação — uma versão nova publicada depois não realoca quem já
+    /// tem uma associada.
+    /// </summary>
+    public Guid TrainingPlanVersionId { get; set; }
+
     public DateTime CreatedAt { get; set; }
 }

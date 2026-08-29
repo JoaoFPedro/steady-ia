@@ -9,6 +9,8 @@ import { RecordQueue } from './sync/recordQueue';
 import { SyncEngine } from './sync/syncEngine';
 import { AsyncStorageTrainingSheet } from './coaching/asyncStorageTrainingSheet';
 import { TrainingSheetCache } from './coaching/trainingSheetCache';
+import { AsyncStorageSteadyTrainingPlan } from './planning/asyncStorageSteadyTrainingPlan';
+import { SteadyTrainingPlanCache } from './planning/steadyTrainingPlanCache';
 import { AsyncStorageCombinedDraft } from './coaching/asyncStorageCombinedDraft';
 import { CombinedWorkoutDrafts } from './coaching/combinedWorkoutDraft';
 
@@ -59,6 +61,11 @@ export const coachingApi = new HttpCoachingApi(API_BASE_URL, googleSession, fetc
 
 export const trainingSheetCache = new TrainingSheetCache(
   new AsyncStorageTrainingSheet(),
+  coachingApi,
+);
+
+export const steadyTrainingPlanCache = new SteadyTrainingPlanCache(
+  new AsyncStorageSteadyTrainingPlan(),
   coachingApi,
 );
 

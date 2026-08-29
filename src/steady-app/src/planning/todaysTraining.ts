@@ -11,7 +11,7 @@ export type TodaysTraining = {
   description: string;
 };
 
-export function todaysTraining(jsWeekday: number, weekPlan: WeekPlanDay[]): TodaysTraining {
+export function todaysTraining(jsWeekday: number, weekPlan: readonly WeekPlanDay[]): TodaysTraining {
   const day = weekPlanDayFor(jsWeekday, weekPlan);
 
   return {

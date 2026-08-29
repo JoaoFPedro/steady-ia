@@ -11,13 +11,15 @@ import type {
   TrainingSheet,
   TrainingSheetDraft,
 } from '../coaching/types';
+import type { TrainingPlanDocument } from '../planning/trainingPlanDocument';
+import type { SteadyTrainingPlanReader } from '../planning/steadyTrainingPlanReader';
 
 type FetchLike = (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
 ) => Promise<{ status: number; json(): Promise<unknown> }>;
 
-export class HttpCoachingApi implements CoachingApi {
+export class HttpCoachingApi implements CoachingApi, SteadyTrainingPlanReader {
   constructor(
     private readonly baseUrl: string,
     private readonly session: TokenSource,
@@ -32,6 +34,9 @@ export class HttpCoachingApi implements CoachingApi {
   history(corredorId: string) {
     return this.get<CoachingHistory>(`/api/coaching/runners/${corredorId}/history`);
   }
+
+  /** O plano do Steady (ADR-013) — mesmo tratamento que `activeTrainingSheet`: sem parsing defensivo, é a própria API do Steady do outro lado. */
+  steadyTrainingPlan() { return this.get<TrainingPlanDocument>('/api/planning/steady-plan'); }
 
   searchRunner(email: string) {
     return this.command<RunnerSearch>(

@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
             options.UseNpgsql(connectionString);
         });
 
+        services.AddScoped<ITrainingPlanRepository, TrainingPlanRepository>();
         services.AddScoped<ICorredorRepository, CorredorRepository>();
         services.AddScoped<IRunningSessionRepository, RunningSessionRepository>();
         services.AddScoped<IStrengthSessionRepository, StrengthSessionRepository>();
