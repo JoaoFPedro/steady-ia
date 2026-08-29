@@ -100,4 +100,76 @@ public sealed class TrainingSheetTests
 
         Assert.Same(agachamento, ficha.Exercise(WorkoutType.Lower, agachamento.Id));
     }
+
+    // STORY-017 — tempo e observação opcionais no exercício (ADR-012).
+
+    [Fact]
+    public void Exercicio_sem_tempo_e_sem_observacao_fica_ausente()
+    {
+        var exercise = Exercise();
+
+        Assert.Null(exercise.DurationSeconds);
+        Assert.Null(exercise.Observation);
+    }
+
+    [Fact]
+    public void Exercicio_aceita_tempo_em_segundos()
+    {
+        var exercise = ExercisePrescription.Create(
+            Guid.NewGuid(), "Prancha", sets: 3, repetitions: 1, durationSeconds: 40);
+
+        Assert.Equal(40, exercise.DurationSeconds);
+        Assert.Equal(3, exercise.Sets);
+        Assert.Equal(1, exercise.Repetitions);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Tempo_zero_ou_negativo_e_recusado(int durationSeconds)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => ExercisePrescription.Create(
+            Guid.NewGuid(), "Prancha", 3, 1, durationSeconds));
+    }
+
+    [Fact]
+    public void Exercicio_aceita_observacao_do_personal()
+    {
+        var exercise = ExercisePrescription.Create(
+            Guid.NewGuid(), "Supino reto", 4, 6, observation: "  não travar o cotovelo  ");
+
+        Assert.Equal("não travar o cotovelo", exercise.Observation);
+    }
+
+    [Fact]
+    public void Observacao_em_branco_fica_ausente()
+    {
+        var exercise = ExercisePrescription.Create(
+            Guid.NewGuid(), "Supino reto", 4, 6, observation: "   ");
+
+        Assert.Null(exercise.Observation);
+    }
+
+    [Fact]
+    public void Observacao_acima_de_200_caracteres_e_recusada()
+    {
+        Assert.Throws<ArgumentException>(() => ExercisePrescription.Create(
+            Guid.NewGuid(), "Supino reto", 4, 6, observation: new string('A', 201)));
+    }
+
+    [Fact]
+    public void Observacao_de_200_caracteres_e_aceita()
+    {
+        var exercise = ExercisePrescription.Create(
+            Guid.NewGuid(), "Supino reto", 4, 6, observation: new string('A', 200));
+
+        Assert.Equal(200, exercise.Observation!.Length);
+    }
+
+    [Fact]
+    public void Tempo_nao_dispensa_series_nem_repeticoes()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => ExercisePrescription.Create(
+            Guid.NewGuid(), "Prancha", sets: 3, repetitions: 0, durationSeconds: 40));
+    }
 }

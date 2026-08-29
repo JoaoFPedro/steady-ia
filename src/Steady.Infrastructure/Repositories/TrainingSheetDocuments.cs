@@ -8,7 +8,17 @@ public static class TrainingSheetDocuments
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private sealed record ExerciseDocument(Guid Id, string Name, int Sets, int Repetitions);
+    /// <summary>
+    /// `DurationSeconds` e `Observation` chegaram na STORY-017 e são opcionais:
+    /// ficha publicada antes disso os lê como ausentes, sem migration (ADR-012).
+    /// </summary>
+    private sealed record ExerciseDocument(
+        Guid Id,
+        string Name,
+        int Sets,
+        int Repetitions,
+        int? DurationSeconds = null,
+        string? Observation = null);
 
     /// <summary>Espelha <see cref="NumericRange{T}"/>. Ausente no JSON = campo não prescrito.</summary>
     private sealed record NumericRangeDocument<T>(T Min, T? Max) where T : struct;
@@ -45,7 +55,9 @@ public static class TrainingSheetDocuments
     {
         static IReadOnlyList<ExerciseDocument> Exercises(WorkoutPrescription workout) =>
             ((StrengthWorkout)workout).Exercises
-                .Select(item => new ExerciseDocument(item.Id, item.Name, item.Sets, item.Repetitions))
+                .Select(item => new ExerciseDocument(
+                    item.Id, item.Name, item.Sets, item.Repetitions,
+                    item.DurationSeconds, item.Observation))
                 .ToArray();
 
         var run = (RunningWorkout)sheet.Workout(WorkoutType.Run);
@@ -67,7 +79,9 @@ public static class TrainingSheetDocuments
 
         static StrengthWorkout Strength(WorkoutType type, IReadOnlyList<ExerciseDocument> exercises) =>
             StrengthWorkout.Create(type, exercises
-                .Select(item => ExercisePrescription.Create(item.Id, item.Name, item.Sets, item.Repetitions))
+                .Select(item => ExercisePrescription.Create(
+                    item.Id, item.Name, item.Sets, item.Repetitions,
+                    item.DurationSeconds, item.Observation))
                 .ToArray());
 
         return TrainingSheet.Create(

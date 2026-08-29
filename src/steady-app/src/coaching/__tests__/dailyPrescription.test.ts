@@ -10,9 +10,9 @@ const sheet: TrainingSheet = {
   corredorId: 'runner-1',
   createdAt: '2026-08-25T00:00:00Z',
   workouts: [
-    { type: 'push', exercises: [{ id: 'p', name: 'Supino', sets: 3, repetitions: 10, suggestedLoadKg: null }], runDescriptions: null },
-    { type: 'pull', exercises: [{ id: 'r', name: 'Remada', sets: 3, repetitions: 10, suggestedLoadKg: null }], runDescriptions: null },
-    { type: 'lower', exercises: [{ id: 'l', name: 'Agachamento', sets: 4, repetitions: 6, suggestedLoadKg: null }], runDescriptions: null },
+    { type: 'push', exercises: [{ id: 'p', name: 'Supino', sets: 3, repetitions: 10, suggestedLoadKg: null, durationSeconds: null, observation: null }], runDescriptions: null },
+    { type: 'pull', exercises: [{ id: 'r', name: 'Remada', sets: 3, repetitions: 10, suggestedLoadKg: null, durationSeconds: null, observation: null }], runDescriptions: null },
+    { type: 'lower', exercises: [{ id: 'l', name: 'Agachamento', sets: 4, repetitions: 6, suggestedLoadKg: null, durationSeconds: null, observation: null }], runDescriptions: null },
     {
       type: 'run',
       exercises: [],

@@ -125,8 +125,12 @@ export default function DetailedStrengthScreen() {
         <Card key={exercise.id} style={s.exercise}>
           <Text style={s.exerciseName}>{exercise.name}</Text>
           <Text style={s.prescription}>
-            {formatExercisePrescription(exercise.sets, exercise.repetitions)}
+            {formatExercisePrescription(
+              exercise.sets, exercise.repetitions, exercise.durationSeconds)}
           </Text>
+          {exercise.observation !== null && (
+            <Text style={s.coachNote}>Do personal: {exercise.observation}</Text>
+          )}
           <Field
             label="Carga real (kg)"
             value={inputs[exercise.id]?.load ?? ''}
@@ -135,7 +139,7 @@ export default function DetailedStrengthScreen() {
             placeholder="0,00"
           />
           <Field
-            label="Observação opcional"
+            label="Sua observação (opcional)"
             value={inputs[exercise.id]?.note ?? ''}
             onChangeText={(value) => update(exercise.id, 'note', value)}
             multiline={3}
@@ -165,4 +169,15 @@ const s = StyleSheet.create({
   exercise: { marginTop: space[6] },
   exerciseName: { color: color.text, fontSize: type.cardTitle },
   prescription: { color: color.accentRamp[300], fontSize: type.body, marginTop: space[1], marginBottom: space[6] },
+  /** Instrução do personal — distinta do campo em que o corredor escreve a dele. */
+  coachNote: {
+    color: color.text,
+    fontSize: type.meta,
+    lineHeight: 19,
+    marginTop: -space[4],
+    marginBottom: space[6],
+    paddingLeft: space[3],
+    borderLeftWidth: 1,
+    borderLeftColor: color.accentRamp[700],
+  },
 });

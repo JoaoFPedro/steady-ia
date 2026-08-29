@@ -2,7 +2,9 @@ namespace Steady.Api.Contracts;
 
 public sealed record CurrentAccountResponse(Guid Id, IReadOnlyList<string> Roles);
 
-public sealed record RunnerSearchResponse(Guid CorredorId, string Email, bool Available);
+/// <summary>`Name` é cache do provedor e pode faltar — o app cai no e-mail (STORY-019).</summary>
+public sealed record RunnerSearchResponse(
+    Guid CorredorId, string Email, bool Available, string? Name);
 public sealed record CreateCoachingLinkBody(Guid CorredorId);
 public sealed record CoachingLinkResponse(
     Guid Id,
@@ -10,9 +12,19 @@ public sealed record CoachingLinkResponse(
     Guid CorredorId,
     string Status,
     DateTime RequestedAt);
-public sealed record LinkedRunnerResponse(Guid LinkId, Guid CorredorId, string Email);
+public sealed record LinkedRunnerResponse(
+    Guid LinkId, Guid CorredorId, string Email, string? Name);
 
-public sealed record ExercisePrescriptionBody(string Name, int Sets, int Repetitions);
+/// <summary>
+/// `DurationSeconds` (segundos) e `Observation` são opcionais (STORY-017):
+/// ausentes significam não prescritos, nunca zero nem texto vazio (ADR-012).
+/// </summary>
+public sealed record ExercisePrescriptionBody(
+    string Name,
+    int Sets,
+    int Repetitions,
+    int? DurationSeconds = null,
+    string? Observation = null);
 
 /// <summary>Faixa opcional: mínimo obrigatório, máximo ausente = alvo exato (ADR-012).</summary>
 public sealed record NumericRangeBody(double Min, double? Max);
@@ -35,7 +47,9 @@ public sealed record ExercisePrescriptionResponse(
     string Name,
     int Sets,
     int Repetitions,
-    decimal? SuggestedLoadKg);
+    decimal? SuggestedLoadKg,
+    int? DurationSeconds,
+    string? Observation);
 public sealed record NumericRangeResponse(double Min, double? Max);
 public sealed record IntRangeResponse(int Min, int? Max);
 public sealed record RunPrescriptionResponse(

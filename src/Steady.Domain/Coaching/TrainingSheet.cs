@@ -12,20 +12,50 @@ public enum WorkoutType
 
 public sealed record ExercisePrescription
 {
+    private const int ObservationMaxLength = 200;
+
     public Guid Id { get; }
     public string Name { get; }
     public int Sets { get; }
     public int Repetitions { get; }
 
-    private ExercisePrescription(Guid id, string name, int sets, int repetitions)
+    /// <summary>
+    /// Tempo prescrito da série, em segundos (STORY-017). Opcional e
+    /// independente: acompanha séries e repetições, nunca as substitui.
+    /// Ausente é ausência, nunca zero (ADR-012).
+    /// </summary>
+    public int? DurationSeconds { get; }
+
+    /// <summary>
+    /// Observação do personal sobre a execução do exercício (STORY-017).
+    /// Instrução, não medida — não se confunde com
+    /// <see cref="ExerciseExecution.Note"/>, que é do corredor.
+    /// </summary>
+    public string? Observation { get; }
+
+    private ExercisePrescription(
+        Guid id,
+        string name,
+        int sets,
+        int repetitions,
+        int? durationSeconds,
+        string? observation)
     {
         Id = id;
         Name = name;
         Sets = sets;
         Repetitions = repetitions;
+        DurationSeconds = durationSeconds;
+        Observation = observation;
     }
 
-    public static ExercisePrescription Create(Guid id, string name, int sets, int repetitions)
+    public static ExercisePrescription Create(
+        Guid id,
+        string name,
+        int sets,
+        int repetitions,
+        int? durationSeconds = null,
+        string? observation = null)
     {
         var normalizedName = name?.Trim() ?? string.Empty;
 
@@ -42,7 +72,22 @@ public sealed record ExercisePrescription
             throw new ArgumentOutOfRangeException(
                 nameof(repetitions), repetitions, "As repetições devem estar entre 1 e 100.");
 
-        return new ExercisePrescription(id, normalizedName, sets, repetitions);
+        if (durationSeconds is <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(durationSeconds), durationSeconds, "O tempo deve ser maior que zero.");
+
+        return new ExercisePrescription(
+            id, normalizedName, sets, repetitions, durationSeconds, NormalizeObservation(observation));
+    }
+
+    private static string? NormalizeObservation(string? observation)
+    {
+        var normalized = observation?.Trim();
+        if (normalized?.Length > ObservationMaxLength)
+            throw new ArgumentException(
+                $"A observação aceita no máximo {ObservationMaxLength} caracteres.", nameof(observation));
+
+        return string.IsNullOrEmpty(normalized) ? null : normalized;
     }
 }
 

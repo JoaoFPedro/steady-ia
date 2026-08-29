@@ -26,6 +26,17 @@ export const color = {
     800: '#3f424d',
     900: '#292b31',
   },
+  /**
+   * Erro (ADR-017). O Nocturne nasceu sem vermelho — o accent era o único
+   * sinal. Campo inválido precisa de um sinal que não se confunda com foco
+   * nem com destaque, então o vermelho entra como rampa própria, restrita a
+   * estado de erro. Nunca use `danger` como decoração.
+   */
+  danger: {
+    300: '#f5a3a3',
+    500: '#e05252',
+    900: '#3a1f24',
+  },
   accentRamp: {
     100: '#f5f4ff',
     200: '#e7e5fe',

@@ -9,6 +9,10 @@ export type ExercisePrescription = {
   sets: number;
   repetitions: number;
   suggestedLoadKg: number | null;
+  /** Tempo prescrito em segundos; ausente = não prescrito (STORY-017). */
+  durationSeconds: number | null;
+  /** Observação do personal sobre a execução; não confundir com a nota do corredor. */
+  observation: string | null;
 };
 
 /** Faixa opcional: `max` ausente = alvo exato (ADR-012, STORY-015). */
@@ -46,10 +50,16 @@ export type CoachingLink = {
   requestedAt: string;
 };
 
-export type RunnerSearch = { corredorId: string; email: string; available: boolean };
-export type LinkedRunner = { linkId: string; corredorId: string; email: string };
+export type RunnerSearch = { corredorId: string; email: string; available: boolean; name: string | null };
+export type LinkedRunner = { linkId: string; corredorId: string; email: string; name: string | null };
 
-export type ExerciseDraft = { name: string; sets: number; repetitions: number };
+export type ExerciseDraft = {
+  name: string;
+  sets: number;
+  repetitions: number;
+  durationSeconds: number | null;
+  observation: string | null;
+};
 
 /** Espelha `RunPrescriptionBody` da API — campos numéricos opcionais e independentes. */
 export type RunPrescriptionDraft = {

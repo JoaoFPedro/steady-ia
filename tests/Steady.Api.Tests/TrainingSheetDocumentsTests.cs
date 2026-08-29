@@ -89,6 +89,63 @@ public sealed class TrainingSheetDocumentsTests
         Assert.Null(run.Thursday.DistanceKm);
     }
 
+    // STORY-017 — tempo e observação opcionais no exercício.
+
+    [Fact]
+    public void Documento_preserva_tempo_e_observacao_do_exercicio()
+    {
+        var sheet = TrainingSheet.Create(
+            Guid.NewGuid(),
+            StrengthWorkout.Create(WorkoutType.Push, [ExercisePrescription.Create(
+                Guid.NewGuid(), "Prancha", 3, 1, durationSeconds: 40, observation: "não travar o cotovelo")]),
+            Strength(WorkoutType.Pull, "Remada curvada"),
+            Strength(WorkoutType.Lower, "Agachamento livre"),
+            RunningWorkout.Create(
+                RunPrescription.Create("Corrida de terça"),
+                RunPrescription.Create("Corrida de quinta"),
+                RunPrescription.Create("Corrida de sábado")));
+
+        var restored = TrainingSheetDocuments.DeserializeSheet(
+            sheet.Id, TrainingSheetDocuments.Serialize(sheet));
+        var exercise = Assert.IsType<StrengthWorkout>(restored.Workout(WorkoutType.Push)).Exercises.Single();
+
+        Assert.Equal(40, exercise.DurationSeconds);
+        Assert.Equal("não travar o cotovelo", exercise.Observation);
+    }
+
+    [Fact]
+    public void Exercicio_sem_tempo_nem_observacao_nao_persiste_zero_nem_vazio()
+    {
+        var sheet = Sheet();
+
+        var json = TrainingSheetDocuments.Serialize(sheet);
+        var restored = TrainingSheetDocuments.DeserializeSheet(sheet.Id, json);
+        var exercise = Assert.IsType<StrengthWorkout>(restored.Workout(WorkoutType.Push)).Exercises.Single();
+
+        Assert.Null(exercise.DurationSeconds);
+        Assert.Null(exercise.Observation);
+        Assert.DoesNotContain("\"durationSeconds\":0", json);
+        Assert.DoesNotContain("\"observation\":\"\"", json);
+    }
+
+    [Fact]
+    public void Ficha_legada_sem_os_campos_novos_continua_legivel()
+    {
+        var id = Guid.NewGuid();
+        var legacy = $$"""
+            {"push":[{"id":"{{Guid.NewGuid()}}","name":"Supino reto","sets":3,"repetitions":10}],
+             "pull":[{"id":"{{Guid.NewGuid()}}","name":"Remada curvada","sets":3,"repetitions":10}],
+             "lower":[{"id":"{{Guid.NewGuid()}}","name":"Agachamento livre","sets":3,"repetitions":10}],
+             "runDescription":"Corrida do dia"}
+            """;
+
+        var restored = TrainingSheetDocuments.DeserializeSheet(id, legacy);
+        var exercise = Assert.IsType<StrengthWorkout>(restored.Workout(WorkoutType.Push)).Exercises.Single();
+
+        Assert.Null(exercise.DurationSeconds);
+        Assert.Null(exercise.Observation);
+    }
+
     private static StrengthWorkout Strength(WorkoutType type, string name) =>
         StrengthWorkout.Create(type, [ExercisePrescription.Create(Guid.NewGuid(), name, 3, 10)]);
 

@@ -15,7 +15,8 @@ internal static class TrainingSheetMapping
 {
     public static ExercisePrescription[] CreateExercises(IReadOnlyList<ExercisePrescriptionBody> bodies) =>
         bodies.Select(item => ExercisePrescription.Create(
-            Guid.NewGuid(), item.Name, item.Sets, item.Repetitions)).ToArray();
+            Guid.NewGuid(), item.Name, item.Sets, item.Repetitions,
+            item.DurationSeconds, item.Observation)).ToArray();
 
     public static RunPrescription CreateRunPrescription(RunPrescriptionBody body) => RunPrescription.Create(
         body.Description,
@@ -36,7 +37,9 @@ internal static class TrainingSheetMapping
                     item.Name,
                     item.Sets,
                     item.Repetitions,
-                    active.SuggestedLoads.GetValueOrDefault(item.Id))).ToArray(),
+                    active.SuggestedLoads.GetValueOrDefault(item.Id),
+                    item.DurationSeconds,
+                    item.Observation)).ToArray(),
                 null),
             RunningWorkout run => new WorkoutPrescriptionResponse(
                 "run",
