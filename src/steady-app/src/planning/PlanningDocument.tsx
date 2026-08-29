@@ -134,9 +134,9 @@ export function PlanningDocument({
         {section === 'regras' && <RegrasSection document={document} />}
       </ScrollView>
 
-      <View style={s.footer}>
+      {/* <View style={s.footer}>
         <PrimaryButton label="Começar semana 1" onPress={() => setSection('semana')} />
-      </View>
+      </View> */}
     </View>
   );
 }

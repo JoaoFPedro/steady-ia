@@ -158,7 +158,8 @@ public sealed class CoachingLinkRepository(SteadyDbContext dbContext) : ICoachin
             from link in dbContext.CoachingLinks
             join corredor in dbContext.Corredores on link.CorredorId equals corredor.Id
             where link.PersonalId == personalId && link.Status == CoachingLinkStatus.Active
-            orderby corredor.Email
-            select new LinkedRunner(link.Id, corredor.Id, corredor.Email))
+            // Ordena pelo que o personal lê: o nome quando existe, o e-mail enquanto não.
+            orderby corredor.Name ?? corredor.Email
+            select new LinkedRunner(link.Id, corredor.Id, corredor.Email, corredor.Name))
             .ToListAsync(cancellationToken);
 }

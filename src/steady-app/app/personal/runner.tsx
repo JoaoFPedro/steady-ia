@@ -5,36 +5,46 @@ import { Field } from '../../src/ui/Field';
 import { Card, Kicker, Muted, NoticeStrip, PrimaryButton, Rule, SecondaryButton } from '../../src/ui/Nocturne';
 import { color, radius, space, textAlpha, type } from '../../src/theme/nocturne';
 import { coachingApi } from '../../src/services';
-import type { CoachingHistory, ExerciseDraft, TrainingSheetDraft } from '../../src/coaching/types';
+import type { CoachingHistory } from '../../src/coaching/types';
 import {
-  buildRunPrescriptionDraft,
+  emptyExerciseInput,
+  emptyRunInput,
+  parseTrainingSheetForm,
+  type ExerciseFormInput,
+  type FieldErrors,
   type RunPrescriptionFormInput,
-} from '../../src/coaching/runPrescriptionForm';
+} from '../../src/coaching/trainingSheetSchema';
+import {
+  canRemoveExercise,
+  clearFieldError,
+  dropExerciseErrors,
+  removeExercise,
+} from '../../src/coaching/trainingSheetFormState';
+import { coachingTimeline } from '../../src/coaching/coachingTimeline';
+import { runnerLabel } from '../../src/coaching/runnerLabel';
 import { goToLogin } from '../../src/auth/goToLogin';
 
-type DraftInput = { name: string; sets: string; repetitions: string };
-const emptyExercise = (): DraftInput => ({ name: '', sets: '', repetitions: '' });
-const emptyRun = (): RunPrescriptionFormInput => ({
-  description: '',
-  distanceMin: '', distanceMax: '',
-  durationMin: '', durationMax: '',
-  effortMin: '', effortMax: '',
-});
 
 export default function PersonalRunnerScreen() {
   const router = useRouter();
-  const { corredorId = '', email = '', linkId = '' } = useLocalSearchParams<{
-    corredorId?: string; email?: string; linkId?: string;
+  const { corredorId = '', email = '', name = '', linkId = '' } = useLocalSearchParams<{
+    corredorId?: string; email?: string; name?: string; linkId?: string;
   }>();
-  const [push, setPush] = useState<DraftInput[]>([emptyExercise()]);
-  const [pull, setPull] = useState<DraftInput[]>([emptyExercise()]);
-  const [lower, setLower] = useState<DraftInput[]>([emptyExercise()]);
-  const [tuesdayRun, setTuesdayRun] = useState<RunPrescriptionFormInput>(emptyRun());
-  const [thursdayRun, setThursdayRun] = useState<RunPrescriptionFormInput>(emptyRun());
-  const [saturdayRun, setSaturdayRun] = useState<RunPrescriptionFormInput>(emptyRun());
+  const [push, setPush] = useState<ExerciseFormInput[]>([emptyExerciseInput()]);
+  const [pull, setPull] = useState<ExerciseFormInput[]>([emptyExerciseInput()]);
+  const [lower, setLower] = useState<ExerciseFormInput[]>([emptyExerciseInput()]);
+  const [tuesdayRun, setTuesdayRun] = useState<RunPrescriptionFormInput>(emptyRunInput());
+  const [thursdayRun, setThursdayRun] = useState<RunPrescriptionFormInput>(emptyRunInput());
+  const [saturdayRun, setSaturdayRun] = useState<RunPrescriptionFormInput>(emptyRunInput());
+  /**
+   * Erro por campo, preenchido só quando o personal tenta publicar (STORY-017).
+   * Ninguém é corrigido enquanto digita; corrigido o campo, o erro dele some.
+   */
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [history, setHistory] = useState<CoachingHistory | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const timeline = coachingTimeline(history);
   /** Os forms de treino só aparecem depois de um toque deliberado — a tela não abre já pedindo 15 campos. */
   const [showForm, setShowForm] = useState(false);
 
@@ -49,32 +59,24 @@ export default function PersonalRunnerScreen() {
   }, [corredorId, router]);
 
   async function publish() {
-    const convert = (items: DraftInput[]): ExerciseDraft[] => items.map((item) => ({
-      name: item.name.trim(), sets: Number(item.sets), repetitions: Number(item.repetitions),
-    }));
-
-    const tuesday = buildRunPrescriptionDraft(tuesdayRun);
-    const thursday = buildRunPrescriptionDraft(thursdayRun);
-    const saturday = buildRunPrescriptionDraft(saturdayRun);
-    const firstProblem = [tuesday, thursday, saturday].find((result) => !result.ok);
-    if (firstProblem && !firstProblem.ok) {
-      setMessage(firstProblem.message);
+    const parsed = parseTrainingSheetForm({
+      push, pull, lower, tuesdayRun, thursdayRun, saturdayRun,
+    });
+    if (!parsed.ok) {
+      // Ficha incompleta não vai à rede: o personal não espera round-trip
+      // para descobrir qual campo falta.
+      setErrors(parsed.errors);
+      setMessage(null);
       return;
     }
-    if (!tuesday.ok || !thursday.ok || !saturday.ok) return;
 
-    const draft: TrainingSheetDraft = {
-      push: convert(push),
-      pull: convert(pull),
-      lower: convert(lower),
-      tuesdayRun: tuesday.draft,
-      thursdayRun: thursday.draft,
-      saturdayRun: saturday.draft,
-    };
+    setErrors({});
     setBusy(true);
-    const result = await coachingApi.publishTrainingSheet(corredorId, draft);
+    const result = await coachingApi.publishTrainingSheet(corredorId, parsed.draft);
     setBusy(false);
     if (result.status === 'unauthenticated') return goToLogin(router);
+    // O aviso do topo fica com o que não pertence a campo algum: rejeição da
+    // API por limite de domínio, conflito e falha de rede.
     setMessage(result.status === 'ok'
       ? 'Ficha publicada e ativa. As cargas começam vazias para o corredor.'
       : result.status === 'rejected' || result.status === 'conflict'
@@ -90,7 +92,8 @@ export default function PersonalRunnerScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
-      <Text style={s.title}>{email}</Text>
+      <Text style={s.title}>{runnerLabel({ name: name || null, email })}</Text>
+      {name !== '' && <Muted>{email}</Muted>}
       <Muted>Publicar uma nova ficha substitui a atual sem alterar o histórico já registrado.</Muted>
       {message !== null && <View style={s.block}><NoticeStrip><Text style={s.notice}>{message}</Text></NoticeStrip></View>}
 
@@ -100,28 +103,46 @@ export default function PersonalRunnerScreen() {
           <PrimaryButton label="Criar Ficha" onPress={() => setShowForm(true)} />
         ) : (
           <>
-            <ExerciseSection title="Empurrada" items={push} onChange={setPush} />
-            <ExerciseSection title="Puxada" items={pull} onChange={setPull} />
-            <ExerciseSection title="Inferiores" items={lower} onChange={setLower} />
+            <ExerciseSection
+              title="Empurrada" list="push" items={push} onChange={setPush}
+              errors={errors} onErrors={setErrors}
+            />
+            <ExerciseSection
+              title="Puxada" list="pull" items={pull} onChange={setPull}
+              errors={errors} onErrors={setErrors}
+            />
+            <ExerciseSection
+              title="Inferiores" list="lower" items={lower} onChange={setLower}
+              errors={errors} onErrors={setErrors}
+            />
             <View style={s.section}>
               <Text style={s.sectionTitle}>Corrida</Text>
               <RunPrescriptionSection
                 title="Terça-feira"
                 descriptionPlaceholder="Moderada/fartlek leve, pace e duração"
+                field="tuesdayRun"
                 value={tuesdayRun}
                 onChange={setTuesdayRun}
+                errors={errors}
+                onErrors={setErrors}
               />
               <RunPrescriptionSection
                 title="Quinta-feira"
                 descriptionPlaceholder="Intervalado ou tempo run, pace e duração"
+                field="thursdayRun"
                 value={thursdayRun}
                 onChange={setThursdayRun}
+                errors={errors}
+                onErrors={setErrors}
               />
               <RunPrescriptionSection
                 title="Sábado"
                 descriptionPlaceholder="Longão, pace e distância"
+                field="saturdayRun"
                 value={saturdayRun}
                 onChange={setSaturdayRun}
+                errors={errors}
+                onErrors={setErrors}
               />
             </View>
             <PrimaryButton label={busy ? 'Publicando…' : 'Publicar ficha completa'} disabled={busy} onPress={() => void publish()} />
@@ -131,32 +152,33 @@ export default function PersonalRunnerScreen() {
 
       <View style={s.block}>
         <Kicker>Histórico detalhado</Kicker>
-        {history === null || (history.strengthExecutions.length === 0 && history.runningSessions.length === 0) ? (
+        {timeline.length === 0 ? (
           <Text style={s.empty}>Nenhuma execução registrada.</Text>
+        ) : timeline.map((item) => item.kind === 'strength' ? (
+          <Card key={item.execution.id} style={s.historyCard}>
+            <Text style={s.historyTitle}>
+              {item.execution.workoutType.toUpperCase()} · {item.execution.date}
+            </Text>
+            {item.execution.exercises.map((exercise) => (
+              <View key={exercise.exerciseId} style={s.historyExercise}>
+                <Text style={s.exerciseName}>
+                  {exercise.name} · {exercise.sets}x{exercise.repetitions} repetições
+                </Text>
+                <Text style={exercise.skipped ? s.skipped : s.load}>
+                  {exercise.skipped ? 'Não realizado' : `${exercise.loadKg} kg`}
+                </Text>
+                {exercise.note !== null && <Text style={s.note}>{exercise.note}</Text>}
+              </View>
+            ))}
+          </Card>
         ) : (
-          <>
-            {history.strengthExecutions.map((execution) => (
-              <Card key={execution.id} style={s.historyCard}>
-                <Text style={s.historyTitle}>{execution.workoutType.toUpperCase()} · {execution.date}</Text>
-                {execution.exercises.map((exercise) => (
-                  <View key={exercise.exerciseId} style={s.historyExercise}>
-                    <Text style={s.exerciseName}>´{exercise.name} · {exercise.sets}x{exercise.repetitions} repetições´</Text>
-                    <Text style={exercise.skipped ? s.skipped : s.load}>
-                      {exercise.skipped ? 'Não realizado' : `${exercise.loadKg} kg`}
-                    </Text>
-                    {exercise.note !== null && <Text style={s.note}>{exercise.note}</Text>}
-                  </View>
-                ))}
-              </Card>
-            ))}
-            {history.runningSessions.map((run) => (
-              <Card key={run.id} style={s.historyCard}>
-                <Text style={s.historyTitle}>CORRIDA · {run.date}</Text>
-                <Muted>{run.distanceKm} km · {run.durationMinutes} min · esforço {run.perceivedEffort}/10</Muted>
-              </Card>
-            ))}
-          </>
-        )}
+          <Card key={item.run.id} style={s.historyCard}>
+            <Text style={s.historyTitle}>CORRIDA · {item.run.date}</Text>
+            <Muted>
+              {item.run.distanceKm} km · {item.run.durationMinutes} min · esforço {item.run.perceivedEffort}/10
+            </Muted>
+          </Card>
+        ))}
       </View>
 
       <View style={s.block}><SecondaryButton label="Encerrar vínculo" onPress={() => void endLink()} /></View>
@@ -165,29 +187,82 @@ export default function PersonalRunnerScreen() {
 }
 
 function ExerciseSection({
-  title, items, onChange,
+  title, list, items, onChange, errors, onErrors,
 }: {
   title: string;
-  items: DraftInput[];
-  onChange: (items: DraftInput[]) => void;
+  list: 'push' | 'pull' | 'lower';
+  items: ExerciseFormInput[];
+  onChange: (items: ExerciseFormInput[]) => void;
+  errors: FieldErrors;
+  onErrors: (errors: FieldErrors) => void;
 }) {
-  function update(index: number, field: keyof DraftInput, value: string) {
+  function update(index: number, field: keyof ExerciseFormInput, value: string) {
     onChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item));
+    onErrors(clearFieldError(errors, `${list}.${index}.${field}`));
   }
+
+  function remove(index: number) {
+    onChange(removeExercise(items, index));
+    onErrors(dropExerciseErrors(errors, list, index));
+  }
+
+  const removable = canRemoveExercise(items);
+
   return (
     <View style={s.section}>
       <Rule />
       <Text style={s.sectionTitle}>{title}</Text>
       {items.map((item, index) => (
         <View key={index} style={s.exerciseDraft}>
-          <Field label="Exercício" value={item.name} onChangeText={(value) => update(index, 'name', value)} placeholder="Agachamento livre" />
+          <Field
+            label="Exercício"
+            value={item.name}
+            onChangeText={(value) => update(index, 'name', value)}
+            placeholder="Agachamento livre"
+            error={errors[`${list}.${index}.name`]}
+          />
           <View style={s.row}>
-            <View style={s.half}><Field label="Séries" value={item.sets} onChangeText={(value) => update(index, 'sets', value)} keyboardType="numeric" placeholder="4" /></View>
-            <View style={s.half}><Field label="Repetições" value={item.repetitions} onChangeText={(value) => update(index, 'repetitions', value)} keyboardType="numeric" placeholder="6" /></View>
+            <View style={s.half}>
+              <Field
+                label="Séries" value={item.sets}
+                onChangeText={(value) => update(index, 'sets', value)}
+                keyboardType="numeric" placeholder="4"
+                error={errors[`${list}.${index}.sets`]}
+              />
+            </View>
+            <View style={s.half}>
+              <Field
+                label="Repetições" value={item.repetitions}
+                onChangeText={(value) => update(index, 'repetitions', value)}
+                keyboardType="numeric" placeholder="6"
+                error={errors[`${list}.${index}.repetitions`]}
+              />
+            </View>
           </View>
+          <Field
+            label="Tempo em segundos (opcional)"
+            value={item.durationSeconds}
+            onChangeText={(value) => update(index, 'durationSeconds', value)}
+            keyboardType="numeric"
+            placeholder="40"
+            error={errors[`${list}.${index}.durationSeconds`]}
+          />
+          <Field
+            label="Observação (opcional)"
+            value={item.observation}
+            onChangeText={(value) => update(index, 'observation', value)}
+            multiline={2}
+            placeholder="Não travar o cotovelo"
+            error={errors[`${list}.${index}.observation`]}
+          />
+          {removable && (
+            <Pressable style={s.remove} onPress={() => remove(index)}>
+              <Text style={s.removeText}>Remover exercício</Text>
+            </Pressable>
+          )}
         </View>
       ))}
-      <Pressable style={s.add} onPress={() => onChange([...items, emptyExercise()])}>
+      <Pressable style={s.add} onPress={() => onChange([...items, emptyExerciseInput()])}>
         <Text style={s.addText}>+ Adicionar exercício</Text>
       </Pressable>
     </View>
@@ -199,16 +274,36 @@ function ExerciseSection({
  * personal continua podendo publicar só a descrição, como antes desta story.
  */
 function RunPrescriptionSection({
-  title, descriptionPlaceholder, value, onChange,
+  title, field, descriptionPlaceholder, value, onChange, errors, onErrors,
 }: {
   title: string;
+  field: 'tuesdayRun' | 'thursdayRun' | 'saturdayRun';
   descriptionPlaceholder: string;
   value: RunPrescriptionFormInput;
   onChange: (value: RunPrescriptionFormInput) => void;
+  errors: FieldErrors;
+  onErrors: (errors: FieldErrors) => void;
 }) {
-  function update(field: keyof RunPrescriptionFormInput, text: string) {
-    onChange({ ...value, [field]: text });
+  function update(name: keyof RunPrescriptionFormInput, text: string) {
+    onChange({ ...value, [name]: text });
+    onErrors(clearFieldError(errors, `${field}.${name}`));
   }
+
+  function numeric(name: keyof RunPrescriptionFormInput, label: string, placeholder: string) {
+    return (
+      <View style={s.third}>
+        <Field
+          label={label}
+          value={value[name]}
+          onChangeText={(text) => update(name, text)}
+          keyboardType="numeric"
+          placeholder={placeholder}
+          error={errors[`${field}.${name}`]}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={s.runDraft}>
       <Text style={s.runDraftTitle}>{title}</Text>
@@ -218,30 +313,23 @@ function RunPrescriptionSection({
         onChangeText={(text) => update('description', text)}
         multiline={3}
         placeholder={descriptionPlaceholder}
+        error={errors[`${field}.description`]}
+      />
+      <Field
+        label="Quilômetros (opcional)"
+        value={value.distanceKm}
+        onChangeText={(text) => update('distanceKm', text)}
+        keyboardType="decimal-pad"
+        placeholder="5,4"
+        error={errors[`${field}.distanceKm`]}
       />
       <View style={s.row}>
-        <View style={s.third}>
-          <Field label="Km (min)" value={value.distanceMin} onChangeText={(text) => update('distanceMin', text)} keyboardType="numeric" placeholder="8" />
-        </View>
-        <View style={s.third}>
-          <Field label="Km (máx.)" value={value.distanceMax} onChangeText={(text) => update('distanceMax', text)} keyboardType="numeric" placeholder="10" />
-        </View>
+        {numeric('durationMin', 'Min. (min)', '45')}
+        {numeric('durationMax', 'Min. (máx.)', '55')}
       </View>
       <View style={s.row}>
-        <View style={s.third}>
-          <Field label="Min. (min)" value={value.durationMin} onChangeText={(text) => update('durationMin', text)} keyboardType="numeric" placeholder="45" />
-        </View>
-        <View style={s.third}>
-          <Field label="Min. (máx.)" value={value.durationMax} onChangeText={(text) => update('durationMax', text)} keyboardType="numeric" placeholder="55" />
-        </View>
-      </View>
-      <View style={s.row}>
-        <View style={s.third}>
-          <Field label="Esforço (min)" value={value.effortMin} onChangeText={(text) => update('effortMin', text)} keyboardType="numeric" placeholder="5" />
-        </View>
-        <View style={s.third}>
-          <Field label="Esforço (máx.)" value={value.effortMax} onChangeText={(text) => update('effortMax', text)} keyboardType="numeric" placeholder="6" />
-        </View>
+        {numeric('effortMin', 'Esforço (min)', '5')}
+        {numeric('effortMax', 'Esforço (máx.)', '6')}
       </View>
     </View>
   );
@@ -261,6 +349,8 @@ const s = StyleSheet.create({
   third: { flex: 1 },
   runDraft: { marginTop: space[4] },
   runDraftTitle: { color: color.text, fontSize: type.bodySm, marginBottom: space[2] },
+  remove: { alignSelf: 'flex-start', paddingVertical: space[2], marginBottom: space[4] },
+  removeText: { color: color.danger[300], fontSize: type.meta },
   add: { alignSelf: 'flex-start', borderRadius: radius.md, borderWidth: 1, borderColor: textAlpha.divider, padding: space[3], marginBottom: space[6] },
   addText: { color: color.accentRamp[300], fontSize: type.meta },
   empty: { color: textAlpha.muted, marginTop: space[4], fontSize: type.meta },

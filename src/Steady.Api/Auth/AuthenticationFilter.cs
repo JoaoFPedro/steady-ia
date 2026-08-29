@@ -34,7 +34,7 @@ public sealed class AuthenticationFilter(
             return Unauthorized(context, reason: "invalid_or_expired_token");
 
         var corredor = await corredorRepository.GetOrCreateBySubAsync(
-            identity.Sub, identity.Email, context.HttpContext.RequestAborted);
+            identity.Sub, identity.Email, identity.Name, context.HttpContext.RequestAborted);
         currentCorredor.Id = corredor.Id;
         currentCorredor.Roles = corredor.Roles;
 

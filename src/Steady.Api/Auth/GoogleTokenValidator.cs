@@ -31,7 +31,8 @@ public sealed class GoogleTokenValidator(GoogleAuthOptions options) : IGoogleTok
             if (string.IsNullOrWhiteSpace(payload.Subject))
                 return null;
 
-            return new GoogleIdentity(payload.Subject, NormalizarEmail(payload.Email));
+            return new GoogleIdentity(
+                payload.Subject, NormalizarEmail(payload.Email), NormalizarTexto(payload.Name));
         }
         catch (InvalidJwtException)
         {
@@ -40,6 +41,8 @@ public sealed class GoogleTokenValidator(GoogleAuthOptions options) : IGoogleTok
     }
 
     /// <summary>Claim ausente chega como null ou vazio — os dois significam "sem e-mail".</summary>
-    private static string? NormalizarEmail(string? email) =>
-        string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+    private static string? NormalizarEmail(string? email) => NormalizarTexto(email);
+
+    private static string? NormalizarTexto(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
 }

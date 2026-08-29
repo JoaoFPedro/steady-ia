@@ -12,6 +12,11 @@ public static class HttpClientAuthExtensions
     public static HttpClient AsCorredorComEmail(this HttpClient client, string googleSub, string email) =>
         client.WithToken(FakeGoogleTokenValidator.TokenFor(googleSub, email));
 
+    /// <summary>Autentica com e-mail e nome — o nome é o claim `name` do Google.</summary>
+    public static HttpClient AsCorredorComNome(
+        this HttpClient client, string googleSub, string email, string? name) =>
+        client.WithToken(FakeGoogleTokenValidator.TokenFor(googleSub, email, name));
+
     /// <summary>Autentica como <paramref name="googleSub"/> com um token <b>sem</b> claim de e-mail.</summary>
     public static HttpClient AsCorredorSemEmail(this HttpClient client, string googleSub) =>
         client.WithToken(FakeGoogleTokenValidator.TokenFor(googleSub, null));

@@ -15,6 +15,13 @@ public sealed class CorredorEntity
     public string? Email { get; set; }
 
     /// <summary>
+    /// Nome vindo do claim `name` do Google — cache do provedor, como
+    /// <see cref="Email"/>. Só para exibição; nulo enquanto o corredor não
+    /// tiver entrado novamente depois da STORY-019.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
     /// Capacidades da conta. Contas são corredores por padrão; a role Personal é
     /// provisionada administrativamente e nunca por endpoint público (ADR-008).
     /// </summary>

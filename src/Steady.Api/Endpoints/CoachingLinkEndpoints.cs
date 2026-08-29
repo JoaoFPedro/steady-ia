@@ -34,7 +34,7 @@ public static class CoachingLinkEndpoints
                 return Results.NotFound(new { error = "Corredor não encontrado" });
 
             var available = !await links.RunnerHasActiveAsync(corredor.Id, cancellationToken);
-            return Results.Ok(new RunnerSearchResponse(corredor.Id, corredor.Email!, available));
+            return Results.Ok(new RunnerSearchResponse(corredor.Id, corredor.Email!, available, corredor.Name));
         });
 
         group.MapPost("/coaching/links", async (
@@ -135,7 +135,7 @@ public static class CoachingLinkEndpoints
 
             var runners = await links.GetLinkedRunnersAsync(current.Id, cancellationToken);
             return Results.Ok(runners.Select(item =>
-                new LinkedRunnerResponse(item.LinkId, item.CorredorId, item.Email!)).ToArray());
+                new LinkedRunnerResponse(item.LinkId, item.CorredorId, item.Email!, item.Name)).ToArray());
         });
 
         return group;

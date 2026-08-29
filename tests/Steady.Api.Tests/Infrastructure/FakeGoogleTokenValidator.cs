@@ -29,6 +29,10 @@ public sealed class FakeGoogleTokenValidator : IGoogleTokenValidator
     public static string TokenFor(string googleSub, string? email) =>
         $"{googleSub}{EmailSeparator}{email}";
 
+    /// <summary>Token com e-mail e nome — o nome também é claim opcional do Google.</summary>
+    public static string TokenFor(string googleSub, string? email, string? name) =>
+        $"{googleSub}{EmailSeparator}{email}{EmailSeparator}{name}";
+
     /// <summary>E-mail que <see cref="TokenFor(string)"/> produz para um dado "sub".</summary>
     public static string DefaultEmailFor(string googleSub) => $"{googleSub}@exemplo.test";
 
@@ -37,14 +41,18 @@ public sealed class FakeGoogleTokenValidator : IGoogleTokenValidator
         if (idToken == InvalidToken)
             return Task.FromResult<GoogleIdentity?>(null);
 
-        var separator = idToken.IndexOf(EmailSeparator);
+        var parts = idToken.Split(EmailSeparator);
 
-        if (separator < 0)
-            return Task.FromResult<GoogleIdentity?>(new GoogleIdentity(idToken, DefaultEmailFor(idToken)));
+        if (parts.Length == 1)
+            return Task.FromResult<GoogleIdentity?>(
+                new GoogleIdentity(idToken, DefaultEmailFor(idToken), null));
 
-        var sub = idToken[..separator];
-        var email = idToken[(separator + 1)..];
+        var email = parts[1];
+        var name = parts.Length > 2 ? parts[2] : string.Empty;
 
-        return Task.FromResult<GoogleIdentity?>(new GoogleIdentity(sub, email.Length == 0 ? null : email));
+        return Task.FromResult<GoogleIdentity?>(new GoogleIdentity(
+            parts[0],
+            email.Length == 0 ? null : email,
+            name.Length == 0 ? null : name));
     }
 }

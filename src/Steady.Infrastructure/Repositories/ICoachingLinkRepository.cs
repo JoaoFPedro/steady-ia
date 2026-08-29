@@ -9,7 +9,7 @@ public enum AcceptLinkResult
     AlreadyLinked
 }
 
-public sealed record LinkedRunner(Guid LinkId, Guid CorredorId, string? Email);
+public sealed record LinkedRunner(Guid LinkId, Guid CorredorId, string? Email, string? Name);
 
 public interface ICoachingLinkRepository
 {

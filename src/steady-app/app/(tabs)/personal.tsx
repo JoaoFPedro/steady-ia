@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Field } from '../../src/ui/Field';
 import { Card, Kicker, Muted, NoticeStrip, PrimaryButton, SecondaryButton } from '../../src/ui/Nocturne';
 import { color, space, type } from '../../src/theme/nocturne';
+import { runnerLabel } from '../../src/coaching/runnerLabel';
 import { coachingApi } from '../../src/services';
 import type { LinkedRunner, RunnerSearch } from '../../src/coaching/types';
 import { goToLogin } from '../../src/auth/goToLogin';
@@ -65,7 +66,8 @@ export default function PersonalScreen() {
         </View>
         {found !== null && (
           <View style={s.result}>
-            <Text style={s.runnerEmail}>{found.email}</Text>
+            <Text style={s.runnerEmail}>{runnerLabel(found)}</Text>
+            {found.name !== null && <Muted>{found.email}</Muted>}
             <Muted>{found.available ? 'Disponível para solicitação.' : 'Indisponível para novo vínculo.'}</Muted>
             {found.available && <View style={s.button}><SecondaryButton label="Solicitar vínculo" disabled={busy} onPress={() => void request()} /></View>}
           </View>
@@ -80,11 +82,20 @@ export default function PersonalScreen() {
           <Text style={s.empty}>Nenhum corredor vinculado.</Text>
         ) : runners.map((runner) => (
           <Card key={runner.corredorId} style={s.runner}>
-            <Text style={s.runnerEmail}>{runner.email}</Text>
+            <Text style={s.runnerEmail}>{runnerLabel(runner)}</Text>
             <View style={s.button}>
               <PrimaryButton
                 label="Abrir ficha e histórico"
-                onPress={() => router.push({ pathname: '/personal/runner', params: runner })}
+                onPress={() => router.push({
+                  pathname: '/personal/runner',
+                  params: {
+                    linkId: runner.linkId,
+                    corredorId: runner.corredorId,
+                    email: runner.email,
+                    // `null` viraria a string "null" no parâmetro de rota.
+                    name: runner.name ?? '',
+                  },
+                })}
               />
             </View>
           </Card>

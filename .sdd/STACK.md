@@ -13,6 +13,9 @@
   https://docs.expo.dev/versions/v57.0.0/ antes de escrever código de plataforma.
 - Navegação por arquivos (`expo-router`), fila offline em AsyncStorage,
   detecção de conexão via NetInfo, login Google via `expo-auth-session`.
+- Validação de formulário com `zod`: o schema valida **estrutura** (preenchido?
+  é número? máximo maior que mínimo?); os **limites** de domínio ficam só no
+  backend, para não duplicar a fonte da verdade.
 
 ## Design System — Nocturne
 
@@ -23,3 +26,5 @@ Fonte: `Marathon training app design/_ds/nocturne-*/`. Tokens espelhados em
 - Botão primário é **contorno**, nunca preenchido; accent como linha e brilho, nunca preenchimento amplo
 - Espaçamento denso (0.7×) e raio 8px vêm dos tokens
 - Faixa de aviso = superfície + contorno de 1px em `accent-700`
+- Rampa `danger` (300/500/900) é **exclusiva de estado de erro** em campo de
+  formulário (ADR-017) — nunca decoração. Aplicada só via `Field` com `error`

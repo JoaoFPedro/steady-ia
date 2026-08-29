@@ -28,6 +28,7 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
             // Sem índice único e sem IsRequired: e-mail repetido entre corredores é
             // estado válido, e ausência também (STORY-009, regras 1 e 2).
             entity.Property(c => c.Email).HasColumnName("email");
+            entity.Property(c => c.Name).HasColumnName("name");
             entity.Property(c => c.Roles)
                 .HasColumnName("roles")
                 .HasColumnType("text[]")

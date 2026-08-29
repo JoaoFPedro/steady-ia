@@ -87,6 +87,10 @@ namespace Steady.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("google_sub");
 
+                    b.Property<string>("Name")
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
                     b.Property<string[]>("Roles")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

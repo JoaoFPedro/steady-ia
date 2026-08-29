@@ -10,13 +10,14 @@ public sealed class CorredorRepository(
     public async Task<CorredorEntity> GetOrCreateBySubAsync(
         string googleSub,
         string? email,
+        string? name,
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.Corredores
             .FirstOrDefaultAsync(c => c.GoogleSub == googleSub, cancellationToken);
 
         if (existing is not null)
-            return await SincronizarEmailAsync(existing, email, cancellationToken);
+            return await SincronizarPerfilAsync(existing, email, name, cancellationToken);
 
         // A versão vigente no momento do provisionamento fica fixa nesta conta
         // (ADR-013) — publicar uma versão nova depois não a realoca.
@@ -27,6 +28,7 @@ public sealed class CorredorRepository(
             Id = Guid.NewGuid(),
             GoogleSub = googleSub,
             Email = email,
+            Name = name,
             Roles = ["Corredor"],
             TrainingPlanVersionId = currentPlan.Id,
             CreatedAt = DateTime.UtcNow
@@ -48,7 +50,7 @@ public sealed class CorredorRepository(
             var vencedor = await dbContext.Corredores
                 .FirstAsync(c => c.GoogleSub == googleSub, cancellationToken);
 
-            return await SincronizarEmailAsync(vencedor, email, cancellationToken);
+            return await SincronizarPerfilAsync(vencedor, email, name, cancellationToken);
         }
     }
 
@@ -73,19 +75,24 @@ public sealed class CorredorRepository(
     /// Mantém o e-mail alinhado com o que o provedor informou no acesso atual.
     ///
     /// Duas guardas, ambas deliberadas (STORY-009, regras 4 e 5):
-    /// claim ausente <b>não apaga</b> o e-mail guardado — perder dado bom por causa de
+    /// claim ausente <b>não apaga</b> o que está guardado — perder dado bom por causa de
     /// dado faltante é pior que ficar desatualizado; e valor igual não escreve — este
     /// caminho roda em toda requisição autenticada.
     /// </summary>
-    private async Task<CorredorEntity> SincronizarEmailAsync(
+    private async Task<CorredorEntity> SincronizarPerfilAsync(
         CorredorEntity corredor,
         string? email,
+        string? name,
         CancellationToken cancellationToken)
     {
-        if (email is null || corredor.Email == email)
+        var mudouEmail = email is not null && corredor.Email != email;
+        var mudouNome = name is not null && corredor.Name != name;
+
+        if (!mudouEmail && !mudouNome)
             return corredor;
 
-        corredor.Email = email;
+        if (mudouEmail) corredor.Email = email;
+        if (mudouNome) corredor.Name = name;
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return corredor;
