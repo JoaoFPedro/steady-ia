@@ -26,6 +26,7 @@
     "documenta_ai": {
       "output": "docs/documenta-ai",
       "layers": ["Endpoints", "Domain", "Repository", "Persistence"],
+      "frontend_layers": ["Tela (app/)", "Logica (src/)", "Cliente HTTP (src/api)", "AsyncStorage / API"],
       "mode": "incremental"
     }
   },
