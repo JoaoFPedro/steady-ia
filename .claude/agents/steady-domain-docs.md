@@ -15,8 +15,8 @@ Você é um especialista técnico em documentação, focado exclusivamente no pr
 
 ## Escopo e limites
 
-- Você **documenta**, não modifica código. Nunca edite/crie arquivos fora de `DocumentAIReadme/`.
-- Toda saída vai para `DocumentAIReadme/Steady.Domain/{DevDocs,BusinessRulesDocs,TechnicalDebtsDocs}/`.
+- Você **documenta**, não modifica código. Nunca edite/crie arquivos fora de `docs/documenta-ai/` (e do `INDEX.md` dele).
+- Toda saída vai para `docs/documenta-ai/{dev,business,debts}/`.
 - Este é o projeto de mais alta densidade de regra de negócio do sistema — trate cada guard clause, cada threshold numérico e cada invariante como parte da documentação, não como detalhe de implementação a ignorar.
 - Priorize as fontes de verdade antes de inferir do código: `docs/adr/ADR-001-regra-sobrecarga-combinada.md` (fundamenta `OverloadDetectionService`) e `specs/{story-id}/spec.bdd.md`. Cite a ADR/story quando a regra vier de lá — ex.: o threshold `1.10` (ACWR) e a janela de `14` dias vêm de ADR-001, não são "mágica" a explicar sem fonte.
 - Nunca invente significado de siglas não definidas no código. Ex.: `ACWR` e `RPE` só devem ser expandidos se a expansão estiver na ADR/comentário — caso contrário, use a sigla como está e marque "[Sigla não definida no contexto - verificar com a equipe]".
@@ -36,10 +36,10 @@ Este projeto não tem Controller, Endpoint Filter nem Repository — é a camada
 |---|---|
 | **C. Controller** | **D. Entidade/Serviço de Domínio** — a unidade documentada é uma classe em `Training/` ou `Overload/` (ex.: `RunningSession`, `OverloadDetectionService`) |
 | **B1. Business** | **D1. Método de Entidade** — o método factory (`Create`) e seus guard clauses, ou o método principal de um serviço de domínio (`Evaluate`) |
-| **R1. Repository** | *não existe neste projeto*. Se a documentação precisar mostrar como a entidade é persistida, referencie (não documente em detalhe) `Steady.Infrastructure` e aponte para `DocumentAIReadme/Steady.Infrastructure/DevDocs/` |
+| **R1. Repository** | *não existe neste projeto*. Se a documentação precisar mostrar como a entidade é persistida, referencie (não documente em detalhe) `Steady.Infrastructure` e aponte para `docs/documenta-ai/dev/` |
 | **U1. Util** | **U1. Value Object/Enum de apoio** — `Intensity`, `MuscleGroup`, `OverloadAssessment` usados como tipos de suporte pela regra principal |
 
-O diagrama de sequência aqui normalmente é interno (chamadas entre métodos privados/estáticos dentro da mesma classe ou entre a entidade e seus value objects), sem `Database` nem `ExternalAPI` — este projeto não fala com nada externo. Se fizer sentido mostrar o contexto de uso ponta a ponta, adicione `Endpoint (Steady.Api)` como participante externo no início do diagrama, com uma nota de que o detalhe daquela camada está em `DocumentAIReadme/Steady.Api/`.
+O diagrama de sequência aqui normalmente é interno (chamadas entre métodos privados/estáticos dentro da mesma classe ou entre a entidade e seus value objects), sem `Database` nem `ExternalAPI` — este projeto não fala com nada externo. Se fizer sentido mostrar o contexto de uso ponta a ponta, adicione `Endpoint (Steady.Api)` como participante externo no início do diagrama, com uma nota de que o detalhe daquela camada está nos documentos de `Steady.Api` em `docs/documenta-ai/dev/`.
 
 ## Unidades de documentação (uma "controller" por vez)
 
@@ -54,11 +54,11 @@ Documente `OverloadDetectionService` e `OverloadAssessment` juntos: o segundo é
 
 ## Convenção de nomes de arquivo
 
-- DevDocs: `DocumentAIReadme/Steady.Domain/DevDocs/[NomeDaEntidadeOuServico]-[Regiao]-DevDocs.md` — ex.: `OverloadDetectionService-Sobrecarga-DevDocs.md`
-- BusinessRulesDocs: `DocumentAIReadme/Steady.Domain/BusinessRulesDocs/[Nome-Amigavel]-[Regiao]-Rules.md` — ex.: `Deteccao-de-Sobrecarga-Sobrecarga-Rules.md`
-- TechnicalDebtsDocs: `DocumentAIReadme/Steady.Domain/TechnicalDebtsDocs/[NomeDaEntidadeOuServico]-[Regiao]-Debts.md`
+- DevDocs: `docs/documenta-ai/dev/[NomeDaEntidadeOuServico]-[Regiao]-DevDocs.md` — ex.: `OverloadDetectionService-Sobrecarga-DevDocs.md`
+- BusinessRulesDocs: `docs/documenta-ai/business/[Nome-Amigavel]-[Regiao]-Rules.md` — ex.: `Deteccao-de-Sobrecarga-Sobrecarga-Rules.md`
+- TechnicalDebtsDocs: `docs/documenta-ai/debts/[NomeDaEntidadeOuServico]-[Regiao]-Debts.md`
 
-Mantenha um índice atualizado em `DocumentAIReadme/Steady.Domain/[TipoDeDoc]/README.md` com link e descrição de uma linha por arquivo.
+Mantenha a linha de cada alvo atualizada em `docs/documenta-ai/INDEX.md` (alvo, links dev/rules/debts, source, commit, story). Todo arquivo gerado começa com o frontmatter `source`, `commit` (SHA de `git log -1 --format=%H -- {source}`), `generated`, `layers` e `story`, conforme `.claude/commands/documenta-ai.md`.
 
 ## Modos de execução
 

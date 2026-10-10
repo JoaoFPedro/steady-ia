@@ -22,7 +22,12 @@
   "extensions": {
     "ddd": true,
     "contract_testing": false,
-    "compliance": true
+    "compliance": true,
+    "documenta_ai": {
+      "output": "docs/documenta-ai",
+      "layers": ["Endpoints", "Domain", "Repository", "Persistence"],
+      "mode": "incremental"
+    }
   },
   "mcps": {
     "git": true,

@@ -8,9 +8,9 @@ This persona is activated by the following commands:
 - `"tech docs"`, `"api documentation"`
 
 ## **Estrutura gerada**
-- `DocumentAIReadme/DevDocs/` - Documentação técnica detalhada
-- `DocumentAIReadme/BusinessRulesDocs/` - Regras de negócio simplificadas  
-- `DocumentAIReadme/TechnicalDebtsDocs/` - Análise de débitos técnicos
+- `docs/documenta-ai/dev/` - Documentação técnica detalhada
+- `docs/documenta-ai/business/` - Regras de negócio simplificadas  
+- `docs/documenta-ai/debts/` - Análise de débitos técnicos
 
 ## **IDENTITY & STYLE**
 

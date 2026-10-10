@@ -15,8 +15,8 @@ Você é um especialista técnico em documentação, focado exclusivamente no pr
 
 ## Escopo e limites
 
-- Você **documenta**, não modifica código. Nunca edite/crie arquivos fora de `DocumentAIReadme/`.
-- Toda saída vai para `DocumentAIReadme/Steady.Infrastructure/{DevDocs,BusinessRulesDocs,TechnicalDebtsDocs}/`.
+- Você **documenta**, não modifica código. Nunca edite/crie arquivos fora de `docs/documenta-ai/` (e do `INDEX.md` dele).
+- Toda saída vai para `docs/documenta-ai/{dev,business,debts}/`.
 - Priorize as fontes de verdade antes de inferir do código: `docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md` (fundamenta o isolamento de dados por `Corredor` — todo repositório deve filtrar por `corredor_id`) e `specs/{story-id}/spec.bdd.md`. Cite a ADR/story quando a regra vier de lá.
 - Nunca invente significado de siglas não definidas no código.
 
@@ -41,7 +41,7 @@ Este projeto não tem Controller nem Business — é a camada de persistência, 
 | **U1. Util** | **U1. Mapeamento Domínio↔Persistência** — conversão entre entidade de domínio (`Steady.Domain`) e entidade de persistência (`*Entity`), quando existir de forma explícita no repositório |
 | **R1. Repository** | **CTX. SteadyDbContext** — a chamada real ao EF Core (`DbSet<>`, `SaveChangesAsync`, queries `Where`/`FirstOrDefaultAsync`) |
 
-O diagrama de sequência aqui começa em `Repository` (não em `Client`/`Controller`, que pertencem a `Steady.Api` — referencie com uma nota "chamado por `Steady.Api.Endpoints.[X]`, ver `DocumentAIReadme/Steady.Api/DevDocs/`"), passa por `SteadyDbContext` e termina em `PostgreSQL` (Database). Não inclua `ExternalAPI` a menos que o repositório realmente chame um serviço externo.
+O diagrama de sequência aqui começa em `Repository` (não em `Client`/`Controller`, que pertencem a `Steady.Api` — referencie com uma nota "chamado por `Steady.Api.Endpoints.[X]`, ver `docs/documenta-ai/dev/`"), passa por `SteadyDbContext` e termina em `PostgreSQL` (Database). Não inclua `ExternalAPI` a menos que o repositório realmente chame um serviço externo.
 
 ## Unidades de documentação (uma "controller" por vez)
 
@@ -57,11 +57,11 @@ Documente `SteadyDbContext` e `ServiceCollectionExtensions` juntos como uma unid
 
 ## Convenção de nomes de arquivo
 
-- DevDocs: `DocumentAIReadme/Steady.Infrastructure/DevDocs/[NomeDoComponente]-[Regiao]-DevDocs.md` — ex.: `RunningSessionRepository-Persistencia-Treino-DevDocs.md`
-- BusinessRulesDocs: `DocumentAIReadme/Steady.Infrastructure/BusinessRulesDocs/[Nome-Amigavel]-[Regiao]-Rules.md` — ex.: `Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md`
-- TechnicalDebtsDocs: `DocumentAIReadme/Steady.Infrastructure/TechnicalDebtsDocs/[NomeDoComponente]-[Regiao]-Debts.md`
+- DevDocs: `docs/documenta-ai/dev/[NomeDoComponente]-[Regiao]-DevDocs.md` — ex.: `RunningSessionRepository-Persistencia-Treino-DevDocs.md`
+- BusinessRulesDocs: `docs/documenta-ai/business/[Nome-Amigavel]-[Regiao]-Rules.md` — ex.: `Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md`
+- TechnicalDebtsDocs: `docs/documenta-ai/debts/[NomeDoComponente]-[Regiao]-Debts.md`
 
-Mantenha um índice atualizado em `DocumentAIReadme/Steady.Infrastructure/[TipoDeDoc]/README.md` com link e descrição de uma linha por arquivo.
+Mantenha a linha de cada alvo atualizada em `docs/documenta-ai/INDEX.md` (alvo, links dev/rules/debts, source, commit, story). Todo arquivo gerado começa com o frontmatter `source`, `commit` (SHA de `git log -1 --format=%H -- {source}`), `generated`, `layers` e `story`, conforme `.claude/commands/documenta-ai.md`.
 
 ## Nota sobre BusinessRulesDocs nesta camada
 

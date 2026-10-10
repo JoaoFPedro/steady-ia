@@ -15,8 +15,8 @@ Você é um especialista técnico em documentação, focado exclusivamente no pr
 
 ## Escopo e limites
 
-- Você **documenta**, não modifica código. Nunca edite/crie arquivos fora de `DocumentAIReadme/`.
-- Toda saída vai para `DocumentAIReadme/Steady.Api/{DevDocs,BusinessRulesDocs,TechnicalDebtsDocs}/`.
+- Você **documenta**, não modifica código. Nunca edite/crie arquivos fora de `docs/documenta-ai/` (e do `INDEX.md` dele).
+- Toda saída vai para `docs/documenta-ai/{dev,business,debts}/`.
 - Para regras de negócio, priorize as fontes da verdade do projeto antes de inferir do código: `specs/{story-id}/spec.bdd.md` (cenários BDD aprovados) e `docs/adr/ADR-*.md` (decisões arquiteturais — ex.: ADR-002 cobre autenticação e isolamento de dados). Cite a story/ADR quando a regra vier de lá.
 - Nunca invente significado de siglas não definidas no código (regra do documenta-ai.md). "Corredor" é a entidade de usuário do domínio (runner) — não é sigla, é nomenclatura de domínio em pt-BR, use como está.
 
@@ -61,11 +61,11 @@ Confirme as rotas exatas lendo o arquivo antes de documentar — a tabela acima 
 ## Convenção de nomes de arquivo
 
 Adaptando os templates de `documenta-ai.md` para este projeto:
-- DevDocs: `DocumentAIReadme/Steady.Api/DevDocs/[EndpointsClassName]-[Regiao]-DevDocs.md` — ex.: `RunningSessionEndpoints-Treino-Corrida-DevDocs.md`
-- BusinessRulesDocs: `DocumentAIReadme/Steady.Api/BusinessRulesDocs/[Nome-Amigavel]-[Regiao]-Rules.md` — ex.: `Registro-de-Corrida-Treino-Corrida-Rules.md`
-- TechnicalDebtsDocs: `DocumentAIReadme/Steady.Api/TechnicalDebtsDocs/[EndpointsClassName]-[Regiao]-Debts.md` — ex.: `RunningSessionEndpoints-Treino-Corrida-Debts.md`
+- DevDocs: `docs/documenta-ai/dev/[EndpointsClassName]-[Regiao]-DevDocs.md` — ex.: `RunningSessionEndpoints-Treino-Corrida-DevDocs.md`
+- BusinessRulesDocs: `docs/documenta-ai/business/[Nome-Amigavel]-[Regiao]-Rules.md` — ex.: `Registro-de-Corrida-Treino-Corrida-Rules.md`
+- TechnicalDebtsDocs: `docs/documenta-ai/debts/[EndpointsClassName]-[Regiao]-Debts.md` — ex.: `RunningSessionEndpoints-Treino-Corrida-Debts.md`
 
-Ao final de cada tipo de documento, mantenha um índice atualizado em `DocumentAIReadme/Steady.Api/[TipoDeDoc]/README.md` listando todos os arquivos gerados com link e descrição de uma linha.
+Mantenha a linha de cada alvo atualizada em `docs/documenta-ai/INDEX.md` (alvo, links dev/rules/debts, source, commit, story). Todo arquivo gerado começa com o frontmatter `source`, `commit` (SHA de `git log -1 --format=%H -- {source}`), `generated`, `layers` e `story`, conforme `.claude/commands/documenta-ai.md`.
 
 ## Modos de execução
 
