@@ -1,216 +1,205 @@
-# RunningSessionRepository - Persistencia-Treino - Especificacao Tecnica
+# RunningSessionRepository - Persistencia-Treino - Especificação Técnica
 
-## Indice
-- [1. Visao Geral Tecnica](#1-visao-geral-tecnica)
-- [2. Configuracao e Dependencias](#2-configuracao-e-dependencias)
-- [3. Detalhamento por Metodo](#3-detalhamento-por-metodo)
-  - [3.1. AddAsync - Persiste uma nova sessao de corrida](#31-addasync---persiste-uma-nova-sessao-de-corrida)
-  - [3.2. GetByCorredorIdAsync - Lista o historico de corrida do corredor](#32-getbycorredoridasync---lista-o-historico-de-corrida-do-corredor)
-  - [3.3. GetByIdAsync - Busca uma sessao especifica, escopada ao corredor](#33-getbyidasync---busca-uma-sessao-especifica-escopada-ao-corredor)
-- [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
+Atualizado em 2026-09-27.
 
-## 1. Visao Geral Tecnica
+## Índice
 
-**Proposito**: `RunningSessionRepository` persiste e recupera sessoes de treino de corrida (`RunningSessionEntity`), sempre escopadas ao `CorredorId` do corredor autenticado.
+- [Visão geral](#visao)
+- [Métodos e contratos](#metodos)
+- [Mapeamentos](#ctx)
+- [Observações](#observacoes)
+- [Fontes](#fontes)
 
-**Responsabilidades**:
-- Converter um objeto de dominio `Steady.Domain.Training.RunningSession` (ja validado pelas guard clauses de `RunningSession.Create`) em `RunningSessionEntity` e persisti-lo associado a um `CorredorId`.
-- Aplicar a chave de idempotencia recebida do cliente antes de gravar, devolvendo o registro ja existente em vez de duplicar em caso de reenvio -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
-- Listar todas as sessoes de corrida de um corredor.
-- Buscar uma sessao especifica por ID, escopada ao corredor (isolamento -- ver [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)).
+<a id="visao"></a>
+## 1. Visão geral técnica
 
-**Integracoes**: chamado por `Steady.Api.Endpoints.RunningSessionEndpoints` (POST `/api/running-sessions`), `Steady.Api.Endpoints.TrainingHistoryEndpoints` (GET `/api/training-sessions` e GET `/api/training-sessions/{id}`) e `Steady.Api.Endpoints.OverloadAssessmentEndpoints` (GET `/api/overload-assessment`, que reconstroi objetos de dominio a partir das entidades persistidas para avaliar sobrecarga) -- ver `DocumentAIReadme/Steady.Api/DevDocs/RunningSessionEndpoints-Treino-Corrida-DevDocs.md`, `DocumentAIReadme/Steady.Api/DevDocs/TrainingHistoryEndpoints-Historico-DevDocs.md` e `DocumentAIReadme/Steady.Api/DevDocs/OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md`. Regras fundamentadas em `specs/STORY-001/spec.bdd.md` (validacao de dominio), `specs/STORY-002/spec.bdd.md` (persistencia e isolamento) e `specs/STORY-003/spec.bdd.md` (idempotencia, [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)). O utilitario `IIdempotentRecord`/`SaveResult<TEntity>` usado por `AddAsync` esta documentado em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003`.
+Persistir corrida, intenção de revisão e dor de encerramento na mesma confirmação.
 
-## 2. Configuracao e Dependencias
+Chamada pela camada Steady.Api; ver [índice da API](../../Steady.Api/DevDocs/README.md). Sem rotas próprias: entradas são parâmetros C#, saídas são entidades/objetos ou resultados assíncronos. O token e os papéis são validados na API; parâmetros de identidade precisam vir do contexto autenticado. PostgreSQL é acessado pelo SteadyDbContext com EF Core e Npgsql.
 
-**Dependencias Injetadas**:
-- `SteadyDbContext dbContext`: contexto EF Core injetado via construtor primario, ciclo de vida `Scoped`.
 
-**Interface implementada**: `IRunningSessionRepository` (`Repositories/IRunningSessionRepository.cs`).
+<a id="metodos"></a>
+## 2. R. Métodos e contratos
 
-**Metodos Publicos**:
-- `Task<SaveResult<RunningSessionEntity>> AddAsync(Guid corredorId, RunningSession session, Guid idempotencyKey, CancellationToken cancellationToken)` -- assinatura alterada pelo [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md); antes retornava `RunningSessionEntity` direto e nao recebia `idempotencyKey`.
-- `Task<IReadOnlyList<RunningSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken)`
-- `Task<RunningSessionEntity?> GetByIdAsync(Guid corredorId, Guid sessionId, CancellationToken cancellationToken)`
+- [AddAsync](#r-1)
+- [GetByCorredorIdAsync](#r-2)
+- [GetByIdAsync](#r-3)
 
-## 3. Detalhamento por Metodo
+<a id="r-1"></a>
+### R. AddAsync
 
-### 3.1. AddAsync - Persiste uma nova sessao de corrida
+`public async Task<SaveResult<RunningSessionEntity>> AddAsync( Guid corredorId, RunningSession session, Guid idempotencyKey, bool painReportedAtCompletion, CancellationToken cancellationToken)`
 
-**Entrada**:
-```json
-{
-  "corredorId": "Guid - dono do registro, resolvido pelo AuthenticationFilter",
-  "session": {
-    "Date": "DateOnly",
-    "DistanceKm": "double (> 0, validado em RunningSession.Create)",
-    "DurationMinutes": "int (> 0, validado em RunningSession.Create)",
-    "AveragePaceMinPerKm": "double",
-    "PerceivedEffort": "int (1 a 10, validado em RunningSession.Create)"
-  },
-  "idempotencyKey": "Guid - lido do header 'Idempotency-Key' pelo Endpoint (ADR-003); gerado pelo cliente no momento em que o item entra na fila local, nao a cada tentativa de envio"
-}
-```
+Busca (corredorId,idempotencyKey). Existente retorna Created=false. Novo copia Date, DistanceKm, DurationMinutes, AveragePaceMinPerKm, PerceivedEffort; captura Id da ficha ativa via SingleOrDefaultAsync; adiciona outbox Pending de Running e dor opcional "Informada no encerramento"; uma SaveChangesAsync confirma todas as linhas.
 
-**Saida**:
-```json
-{
-  "SaveResult<RunningSessionEntity>": {
-    "Entity": {
-      "Id": "Guid - gerado pelo repositorio (Guid.NewGuid()) se novo, ou o Id ja existente se reenvio",
-      "CorredorId": "Guid",
-      "Date": "DateOnly",
-      "DistanceKm": "double",
-      "DurationMinutes": "int",
-      "AveragePaceMinPerKm": "double",
-      "PerceivedEffort": "int",
-      "IdempotencyKey": "Guid"
-    },
-    "Created": "bool - true se gravou uma linha nova (Endpoint responde 201); false se devolveu um registro ja existente por reenvio da mesma chave (Endpoint responde 200)"
-  }
-}
-```
+Entrada: os parâmetros da assinatura, incluindo `CancellationToken` nas operações assíncronas. Saída: o tipo retornado na assinatura; `Task` transporta conclusão, resultado ou falha. Objetos de domínio chegam validados por suas fábricas; o repositório não substitui essa validação.
 
-#### Fluxo de Execucao
+<a id="r-2"></a>
+### R. GetByCorredorIdAsync
+
+`public async Task<IReadOnlyList<RunningSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken)`
+
+Where(CorredorId) e ToListAsync, sem ordenação ou paginação.
+
+Entrada: os parâmetros da assinatura, incluindo `CancellationToken` nas operações assíncronas. Saída: o tipo retornado na assinatura; `Task` transporta conclusão, resultado ou falha. Objetos de domínio chegam validados por suas fábricas; o repositório não substitui essa validação.
+
+<a id="r-3"></a>
+### R. GetByIdAsync
+
+`public async Task<RunningSessionEntity?> GetByIdAsync(Guid corredorId, Guid sessionId, CancellationToken cancellationToken)`
+
+FirstOrDefaultAsync por CorredorId e sessionId; retorna null se ausente ou de outra conta.
+
+Entrada: os parâmetros da assinatura, incluindo `CancellationToken` nas operações assíncronas. Saída: o tipo retornado na assinatura; `Task` transporta conclusão, resultado ou falha. Objetos de domínio chegam validados por suas fábricas; o repositório não substitui essa validação.
+
+#### Fluxo de execução
 
 ```mermaid
 sequenceDiagram
-    participant Endpoint as Steady.Api.Endpoints.RunningSessionEndpoints
-    participant Repository as RunningSessionRepository
-    participant Context as SteadyDbContext
-    participant Database as PostgreSQL (running_sessions)
-
-    Endpoint->>+Repository: AddAsync(corredorId, session, idempotencyKey, ct)
-    Repository->>+Context: RunningSessions.FindByIdempotencyKeyAsync(corredorId, idempotencyKey, ct)
-    Context->>+Database: SELECT * FROM running_sessions WHERE corredor_id = @corredorId AND idempotency_key = @idempotencyKey
-    Database-->>-Context: 0 ou 1 linha
-    Context-->>-Repository: RunningSessionEntity ou null
-    alt Ja existe registro com esta chave (reenvio)
-        Repository-->>Endpoint: SaveResult(entity: existente, Created: false)
+    participant R as RunningSessionRepository
+    participant CTX as SteadyDbContext
+    participant DB as PostgreSQL
+    R->>CTX: FindByIdempotencyKeyAsync(corredorId, chave)
+    CTX->>DB: SELECT por corredor_id e idempotency_key
+    DB-->>CTX: Linha ou ausência
+    CTX-->>R: Entidade ou null
+    alt Chave já existe
+        R-->>R: SaveResult(existing, Created=false)
     else Registro novo
-        Repository->>Repository: monta RunningSessionEntity (Id = NewGuid, CorredorId = corredorId, IdempotencyKey = idempotencyKey, campos de session)
-        Repository->>+Context: RunningSessions.Add(entity)
-        Repository->>+Context: SaveChangesAsync(ct)
-        Context->>+Database: INSERT INTO running_sessions (...)
-        Database-->>-Context: 1 linha afetada
-        Context-->>-Repository: ok
-        Repository-->>-Endpoint: SaveResult(entity: nova, Created: true)
+        R->>CTX: Add(entidade e registros associados descritos acima)
+        R->>CTX: SaveChangesAsync(token)
+        CTX->>DB: INSERT em transação da confirmação
+        DB-->>CTX: Commit ou falha
+        CTX-->>R: Conclusão
     end
 ```
 
-#### Detalhamento do Fluxo
+<a id="ctx"></a>
+## 3. CTX. Mapeamento e integridade
 
-**R. Repository (RunningSessionRepository)**
+### CTX. running_sessions
 
-R.1. AddAsync()
-- Recebe o objeto de dominio `RunningSession` ja validado (guard clauses em `RunningSession.Create`, ver `specs/STORY-001/spec.bdd.md`), o `corredorId` resolvido pelo `AuthenticationFilter` e a `idempotencyKey` do header `Idempotency-Key` ([ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)).
-- **Passo 1 -- busca por chave existente**: chama `dbContext.RunningSessions.FindByIdempotencyKeyAsync(corredorId, idempotencyKey, ct)` -- documentado em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md#u1-iidempotentrecord-e-saveresult` (U1.1) -> [CTX.1](#ctx1-runningsessions-dbset)
-- **Se ja existe** (`existing is not null`): retorna imediatamente `new SaveResult<RunningSessionEntity>(existing, Created: false)` -- **nao grava nada novo**. Este e o caminho de reenvio da fila offline apos uma resposta perdida.
-- **Se nao existe -- Mapeamento Dominio -> Persistencia (U1)**: monta um novo `RunningSessionEntity` copiando campo a campo de `RunningSession` (`Date`, `DistanceKm`, `DurationMinutes`, `AveragePaceMinPerKm`, `PerceivedEffort`) e atribuindo `Id = Guid.NewGuid()`, `CorredorId = corredorId` (nunca vem do cliente, sempre do contexto de autenticacao) e `IdempotencyKey = idempotencyKey`.
-- Adiciona a entidade ao `DbSet<RunningSessionEntity>` e persiste via `SaveChangesAsync` -> [CTX.1](#ctx1-runningsessions-dbset)
-- Retorna `new SaveResult<RunningSessionEntity>(entity, Created: true)`. O Endpoint usa `Created` para decidir entre HTTP 201 (novo) e HTTP 200 (reenvio) -- ver `RunningSessionEndpoints-Treino-Corrida-DevDocs.md`.
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-**CTX. SteadyDbContext**
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `Date` | `date` | `Tipo por convenção do provider` |
+| `DistanceKm` | `distance_km` | `Tipo por convenção do provider` |
+| `DurationMinutes` | `duration_minutes` | `Tipo por convenção do provider` |
+| `AveragePaceMinPerKm` | `average_pace_min_per_km` | `Tipo por convenção do provider` |
+| `PerceivedEffort` | `perceived_effort` | `Tipo por convenção do provider` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
 
-<a id="ctx1-runningsessions-dbset"></a>
-CTX.1. RunningSessions (DbSet&lt;RunningSessionEntity&gt;) + SaveChangesAsync
-- Mapeado para a tabela `running_sessions`: `Id` como chave primaria; `CorredorId` -> coluna `corredor_id` (indexada via `IX_running_sessions_corredor_id`); `Date` -> `date`; `DistanceKm` -> `distance_km`; `DurationMinutes` -> `duration_minutes`; `AveragePaceMinPerKm` -> `average_pace_min_per_km`; `PerceivedEffort` -> `perceived_effort`; `IdempotencyKey` -> `idempotency_key` (indice UNICO composto `IX_running_sessions_corredor_id_idempotency_key` em `(corredor_id, idempotency_key)`, [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)).
-- `SaveChangesAsync` persiste o INSERT em uma transacao implicita de uma unica operacao. O indice unico composto e a garantia final contra duplicata mesmo sob corrida entre dois envios simultaneos da mesma chave, conforme previsto no [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) ("mesmo com uma corrida entre dois envios simultaneos, o banco recusa a segunda insercao") -- diferente de `CorredorRepository.GetOrCreateBySubAsync`, este metodo nao captura `DbUpdateException` para esse cenario (ver secao 4, Observacoes Tecnicas).
+Índices e relações (expressões reais do modelo):
 
-### 3.2. GetByCorredorIdAsync - Lista o historico de corrida do corredor
-
-**Entrada**:
-```json
-{
-  "corredorId": "Guid - do corredor autenticado",
-  "cancellationToken": "CancellationToken"
-}
+```csharp
+HasIndex(s => s.CorredorId);
+HasIndex(s => new { s.CorredorId, s.IdempotencyKey }).IsUnique();
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(s => s.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
 ```
 
-**Saida**:
-```json
-{
-  "IReadOnlyList<RunningSessionEntity>": "todas as sessoes de corrida cujo CorredorId == corredorId, sem paginacao, sem ordenacao no repositorio (ordenacao por data e feita no Endpoint TrainingHistoryEndpoints)"
-}
+### CTX. review_outbox
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `ExecutionId` | `execution_id` | `Tipo por convenção do provider` |
+| `TrainingSheetId` | `training_sheet_id` | `Tipo por convenção do provider` |
+| `ExecutionKind` | `execution_kind` | `HasConversion<string>()` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
+| `ExecutionDate` | `execution_date` | `Tipo por convenção do provider` |
+| `PainReportedAtCompletion` | `pain_reported_at_completion` | `Tipo por convenção do provider` |
+| `Status` | `status` | `HasConversion<string>()` |
+| `Attempts` | `attempts` | `Tipo por convenção do provider` |
+| `LeaseUntil` | `lease_until` | `Tipo por convenção do provider` |
+| `NextAttemptAt` | `next_attempt_at` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
+| `CompletedAt` | `completed_at` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(item => new { item.ExecutionKind, item.ExecutionId }).IsUnique();
+HasIndex(item => new { item.CorredorId, item.IdempotencyKey }).IsUnique();
+HasIndex(item => new { item.Status, item.NextAttemptAt });
+HasOne<CorredorEntity>().WithMany().HasForeignKey(item => item.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
 ```
 
-#### Fluxo de Execucao
+### CTX. pain_logs
 
-```mermaid
-sequenceDiagram
-    participant Endpoint as Steady.Api.Endpoints.TrainingHistoryEndpoints / OverloadAssessmentEndpoints
-    participant Repository as RunningSessionRepository
-    participant Context as SteadyDbContext
-    participant Database as PostgreSQL (running_sessions)
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-    Endpoint->>+Repository: GetByCorredorIdAsync(corredorId, ct)
-    Repository->>+Context: RunningSessions.Where(s => s.CorredorId == corredorId).ToListAsync(ct)
-    Context->>+Database: SELECT * FROM running_sessions WHERE corredor_id = @corredorId
-    Database-->>-Context: 0..N linhas
-    Context-->>-Repository: List<RunningSessionEntity>
-    Repository-->>-Endpoint: IReadOnlyList<RunningSessionEntity>
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `Date` | `date` | `Tipo por convenção do provider` |
+| `Region` | `region` | `IsRequired()` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(p => p.CorredorId);
+HasIndex(p => new { p.CorredorId, p.IdempotencyKey }).IsUnique();
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(p => p.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
 ```
 
-#### Detalhamento do Fluxo
+### CTX. training_sheets
 
-**R. Repository (RunningSessionRepository)**
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-R.2. GetByCorredorIdAsync()
-- Aplica `Where(s => s.CorredorId == corredorId)` -- o filtro de isolamento e traduzido pelo EF Core para a clausula `WHERE` da query SQL, nao filtrado em memoria (regra central de isolamento, ver `Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md`) -> [CTX.2](#ctx2-query-filtrada-por-corredorid)
-- Materializa o resultado com `ToListAsync`. Sem historico, devolve lista vazia (nao lanca excecao) -- comportamento coberto pelo cenario "Corredor sem historico consulta seu historico de treinos" em `specs/STORY-002/spec.bdd.md`.
-- Usado tambem por `OverloadAssessmentEndpoints`, que reconstroi objetos `RunningSession` de dominio a partir das entidades para reavaliar a regra de sobrecarga (ver [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md)).
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `PersonalId` | `personal_id` | `Tipo por convenção do provider` |
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `DefinitionJson` | `definition` | `HasColumnType("jsonb")` |
+| `IsActive` | `is_active` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
 
-**CTX. SteadyDbContext**
+Índices e relações (expressões reais do modelo):
 
-<a id="ctx2-query-filtrada-por-corredorid"></a>
-CTX.2. Query LINQ traduzida para SQL com filtro indexado
-- O indice `IX_running_sessions_corredor_id` (nao unico, coluna simples `corredor_id`) suporta esta consulta com plano de execucao por indice, evitando full table scan a medida que a tabela cresce.
-
-### 3.3. GetByIdAsync - Busca uma sessao especifica, escopada ao corredor
-
-**Entrada**:
-```json
-{
-  "corredorId": "Guid - do corredor autenticado, usado como parte do filtro",
-  "sessionId": "Guid - identificador da sessao solicitada",
-  "cancellationToken": "CancellationToken"
-}
+```csharp
+HasIndex(sheet => sheet.CorredorId)
+                .IsUnique()
+                .HasFilter("is_active = TRUE");
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(sheet => sheet.PersonalId)
+                .OnDelete(DeleteBehavior.Restrict);
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(sheet => sheet.CorredorId)
+                .OnDelete(DeleteBehavior.Restrict);
 ```
 
-**Saida**:
-```json
-{
-  "RunningSessionEntity?": "a sessao, se pertencer ao corredorId informado; null caso contrario ou se o Id nao existir"
-}
-```
+<a id="observacoes"></a>
+## 4. Observações técnicas
 
-#### Fluxo de Execucao
+Consultas usam rastreamento padrão salvo AsNoTracking explicitamente indicado. Falhas de persistência e cancelamento propagam quando não houver captura documentada. Cada chave idempotente pertence à conta, não é uma chave global entre corredores. Entidades retornadas incluem os campos persistidos listados em CTX; resultados SaveResult contêm Entity e Created.
 
-```mermaid
-sequenceDiagram
-    participant Endpoint as Steady.Api.Endpoints.TrainingHistoryEndpoints
-    participant Repository as RunningSessionRepository
-    participant Context as SteadyDbContext
-    participant Database as PostgreSQL (running_sessions)
+<a id="fontes"></a>
+## 5. Fontes e verificação
 
-    Endpoint->>+Repository: GetByIdAsync(corredorId, sessionId, ct)
-    Repository->>+Context: RunningSessions.FirstOrDefaultAsync(s => s.CorredorId == corredorId && s.Id == sessionId)
-    Context->>+Database: SELECT * FROM running_sessions WHERE corredor_id = @corredorId AND "Id" = @sessionId
-    Database-->>-Context: 0 ou 1 linha
-    Context-->>-Repository: RunningSessionEntity ou null
-    Repository-->>-Endpoint: RunningSessionEntity?
-```
+- [docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)
+- [docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)
+- [docs/adr/ADR-018-outbox-transacional-da-revisao.md](../../../docs/adr/ADR-018-outbox-transacional-da-revisao.md)
+- [tests/Steady.Api.Tests/RunningSessionEndpointTests.cs](../../../tests/Steady.Api.Tests/RunningSessionEndpointTests.cs)
+- [src/Steady.Infrastructure/Persistence/SteadyDbContext.cs](../../../src/Steady.Infrastructure/Persistence/SteadyDbContext.cs)
+- [src/Steady.Infrastructure/Repositories/RunningSessionRepository.cs](../../../src/Steady.Infrastructure/Repositories/RunningSessionRepository.cs)
 
-#### Detalhamento do Fluxo
+Os testes citados foram inspecionados como evidência de comportamento; não foram executados nesta rodada de documentação.
 
-**R. Repository (RunningSessionRepository)**
+Especificações de comportamento relacionadas:
 
-R.3. GetByIdAsync()
-- Filtra simultaneamente por `CorredorId == corredorId` E `Id == sessionId` na mesma clausula `WHERE` -- e o ponto que impede um corredor de acessar a sessao de outro mesmo conhecendo o `Guid` exato (ver cenario "Corredor tenta acessar sessao de treino de outro corredor" em `specs/STORY-002/spec.bdd.md`).
-- Se a sessao existe mas pertence a outro corredor, o resultado e `null` -- identico ao caso "Id nao existe" -- garantindo que o Endpoint responda 404 sem distincao (Playbook A01, nao revela existencia do recurso) -> [CTX.2](#ctx2-query-filtrada-por-corredorid)
-
-## 4. Observacoes Tecnicas
-
-- **Performance**: `GetByCorredorIdAsync` nao pagina -- para um corredor com historico muito extenso, a query retorna todas as linhas de uma vez (ver TechnicalDebtsDocs). O indice `corredor_id` garante que a busca em si seja eficiente mesmo com a tabela cheia de dados de outros corredores. `AddAsync` agora faz 1 SELECT (busca por chave de idempotencia) antes do INSERT no caminho de registro novo -- custo adicional pequeno e justificado pela protecao contra duplicata do [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
-- **Tratamento de Erros**: nenhum dos tres metodos trata excecoes de banco explicitamente -- falhas de infraestrutura propagam para o Endpoint chamador sem tratamento especifico nesta camada. Isso inclui o cenario (raro, de corrida) em que dois envios simultaneos com a mesma `idempotencyKey` passam ambos pela verificacao de existencia antes que o primeiro `SaveChangesAsync` termine: o indice unico composto garante que apenas um INSERT seja aceito pelo banco, mas o segundo propagaria uma `DbUpdateException` nao capturada, diferente do tratamento de corrida ja existente em `CorredorRepository.GetOrCreateBySubAsync`.
-- **Integracoes Criticas**: `GetByCorredorIdAsync` e reutilizado tanto para exibir historico (`TrainingHistoryEndpoints`) quanto para recalcular a regra de sobrecarga (`OverloadAssessmentEndpoints`) -- qualquer mudanca de comportamento aqui (ex.: adicionar paginacao) precisa considerar ambos os consumidores. `AddAsync` agora depende do utilitario `IIdempotentRecord`/`SaveResult<TEntity>` compartilhado com `StrengthSessionRepository` e `PainLogRepository` -- documentado uma unica vez em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md`.
+- [STORY-003](../../../specs/STORY-003/spec.bdd.md)
+- [STORY-014](../../../specs/STORY-014/spec.bdd.md)

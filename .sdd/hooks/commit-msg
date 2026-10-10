@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SDD Kit — commit-msg hook
+# isabel — commit-msg hook
 # Validates Conventional Commits format before every commit.
 # Install: ln -sf "$(pwd)/.sdd/hooks/commit-msg" .git/hooks/commit-msg && chmod +x .sdd/hooks/commit-msg
 

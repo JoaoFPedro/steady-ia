@@ -1,20 +1,18 @@
-# DevDocs - Steady.Api - Indice
+# Steady.Api - DevDocs
 
-Documentacao tecnica detalhada de cada classe de Endpoints do `src/Steady.Api`, com fluxo completo por camada (Endpoint -> Endpoint Filter -> Domain -> Repository -> Database) e diagramas de sequencia Mermaid.
+Auditoria: 2026-09-27. Cobertura: 10/10 unidades de endpoints; arquivos de mapping são apoio, não unidades adicionais.
 
-| Arquivo | Descricao |
-|---------|-----------|
-| [RunningSessionEndpoints-Treino-Corrida-DevDocs.md](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md) | Registro de Sessao de Treino de Corrida (`POST /api/running-sessions`) |
-| [StrengthSessionEndpoints-Treino-Forca-DevDocs.md](./StrengthSessionEndpoints-Treino-Forca-DevDocs.md) | Registro de Sessao de Treino de Musculacao (`POST /api/strength-sessions`) |
-| [PainLogEndpoints-Treino-Dor-DevDocs.md](./PainLogEndpoints-Treino-Dor-DevDocs.md) | Registro de dor pos-treino (`POST /api/pain-logs`) |
-| [OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md](./OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md) | Avaliacao de risco de sobrecarga combinada (`GET /api/overload-assessment`) |
-| [TrainingHistoryEndpoints-Historico-DevDocs.md](./TrainingHistoryEndpoints-Historico-DevDocs.md) | Historico consolidado de treinos (`GET /api/training-sessions`, `GET /api/training-sessions/{id}`) |
+| Unidade | Descrição | Rotas |
+|---|---|---|
+| [RunningSessionEndpoints](RunningSessionEndpoints-Treino-Corrida-DevDocs.md) | Registrar a corrida do corredor e sua intenção durável de revisão, sem esperar o provedor de explicação. | 1 |
+| [StrengthSessionEndpoints](StrengthSessionEndpoints-Treino-Forca-DevDocs.md) | Registrar musculação avulsa com grupo, intensidade e duração, e opcionalmente dor no encerramento. | 1 |
+| [PainLogEndpoints](PainLogEndpoints-Treino-Dor-DevDocs.md) | Registrar região e data de dor de forma idempotente, sem diagnóstico ou reabertura de revisão publicada. | 1 |
+| [OverloadAssessmentEndpoints](OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md) | Avaliar a combinação de corrida com musculação avulsa pesada de perna, distinguindo histórico insuficiente de ausência de risco. | 1 |
+| [TrainingHistoryEndpoints](TrainingHistoryEndpoints-Historico-DevDocs.md) | Unificar corridas, musculação avulsa e execuções da ficha no histórico do corredor. | 2 |
+| [PlanRequestEndpoints](PlanRequestEndpoints-Planejamento-DevDocs.md) | Persistir o contexto do planejamento do corredor com identidade estável criada antes da sincronização. | 3 |
+| [TrainingPlanEndpoints](TrainingPlanEndpoints-Planejamento-DevDocs.md) | Ler o documento versionado associado ao corredor, mantendo prescrições e mobilidade sem calcular progressão. | 1 |
+| [CoachingLinkEndpoints](CoachingLinkEndpoints-Acompanhamento-DevDocs.md) | Solicitar, aceitar e encerrar vínculos de acompanhamento, com descoberta por e-mail e acesso restrito por papel. | 8 |
+| [TrainingSheetEndpoints](TrainingSheetEndpoints-Ficha-DevDocs.md) | Publicar ficha versionada, registrar musculação ou treino combinado e disponibilizar histórico ao personal vinculado. | 5 |
+| [WorkoutReviewEndpoints](WorkoutReviewEndpoints-Revisao-DevDocs.md) | Consultar revisão determinística, registrar compreensão/contestação e solicitar nova explicação sem alterar o treino. | 6 |
 
-## Referencias transversais
-
-- Autenticacao (`AuthenticationFilter`, aplicada a todo o grupo `/api`): detalhada em cada arquivo acima, seção "F. Endpoint Filter" - fonte canonica em [RunningSessionEndpoints DevDocs - F.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#f1-authenticationfilterinvokeasync), incluindo a restricao de audiencia do ID token (ADR-002, adendo 2026-08-16).
-- Traducao de erro de dominio para HTTP 400 (`Common.DomainFactory.TryCreate`): detalhada em cada arquivo de rota de escrita, seção "U1. Common/Auth".
-- Idempotencia nos tres endpoints de registro (`Common.Idempotency`, header `Idempotency-Key`, `SaveResult<TEntity>`): fonte canonica em [RunningSessionEndpoints DevDocs - U1.3](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#u13-idempotency) e [R1.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#r11-runningsessionrepositoryaddasync) - [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
-- Regra de deteccao de sobrecarga (`OverloadDetectionService`): [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md).
-- Autenticacao via Google e isolamento de dados por corredor: [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md).
-- Estado de historico insuficiente exposto no contrato de `OverloadAssessmentResponse` (`hasSufficientHistory`): [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md).
+[Índice mestre](../../README.md).

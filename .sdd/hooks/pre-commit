@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SDD Kit — pre-commit hook
+# isabel — pre-commit hook
 # Validates branch naming convention and warns when spec is missing for feature branches.
 # Install: ln -sf "$(pwd)/.sdd/hooks/pre-commit" .git/hooks/pre-commit && chmod +x .sdd/hooks/pre-commit
 
@@ -27,7 +27,7 @@ BRANCH_PATTERN="^(feature|fix|docs|refactor|test|chore|hotfix)/.+"
 
 if ! echo "$BRANCH" | grep -qE "$BRANCH_PATTERN"; then
   echo ""
-  echo -e "  ${R}✗ Branch fora da convenção SDD Kit${N}"
+  echo -e "  ${R}✗ Branch fora da convenção isabel${N}"
   echo ""
   echo -e "  ${BD}Formato:${N}  <type>/<story-id>-<descricao>"
   echo ""
@@ -54,14 +54,14 @@ if [ -n "$STORY_ID" ] && [ -d "specs" ]; then
     echo ""
     echo -e "  ${Y}⚠ Spec não encontrada para ${STORY_ID}${N}"
     echo -e "    Esperado: ${BD}${SPEC_FILE}${N}"
-    echo -e "    Use ${C}/spec${N} no Claude Code para criar a story e a spec BDD"
+    echo -e "    Use ${C}/shape${N} no Claude Code para criar a story e a spec BDD"
     echo ""
     # warn only, do not block — spec may be in progress
   elif ! grep -q "Scenario:" "$SPEC_FILE" 2>/dev/null; then
     echo ""
     echo -e "  ${Y}⚠ Spec existe mas não tem cenários BDD (Scenario:)${N}"
     echo -e "    ${BD}${SPEC_FILE}${N}"
-    echo -e "    Use ${C}/spec${N} para gerar os cenários antes de implementar"
+    echo -e "    Use ${C}/shape${N} para gerar os cenários antes de implementar"
     echo ""
     # warn only, do not block
   else
@@ -117,10 +117,12 @@ if [ -n "$STAGED" ]; then
   for file in $STAGED; do
     file_content=$(git show ":$file" 2>/dev/null) || continue
     for pattern in "${SECRET_PATTERNS[@]}"; do
-      # `-e` é obrigatório: sem ele, um padrão iniciado por "-" (o de chave
-      # privada, por exemplo) é lido como opção do grep e a checagem morre em
-      # silêncio — o hook seguia dizendo "commit válido" sem ter procurado nada.
-      if echo "$file_content" | grep -iqE -e "$pattern"; then
+      if [[ "$pattern" == 'AKIA[0-9A-Z]{16}' ]]; then
+        echo "$file_content" | grep -qE -- "$pattern"
+      else
+        echo "$file_content" | grep -iqE -- "$pattern"
+      fi
+      if [ "$?" -eq 0 ]; then
         SECRETS_FOUND="${SECRETS_FOUND}\n    ${BD}$file${N} — padrão: $(echo "$pattern" | cut -c1-40)..."
         break
       fi
@@ -161,8 +163,8 @@ if [ -n "$STAGED" ]; then
   for file in $STAGED; do
     file_content=$(git show ":$file" 2>/dev/null) || continue
     for pattern in "${DANGEROUS_PATTERNS[@]}"; do
-      if echo "$file_content" | grep -qE -e "$pattern"; then
-        line=$(echo "$file_content" | grep -nE -e "$pattern" | head -1 | cut -d: -f1)
+      if echo "$file_content" | grep -qE "$pattern"; then
+        line=$(echo "$file_content" | grep -nE "$pattern" | head -1 | cut -d: -f1)
         DANGEROUS_FOUND="${DANGEROUS_FOUND}\n    ${BD}$file${N}:${line} — ${Y}$pattern${N}"
       fi
     done

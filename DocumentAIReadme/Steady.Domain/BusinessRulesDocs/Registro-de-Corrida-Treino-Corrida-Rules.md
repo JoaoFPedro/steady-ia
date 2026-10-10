@@ -14,9 +14,9 @@
 
 **Usuários**: corredores autenticados no Steady.
 
-**Valor de Negócio**: sem o registro de corrida, o sistema não tem como calcular a carga de treino nem alertar sobre risco de sobrecarga combinada com musculação — é a base de dados de toda a proposta de valor do produto (ver `specs/STORY-001/spec.bdd.md`).
+**Valor de Negócio**: sem o registro de corrida, o sistema não tem como calcular a carga de treino nem alertar sobre risco de sobrecarga combinada com musculação - é a base de dados de toda a proposta de valor do produto (ver `specs/STORY-001/spec.bdd.md`).
 
-**Frequência de Uso**: alta — potencialmente a cada sessão de corrida realizada pelo usuário.
+**Frequência de Uso**: alta - potencialmente a cada sessão de corrida realizada pelo usuário.
 
 **Impacto Operacional**: dado incorreto (ex: distância zero) nunca é salvo. O sistema rejeita na entrada, protegendo a integridade dos cálculos de sobrecarga que dependem desses dados.
 
@@ -60,14 +60,14 @@ journey
 **Cenários de Uso**:
 - **Cenário Principal**: corredor termina o treino e registra distância, tempo, ritmo médio e percepção de esforço reais.
 - **Cenário Alternativo**: não há variação alternativa documentada além do fluxo principal.
-- **Cenário de Exceção**: corredor informa distância, duração ou esforço fora dos limites de negócio — o sistema rejeita o registro e explica o motivo.
+- **Cenário de Exceção**: corredor informa distância, duração ou esforço fora dos limites de negócio - o sistema rejeita o registro e explica o motivo.
 
-**Resultado Esperado**: a sessão fica salva e disponível no histórico de treinos do corredor, e passa a contar para o cálculo de sobrecarga combinada dos próximos dias (janela móvel de 7 dias, com histórico mínimo de 14 dias — ver [Deteccao-de-Sobrecarga-Sobrecarga-Rules.md](./Deteccao-de-Sobrecarga-Sobrecarga-Rules.md)).
+**Resultado Esperado**: a sessão fica salva e disponível no histórico de treinos do corredor, e passa a contar para o cálculo de sobrecarga combinada dos próximos dias (janela móvel de 7 dias, com histórico mínimo de 14 dias - ver [Deteccao-de-Sobrecarga-Sobrecarga-Rules.md](./Deteccao-de-Sobrecarga-Sobrecarga-Rules.md)).
 
 ## 4. Validações e Restrições
 
 ### Controle de Acesso
-- **Permissões**: qualquer corredor autenticado pode registrar suas próprias sessões. Autenticação e isolamento de dados entre corredores são responsabilidade de `Steady.Api`/`Steady.Infrastructure` — fora do escopo deste domínio (ver ADR-002).
+- **Permissões**: qualquer corredor autenticado pode registrar suas próprias sessões. Autenticação e isolamento de dados entre corredores são responsabilidade de `Steady.Api`/`Steady.Infrastructure` - fora do escopo deste domínio (ver ADR-002).
 - **Hierarquia**: não existe hierarquia de papéis dentro desta funcionalidade.
 
 ### Dados e Entrada
@@ -76,7 +76,7 @@ journey
 - **Limitações de Volume**: distância e duração devem ser estritamente positivas; esforço restrito à escala fechada de 1 a 10.
 
 ### Restrições do Sistema
-- **Horários de Funcionamento**: nenhuma restrição de horário — o registro pode ocorrer a qualquer momento.
+- **Horários de Funcionamento**: nenhuma restrição de horário - o registro pode ocorrer a qualquer momento.
 - **Dependências**: nenhuma dependência externa nesta camada de regra de negócio; a persistência real depende de `Steady.Infrastructure`.
 - **Limitações Técnicas**: nenhuma limitação de performance conhecida neste nível.
 

@@ -1,9 +1,9 @@
-# SDD Kit como Harness
+# isabel como Harness
 
 > Mapa de referência: onde cada artefato se encaixa na taxonomia de harness engineering.
 >
 > **Agent = Model + Harness**
-> O SDD Kit é o harness — tudo que envolve o agente além do modelo em si.
+> O isabel é o harness — tudo que envolve o agente além do modelo em si.
 
 ---
 
@@ -23,6 +23,8 @@ Documentos que o agente lê **antes** de agir para aumentar a probabilidade de a
 | `.sdd/memory/PROJECT.md` | Contexto persistente do projeto | Todos | Todo início de sessão |
 | `.sdd/memory/DOMAIN.md` | Entidades e fluxos de domínio | Behaviour | Toda implementação de negócio |
 | `.sdd/memory/DECISIONS.md` | Índice de ADRs ativos | Architecture | Antes de propor nova decisão |
+| `docs/documenta-ai/dev/*-DevDocs.md` | Fluxo real por camada | Architecture | `/analyze` e toda decisão de design em área legada |
+| `docs/documenta-ai/business/*-Rules.md` | Comportamento atual do código | Behaviour | `/shape` (Matriz de Cenários → Gherkin) e RED |
 
 ---
 
@@ -42,8 +44,10 @@ Mecanismos que observam **após** a ação para detectar desvios e permitir auto
 | Mutation testing | Computacional | Maintainability | CI (pós-merge) |
 | Testes de arquitetura | Computacional | Architecture Fitness | CI |
 | Fitness Functions | Computacional | Architecture Fitness | Pre-commit + CI |
-| `/review` | Inferencial | Maintainability | Pós-implementação |
-| `/sync` | Inferencial | Behaviour | Pós-refactor / pós-merge |
+| `/check` | Inferencial | Maintainability | Pós-implementação |
+| `/reflect` | Inferencial | Behaviour | Pós-refactor / pós-merge |
+| `docs/documenta-ai/debts/*-Debts.md` | Inferencial | Maintainability | Catálogo de débito — lido e realimentado pelo `/check` |
+| Doc drift (`commit:` vs SHA da fonte) | Computacional | Architecture | `session-healthcheck` após cada resposta |
 | Revisão humana (PR) | Inferencial | Todos | Pull Request |
 
 ---
@@ -55,22 +59,26 @@ Mecanismos que observam **após** a ação para detectar desvios e permitir auto
 │              BEHAVIOUR HARNESS                  │
 │  "O sistema faz o que foi especificado?"        │
 │                                                 │
-│  Guides: spec.bdd.md, story.md, DOMAIN.md      │
-│  Sensors: TDD tests, fixtures, /sync, E2E       │
+│  Guides: spec.bdd.md, story.md, DOMAIN.md,     │
+│          documenta-ai/business/*-Rules.md       │
+│  Sensors: TDD tests, fixtures, /reflect, E2E    │
 └─────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────┐
 │            MAINTAINABILITY HARNESS              │
 │  "O código é sustentável internamente?"         │
 │                                                 │
 │  Guides: PLAYBOOK.md, STACK.md                 │
-│  Sensors: linter, type checker, /review         │
+│  Sensors: linter, type checker, /check,         │
+│           documenta-ai/debts/*-Debts.md         │
 └─────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────┐
 │          ARCHITECTURE FITNESS HARNESS           │
 │  "As características arquiteturais se mantêm?" │
 │                                                 │
-│  Guides: ADRs, blueprint.mermaid               │
-│  Sensors: Fitness Functions, constraint tests   │
+│  Guides: ADRs, blueprint.mermaid,              │
+│          documenta-ai/dev/*-DevDocs.md          │
+│  Sensors: Fitness Functions, constraint tests,  │
+│           doc drift (healthcheck)               │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -80,17 +88,17 @@ Mecanismos que observam **após** a ação para detectar desvios e permitir auto
 
 ```
 Pré-commit → linter, type check, testes unitários afetados
-Commit     → /review local pelo agente (diff analysis)
+Commit     → /check local pelo agente (diff analysis)
 PR         → revisão humana, suite completa, Fitness Functions
 CI/CD      → mutation testing, testes E2E, testes de arquitetura
-Contínuo   → /sync periódico, monitoramento de cobertura, drift detection
+Contínuo   → /reflect periódico, monitoramento de cobertura, drift detection
 ```
 
 ---
 
 ## Harnessability
 
-O `STACK.md` gerado por `./sdd scan` inclui uma seção de **Harnessability** — avaliação das affordances ambientais do codebase. Affordances de alta pontuação habilitam sensores computacionais mais eficazes:
+O `STACK.md` gerado por `/init` ou `/onboard` inclui uma seção de **Harnessability** — avaliação das affordances ambientais do codebase. Affordances de alta pontuação habilitam sensores computacionais mais eficazes:
 
 - **Tipagem estática** → type-checking como sensor gratuito
 - **Limites de módulo claros** → constraint de arquitetura automática
@@ -98,7 +106,7 @@ O `STACK.md` gerado por `./sdd scan` inclui uma seção de **Harnessability** �
 - **Baseline de testes** → sensores comportamentais funcionam
 - **Linter configurado** → sensor de maintainability ativo
 
-Score baixo não impede o SDD Kit — indica onde investir primeiro para ampliar a cobertura do harness.
+Score baixo não impede o isabel — indica onde investir primeiro para ampliar a cobertura do harness.
 
 ---
 

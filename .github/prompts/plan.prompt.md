@@ -1,9 +1,11 @@
 ---
 description: Planeja uma história sem implementar — story, spec BDD, blueprint, ADR e tasks.
 agent: agent
-model: Claude Opus 4
+model: Claude Opus 4.7
 argument-hint: story-id
 ---
+
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
 
 # /plan — Planejamento de história (Produto & Design)
 
@@ -19,8 +21,9 @@ Antes de qualquer ação, leia (silenciosamente, só comente se ausente):
 - [.sdd/memory/DECISIONS.md](../../.sdd/memory/DECISIONS.md)
 - `.discovery/{DISC-ID}/` — se a story vem de uma discovery
 
-Aplique também as regras de [spec-files.instructions.md](../instructions/spec-files.instructions.md) ao escrever em `specs/**` e [adr-files.instructions.md](../instructions/adr-files.instructions.md) ao escrever em `docs/adr/**`.
 
+
+Aplique também as regras de [spec-files.instructions.md](../instructions/spec-files.instructions.md), [adr-files.instructions.md](../instructions/adr-files.instructions.md).
 ---
 
 ## Passos
@@ -31,4 +34,4 @@ Aplique também as regras de [spec-files.instructions.md](../instructions/spec-f
 4. Se decisão arquitetural: `docs/adr/ADR-{NNN}.md`
 5. `specs/{story-id}/tasks.md` — tasks ordenadas
 
-Ao final, apresente um sumário dos artefatos gerados e pergunte se a story está pronta para o Engineer & QA executar `/implement`.
+Ao final, apresente um sumário dos artefatos gerados e pergunte se a story está pronta para o Engineer & QA executar `/build`.

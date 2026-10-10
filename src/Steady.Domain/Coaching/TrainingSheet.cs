@@ -15,6 +15,7 @@ public sealed record ExercisePrescription
     private const int ObservationMaxLength = 200;
 
     public Guid Id { get; }
+    public Guid ExerciseKey { get; }
     public string Name { get; }
     public int Sets { get; }
     public int Repetitions { get; }
@@ -39,9 +40,11 @@ public sealed record ExercisePrescription
         int sets,
         int repetitions,
         int? durationSeconds,
-        string? observation)
+        string? observation,
+        Guid exerciseKey)
     {
         Id = id;
+        ExerciseKey = exerciseKey;
         Name = name;
         Sets = sets;
         Repetitions = repetitions;
@@ -55,7 +58,8 @@ public sealed record ExercisePrescription
         int sets,
         int repetitions,
         int? durationSeconds = null,
-        string? observation = null)
+        string? observation = null,
+        Guid? exerciseKey = null)
     {
         var normalizedName = name?.Trim() ?? string.Empty;
 
@@ -76,8 +80,12 @@ public sealed record ExercisePrescription
             throw new ArgumentOutOfRangeException(
                 nameof(durationSeconds), durationSeconds, "O tempo deve ser maior que zero.");
 
+        if (exerciseKey == Guid.Empty)
+            throw new ArgumentException("A identidade histórica do exercício é obrigatória.", nameof(exerciseKey));
+
         return new ExercisePrescription(
-            id, normalizedName, sets, repetitions, durationSeconds, NormalizeObservation(observation));
+            id, normalizedName, sets, repetitions, durationSeconds,
+            NormalizeObservation(observation), exerciseKey ?? id);
     }
 
     private static string? NormalizeObservation(string? observation)

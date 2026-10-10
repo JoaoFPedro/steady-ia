@@ -2,7 +2,6 @@
 
 > **Story**: [link para story.md]
 > **Tipo**: Fluxo | Sequência | Modelo de Dados | Arquitetura
-> **Autor**: {nome}
 
 ## Descrição
 

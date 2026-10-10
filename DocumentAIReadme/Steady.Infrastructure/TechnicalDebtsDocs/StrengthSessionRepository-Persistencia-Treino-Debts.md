@@ -1,77 +1,73 @@
-# StrengthSessionRepository - Persistencia-Treino - Debitos Tecnicos
+# StrengthSessionRepository - Persistencia-Treino - Débitos Técnicos
 
-## Indice
-- [1. Resumo Executivo](#1-resumo-executivo)
-- [2. Problemas por Criticidade](#2-problemas-por-criticidade)
-- [3. Plano de Acao](#3-plano-de-acao)
-- [4. User Stories para Implementacao](#4-user-stories-para-implementacao)
+## Índice
 
-## 1. Resumo Executivo
-- **Estado Atual**: implementacao identica em estrutura a `RunningSessionRepository` (mesmo padrao de tres metodos), com a particularidade de persistir os enums `MuscleGroup` e `Intensity` como texto. Isolamento por `corredor_id` aplicado corretamente. Sem teste dedicado ao repositorio.
-- **Principais Problemas**: os mesmos de `RunningSessionRepository` (ausencia de paginacao, ausencia de indice composto por data, ausencia de teste dedicado), mais um risco especifico da conversao de enum para string: renomear um valor do enum no codigo sem migration de dados quebraria a leitura de registros ja persistidos com o nome antigo.
-- **Impacto no Negocio**: baixo hoje; o risco do enum-como-string e latente e so se manifesta se houver uma renomeacao de valor no futuro sem cuidado.
+- [Resumo executivo](#resumo)
+- [Criticidade e evidência](#problemas)
+- [Plano de ação](#plano)
+- [Story e roteiro de teste](#story)
 
-## 2. Problemas por Criticidade
+<a id="resumo"></a>
+## 1. Resumo executivo
 
-### Amarelo Importantes
-- **Renomear um valor de MuscleGroup ou Intensity quebra dados existentes**: como os enums sao persistidos como `text` (via `.HasConversion<string>()`), o banco guarda o nome literal do valor C# (ex.: `"PernaFrontal"`). Se um desenvolvedor renomear `PernaFrontal` para `PernaAnterior` no enum, todo registro ja gravado com `"PernaFrontal"` deixa de corresponder a nenhum valor do enum atual, e o EF Core lanca excecao ao materializar a linha na leitura.
-  - **Acao Recomendada**: documentar esta restricao diretamente no codigo (comentario XML nos enums `MuscleGroup`/`Intensity` em `Steady.Domain`) alertando que renomear um valor exige migration de dados (`UPDATE ... SET muscle_group = 'NovoNome' WHERE muscle_group = 'NomeAntigo'`) antes do deploy. Nao ha acao de codigo imediata, apenas de processo/documentacao.
-- **GetByCorredorIdAsync sem paginacao**: identico ao debito de `RunningSessionRepository` -- ver `RunningSessionRepository-Persistencia-Treino-Debts.md` para o detalhamento completo (a acao recomendada e a mesma e deve ser implementada de forma consistente entre os dois repositorios).
-- **Sem indice composto por data**: mesma observacao de `RunningSessionRepository` -- o filtro por janela de 7/14 dias da regra de sobrecarga acontece em memoria, nao na query SQL.
-- **Sem teste dedicado ao repositorio**: cobertura apenas via `tests/Steady.Api.Tests`.
+O comportamento atual está descrito na [documentação técnica](../DevDocs/StrengthSessionRepository-Persistencia-Treino-DevDocs.md). Esta análise registra uma limitação observada, não uma falha confirmada em produção. GetByCorredorIdAsync não limita o histórico, nem estabelece uma ordem. O registro resumido não contém detalhes necessários para revisão por exercício, o que é uma fronteira de produto, não um bug.
 
-### Verde Menores
-- **Sem tratamento de erro de infraestrutura**: mesma observacao dos demais repositorios de treino.
+<a id="problemas"></a>
+## 2. Problemas por criticidade
 
-## 3. Plano de Acao
-1. **Fase 1 - Importantes**: documentar a restricao de renomeacao de enum nos comentarios do dominio; aplicar a mesma solucao de paginacao e indice composto planejada para `RunningSessionRepository` de forma consistente aqui.
-2. **Fase 2 - Menores**: alinhar politica de tratamento de erro de infraestrutura entre os tres repositorios de treino.
+**Críticos**: nenhum adicional comprovado nesta leitura.
 
-## 4. User Stories para Implementacao
+**Importante - Volume e estabilidade da consulta**: GetByCorredorIdAsync não limita o histórico, nem estabelece uma ordem. O registro resumido não contém detalhes necessários para revisão por exercício, o que é uma fronteira de produto, não um bug.
 
-### Story 1: Documentar e proteger a estabilidade dos nomes de MuscleGroup e Intensity
+Evidência: [src/Steady.Infrastructure/Repositories/StrengthSessionRepository.cs](../../../src/Steady.Infrastructure/Repositories/StrengthSessionRepository.cs). Os métodos descritos em DevDocs permitem localizar a expressão/ramo; o problema é inferido da implementação, sem medição de produção.
 
-**Contexto Atual**: `MuscleGroup` e `Intensity` sao persistidos como `text` no PostgreSQL via `.HasConversion<string>()` em `SteadyDbContext.OnModelCreating`. Isso e uma boa pratica em relacao a persistir como inteiro (mais legivel, resistente a reordenacao dos valores no enum), mas introduz uma dependencia implicita: o *nome* do valor do enum e, na pratica, um contrato de dados com o banco.
+**Ação recomendada**: Paginar o histórico resumido sem misturar esse contrato com execução de ficha.
 
-**Objetivo**: evitar que uma futura renomeacao de valor de enum quebre silenciosamente a leitura de dados historicos.
+**Menores**: nenhum item independente levantado; decisões deliberadas de versão, texto de data e imutabilidade não são automaticamente débitos.
 
-**Regras de Negocio**:
-- Nenhuma mudanca de nomenclatura no codigo pode invalidar dados de musculacao ja persistidos.
+<a id="plano"></a>
+## 3. Plano de ação
 
-**Especificacao Tecnica**:
-- Adicionar comentario XML nos enums `MuscleGroup` (`src/Steady.Domain/Training/MuscleGroup.cs`) e `Intensity` (`src/Steady.Domain/Training/Intensity.cs`) alertando que os nomes sao persistidos como texto no banco e que renomear um valor exige uma migration de dados correspondente.
-- Opcionalmente, considerar um teste de regressao que verifique que os nomes dos valores de enum atuais (`PeitoTriceps`, `Ombro`, `PernaFrontal`, `PernaPosterior`, `BicepsCostas`, `Leve`, `Moderado`, `Pesado`) permanecem inalterados, falhando caso alguem renomeie sem ajustar o teste conscientemente.
+1. Reproduzir a limitação em teste com PostgreSQL e contratos atuais.
+2. Confirmar comportamento desejado com a spec correspondente antes de alterar contrato.
+3. Implementar a correção focal e executar regressão de isolamento, idempotência e resultado.
 
-**Criterios de Aceite**:
-- [ ] Comentario XML presente em ambos os enums explicando a implicacao de persistencia.
-- [ ] Teste de regressao (opcional, mas recomendado) cobre os nomes atuais dos valores.
-- [ ] Nenhuma mudanca de comportamento funcional introduzida.
+```mermaid
+graph LR
+    A[Evidência no método] --> B[Teste de reprodução]
+    B --> C[Correção focal]
+    C --> D[Regressão e medição]
+```
 
-**Roteiro de Teste**:
-1. **Teste 1**: Teste de regressao dos nomes de enum.
-   - **Entrada**: reflexao sobre os valores definidos em `MuscleGroup` e `Intensity`.
-   - **Resultado Esperado**: teste falha se um nome de valor mudar sem atualizacao deliberada do teste.
+<a id="story"></a>
+## 4. Story: tornar a operação previsível sob a condição observada
 
-### Story 2: Aplicar paginacao e indice composto por data (mesma solucao de RunningSessionRepository)
+**Contexto atual**: GetByCorredorIdAsync não limita o histórico, nem estabelece uma ordem. O registro resumido não contém detalhes necessários para revisão por exercício, o que é uma fronteira de produto, não um bug.
 
-**Contexto Atual**: identico ao descrito em `RunningSessionRepository-Persistencia-Treino-Debts.md`, Story 1 e Story 2 -- `GetByCorredorIdAsync` sem paginacao e sem filtro de data na query SQL.
+**Objetivo e especificação técnica**: Paginar o histórico resumido sem misturar esse contrato com execução de ficha.
 
-**Objetivo**: aplicar a mesma solucao de forma consistente entre `RunningSessionRepository` e `StrengthSessionRepository`, evitando que os dois repositorios divirjam em comportamento de performance.
+**Regras preservadas**: identidade do corredor, autorização por vínculo quando aplicável, fatos e prescrições imutáveis, retorno compatível ou mudança explícita de contrato.
 
-**Regras de Negocio**:
-- A regra de sobrecarga precisa dos ultimos 14 dias completos de historico de musculacao para decidir se ha dados suficientes.
+**Critérios de aceite**:
 
-**Especificacao Tecnica**:
-- Replicar a assinatura de metodo paginado e o metodo filtrado por janela de data definidos para `RunningSessionRepository`, mantendo a mesma convencao de nomes entre os dois repositorios (ex.: `GetByCorredorIdSinceAsync`).
+- [ ] A reprodução deixa de produzir a limitação descrita.
+- [ ] Resultado e efeitos de registros existentes permanecem compatíveis.
+- [ ] O cenário de conta B nunca lê ou altera o recurso da conta A.
 
-**Criterios de Aceite**:
-- [ ] `StrengthSessionRepository` expoe os mesmos metodos adicionais que `RunningSessionRepository` (paginacao e filtro por data), com assinaturas equivalentes.
-- [ ] Indice composto `(corredor_id, date)` criado para `strength_sessions` na mesma migration ou em migration equivalente a de `running_sessions`.
+**Roteiro de teste concreto**:
 
-**Roteiro de Teste**:
-1. **Teste 1**: Paginacao do historico de musculacao.
-   - **Entrada**: corredor com 50 sessoes, pagina 1 de tamanho 10.
-   - **Resultado Esperado**: 10 sessoes mais recentes retornadas.
-2. **Teste 2**: Filtro por janela de data.
-   - **Entrada**: `since = hoje - 14 dias`.
-   - **Resultado Esperado**: apenas sessoes dentro da janela retornadas.
+1. Inserir 205 registros válidos da conta A, incluindo dois com o mesmo instante de ordenação, e 3 da conta B; consultar A com limite 50. Esperado após correção: 50 itens por página, cursor estável, 205 Ids únicos ao percorrer páginas e nenhum Id de B.
+2. Consultar última página e continuar seu cursor; esperado: lista vazia, sem repetir o último item.
+
+Fontes de decisão e testes existentes:
+
+- [docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)
+- [docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)
+- [tests/Steady.Api.Tests/StrengthSessionEndpointTests.cs](../../../tests/Steady.Api.Tests/StrengthSessionEndpointTests.cs)
+- [src/Steady.Infrastructure/Persistence/SteadyDbContext.cs](../../../src/Steady.Infrastructure/Persistence/SteadyDbContext.cs)
+
+O roteiro acima é uma proposta de verificação da melhoria, não declaração de teste executado.
+
+Especificações de comportamento relacionadas:
+
+- [STORY-003](../../../specs/STORY-003/spec.bdd.md)

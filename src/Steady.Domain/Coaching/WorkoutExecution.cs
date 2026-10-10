@@ -3,12 +3,14 @@ namespace Steady.Domain.Coaching;
 public sealed record ExerciseExecution
 {
     public Guid ExerciseId { get; }
+    public Guid ExerciseKey { get; }
     public string Name { get; }
     public int Sets { get; }
     public int Repetitions { get; }
     public decimal? LoadKg { get; }
     public string? Note { get; }
     public bool Skipped { get; }
+    public int? DurationSeconds { get; }
 
     private ExerciseExecution(
         Guid exerciseId,
@@ -17,15 +19,19 @@ public sealed record ExerciseExecution
         int repetitions,
         decimal? loadKg,
         string? note,
-        bool skipped)
+        bool skipped,
+        Guid exerciseKey,
+        int? durationSeconds)
     {
         ExerciseId = exerciseId;
+        ExerciseKey = exerciseKey;
         Name = name;
         Sets = sets;
         Repetitions = repetitions;
         LoadKg = loadKg;
         Note = note;
         Skipped = skipped;
+        DurationSeconds = durationSeconds;
     }
 
     public static ExerciseExecution Executed(
@@ -34,16 +40,19 @@ public sealed record ExerciseExecution
         int sets,
         int repetitions,
         decimal loadKg,
-        string? note)
+        string? note,
+        Guid? exerciseKey = null,
+        int? durationSeconds = null)
     {
-        ValidateSnapshot(exerciseId, name, sets, repetitions);
+        ValidateSnapshot(exerciseId, name, sets, repetitions, exerciseKey, durationSeconds);
 
         if (loadKg is <= 0 or > 999.99m || decimal.Round(loadKg, 2) != loadKg)
             throw new ArgumentOutOfRangeException(
                 nameof(loadKg), loadKg, "A carga deve estar entre 0,01 e 999,99 kg, com até duas casas decimais.");
 
         return new ExerciseExecution(
-            exerciseId, name.Trim(), sets, repetitions, loadKg, NormalizeNote(note), skipped: false);
+            exerciseId, name.Trim(), sets, repetitions, loadKg, NormalizeNote(note), skipped: false,
+            exerciseKey ?? exerciseId, durationSeconds);
     }
 
     public static ExerciseExecution SkippedExercise(
@@ -51,15 +60,20 @@ public sealed record ExerciseExecution
         string name,
         int sets,
         int repetitions,
-        string? note)
+        string? note,
+        Guid? exerciseKey = null,
+        int? durationSeconds = null)
     {
-        ValidateSnapshot(exerciseId, name, sets, repetitions);
+        ValidateSnapshot(exerciseId, name, sets, repetitions, exerciseKey, durationSeconds);
         return new ExerciseExecution(
-            exerciseId, name.Trim(), sets, repetitions, loadKg: null, NormalizeNote(note), skipped: true);
+            exerciseId, name.Trim(), sets, repetitions, loadKg: null, NormalizeNote(note), skipped: true,
+            exerciseKey ?? exerciseId, durationSeconds);
     }
 
-    private static void ValidateSnapshot(Guid id, string name, int sets, int repetitions) =>
-        _ = ExercisePrescription.Create(id, name, sets, repetitions);
+    private static void ValidateSnapshot(
+        Guid id, string name, int sets, int repetitions, Guid? exerciseKey, int? durationSeconds) =>
+        _ = ExercisePrescription.Create(
+            id, name, sets, repetitions, durationSeconds: durationSeconds, exerciseKey: exerciseKey);
 
     private static string? NormalizeNote(string? note)
     {
@@ -111,4 +125,3 @@ public sealed class StrengthWorkoutExecution
         return new StrengthWorkoutExecution(trainingSheetId, workoutType, date, exercises.ToArray());
     }
 }
-

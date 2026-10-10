@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SDD Kit — session-tracker hook (UserPromptSubmit)
+# isabel — session-tracker hook (UserPromptSubmit)
 # Registra início de sessão e turno. Silencioso — não emite output para o Claude.
 
 SESSION_FILE=".sdd/.session-id"
@@ -48,8 +48,8 @@ printf "SESSION_ID=%s\nLAST_ACTIVE=%s\n" "$SESSION_ID" "$NOW" > "$SESSION_FILE"
 # Registra epoch de início do turno
 echo "$NOW" > "$TURN_FILE"
 
-# ─── Detecta e registra comando SDD ──────────────────────────────────────────
-for cmd in init onboard discover spec plan analyze implement review sync feature; do
+# ─── Detecta e registra comando isabel ──────────────────────────────────────────
+for cmd in init onboard triage shape plan analyze build check reflect feature; do
   if echo "$PROMPT" | grep -qE "^\s*/${cmd}(\s|$)"; then
     echo "/$cmd" >> "$COMMANDS_FILE"
     break

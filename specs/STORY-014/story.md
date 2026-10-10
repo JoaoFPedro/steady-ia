@@ -26,7 +26,9 @@ saída não altera plano ou ficha.
 
 Como o registro é offline-first, a indisponibilidade de rede nunca impede o
 salvamento. Nessa situação, a revisão fica pendente e aparece depois da
-sincronização.
+sincronização. A resposta sobre dor faz parte do encerramento do treino e
+acompanha a execução na mesma unidade lógica. Depois do commit, uma outbox
+durável garante que uma queda do processo não faça a revisão desaparecer.
 
 ## Critérios de Aceite
 
@@ -51,7 +53,12 @@ sincronização.
 - [ ] Dados de outro corredor ou de vínculo não autorizado nunca entram no contexto enviado à IA.
 - [ ] A Dashboard mostra somente a revisão mais recente; todas as revisões permanecem no histórico dos respectivos treinos.
 - [ ] O personal com vínculo ativo vê a revisão completa, a recomendação, a confirmação `Entendi` e a coerência com o treino seguinte.
-- [ ] Qualquer dor registrada no mesmo dia força a recomendação `priorizar recuperação`.
+- [ ] Dor informada no encerramento do treino força a recomendação `priorizar recuperação`.
+- [ ] O encerramento do treino pergunta sobre dor e sincroniza a resposta junto da execução; uma dor informada nesse momento participa da primeira revisão.
+- [ ] Um registro avulso de dor criado depois não reabre nem reclassifica uma revisão já publicada.
+- [ ] Execução e solicitação durável de revisão são confirmadas na mesma transação; queda após o commit não perde nem duplica a revisão.
+- [ ] O mesmo exercício preserva uma identidade estável entre versões da ficha, inclusive após renome, e um exercício removido e recriado recebe outra identidade.
+- [ ] Sincronização tardia pode recalcular a coerência pelo próximo treino em data real, sem alterar comparação, ação ou explicação da revisão.
 - [ ] Se a IA falhar, uma nova tentativa ocorre somente quando o corredor tocar em `Tentar novamente`.
 - [ ] Casos comuns, incompletos, contraditórios e perigosos são avaliados antes da liberação da feature.
 
@@ -69,8 +76,8 @@ sincronização.
 | Story | STORY-013 — ficha e execução detalhada do personal | Concluída |
 | Domínio | Regras, tolerâncias versionadas e fontes para comparação e limites de segurança | Decidido — ADR-014 e ADR-015 |
 | Serviço | Provedor de IA com saída estruturada | Decidido — ADR-016 (Claude API) |
-| Story | STORY-015 — prescrição de corrida estruturada na ficha (ADR-012) | Planejada — bloqueia, entra primeiro |
-| Story | STORY-016 — plano do Steady como prescrição no servidor (ADR-013) | Planejada — bloqueia, depende da STORY-015 |
+| Story | STORY-015 — prescrição de corrida estruturada na ficha (ADR-012) | Concluída |
+| Story | STORY-016 — plano do Steady como prescrição no servidor (ADR-013) | Concluída |
 
 > Última da sequência **STORY-015 → STORY-016 → STORY-014**.
 
@@ -101,3 +108,6 @@ sincronização.
   discovery e autorização explícita do corredor e, quando aplicável, do
   personal.
 - As métricas e suposições completas estão em `hypothesis.md` no discovery.
+- A dor capturada no encerramento pertence ao comando do treino somente para
+  garantir a revisão inicial; `PainLog` continua sendo um fato de domínio
+  independente, conforme a modelagem existente.

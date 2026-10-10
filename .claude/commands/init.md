@@ -1,16 +1,32 @@
+---
+description: Construa a fundação do projeto via entrevista estruturada — gera Constituição, memórias e ADR-000.
+---
+
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
+
 ## /init
 
 Construa a fundação do projeto através de uma entrevista estruturada. Gera a Constituição do projeto e inicializa as memórias antes do primeiro código.
 
 > Use este comando **antes de qualquer feature**, no início absoluto do projeto.
-> Pré-requisito: pasta do `sdd-kit` (`.sdd/`, `.claude/`, `CLAUDE.md`) já copiada para a raiz do projeto.
+> Pré-requisito: pasta do `isabel` (`.sdd/`, `.claude/`, `CLAUDE.md`) já copiada para a raiz do projeto.
 > Para projetos com código existente, use `/onboard` em vez de `/init`.
+
+O `/init` prepara o contexto do produto. Quando a primeira funcionalidade for implementada, `/build` cria sua documentação em `docs/documenta-ai/`; as entregas seguintes a atualizam.
+
+## Pré-condições
+
+Antes de qualquer ação, leia (silenciosamente, só comente se ausente):
+
+- `.sdd/CONSTITUTION.md` — leis universais do framework
+- `.sdd/PLAYBOOK.md` — patterns e técnicas disponíveis
+- `.sdd/STACK.md` — stack detectada (se existir)
 
 ---
 
 ## O que é a Constituição do Projeto
 
-A CONSTITUTION.md do framework define as leis universais do SDD Kit — essas não mudam.
+A CONSTITUTION.md do framework define as leis universais do isabel — essas não mudam.
 
 A **Constituição do projeto** (`.sdd/PROJECT-CONSTITUTION.md`) é diferente: é o contrato específico *deste* software. Ela responde:
 - Qual problema resolve e para quem
@@ -111,7 +127,7 @@ Preencha com as informações coletadas:
 ### `.sdd/memory/PROJECT.md`
 - Identificação: nome e cliente (se aplicável)
 - Contexto: o que faz, para quem, por quê — em 3-5 frases
-- Convenções: branches, commits, testes (padrão SDD Kit, ajuste se o time informou diferente)
+- Convenções: branches, commits, testes (padrão isabel, ajuste se o time informou diferente)
 - Glossário: termos de domínio mencionados na entrevista (entidades, jargões do negócio)
 - Links: deixe em branco se não informado
 
@@ -161,7 +177,7 @@ Revise a Constituição — ela guiará todas as decisões de arquitetura e dom�
 Se algo estiver errado, corrija agora: é mais barato do que corrigir depois de 10 stories.
 
 Próximos passos:
-  1. /discover  → explore o primeiro problema antes de virar story
+  1. /triage    → explore o primeiro problema antes de virar story
   2. /feature   → pipeline completo: story → spec → blueprint → TDD
 ```
 

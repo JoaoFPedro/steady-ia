@@ -1,15 +1,17 @@
 ---
 description: Análise estratégica do código antes de implementar — riscos, edge cases, direção.
 agent: agent
-model: Claude Opus 4
+model: Claude Opus 4.7
 argument-hint: story-id ou descrição da feature
 ---
+
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
 
 # /analyze — Análise estratégica (Engineer & QA)
 
 Analise o código existente e produza contexto estratégico antes de implementar.
 
-> Use antes de `/feature` ou `/implement` quando a mudança toca áreas do código que você não domina,
+> Use antes de `/feature` ou `/build` quando a mudança toca áreas do código que você não domina,
 > ou quando a feature é complexa o suficiente para merecer uma análise prévia.
 
 ## Pré-condições
@@ -20,6 +22,7 @@ Antes de qualquer ação, leia (silenciosamente, só comente se ausente):
 - [.sdd/memory/PROJECT.md](../../.sdd/memory/PROJECT.md) — contexto do projeto
 - [.sdd/memory/DOMAIN.md](../../.sdd/memory/DOMAIN.md) — entidades e fluxos
 - [.sdd/memory/DECISIONS.md](../../.sdd/memory/DECISIONS.md) — ADRs existentes
+- `docs/documenta-ai/INDEX.md` — se a área já foi documentada, o DevDocs correspondente
 - O código-fonte relevante à feature
 
 ---
@@ -36,6 +39,10 @@ Identifique no código existente:
 - Quais padrões estão em uso na área (Repository? Service layer? Middleware?)
 
 Não leia o projeto inteiro. Extraia palavras-chave da feature e use para navegar até o código relevante.
+
+**Antes de abrir o código, cheque `docs/documenta-ai/INDEX.md`.** Se existe DevDocs para o controller ou módulo afetado, leia-o primeiro: o fluxo entre camadas, as dependências injetadas e as estruturas de entrada/saída já estão mapeados. Custa uma fração do contexto de ler os arquivos de todas as camadas. Confirme no frontmatter do doc que `commit:` bate com `git log -1 --format=%H -- {source}` — se divergir, o doc está velho e o código é a verdade.
+
+Se a área é crítica e não está documentada, sugira `/documenta-ai {Controller}` antes de seguir.
 
 ### 2. Análise de domínio
 
@@ -83,4 +90,4 @@ Salve como `specs/{story-id}/analysis.md` com as quatro seções acima.
 ## Quando NÃO usar
 
 - Feature é simples e isolada (1 módulo, sem dependências)
-- Você já domina a área — vá direto para `/feature` ou `/spec`
+- Você já domina a área — vá direto para `/feature` ou `/shape`

@@ -1,194 +1,166 @@
-# StrengthSessionEndpoints - Treino-Forca - Especificacao Tecnica
+# StrengthSessionEndpoints - Treino-Forca - Especificação Técnica
 
-## Indice
-- [1. Visao Geral Tecnica](#1-visao-geral-tecnica)
-- [2. Configuracao e Dependencias](#2-configuracao-e-dependencias)
-- [3. Detalhamento por Rota](#3-detalhamento-por-rota)
-  - [3.1. Registrar Sessao de Treino de Musculacao](#31-registrar-sessao-de-treino-de-musculacao)
-- [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
+Auditoria de fontes: 2026-09-27. Unidade: [StrengthSessionEndpoints.cs](../../../src/Steady.Api/Endpoints/StrengthSessionEndpoints.cs).
 
-## 1. Visao Geral Tecnica
+## Índice
 
-**Proposito**: Expor via API HTTP o registro de Sessoes de Treino de Musculacao (forca) do corredor autenticado, persistindo os dados em PostgreSQL. Traduz a factory de dominio `Steady.Domain.Training.StrengthSession` para um endpoint REST.
+- [1. Visão Geral Técnica](#visao)
+- [2. Configuração e Dependências](#config)
+- [3. Detalhamento por Rota](#rotas)
+- [4. Observações Técnicas](#observacoes)
+  - [3.1. Registrar musculação avulsa](#rota-1)
 
-**Responsabilidades**:
-- Receber o payload de uma sessao de musculacao via `POST /api/strength-sessions`, exigindo o header `Idempotency-Key` (ADR-003) para suportar o reenvio da fila offline do app sem duplicar o registro.
-- Delegar a validacao de negocio (grupo muscular e intensidade obrigatorios, duracao positiva) para a factory `StrengthSession.Create`.
-- Persistir a sessao associada ao `CorredorId` do usuario autenticado, escopando a chave de idempotencia por corredor.
-- Retornar `201 Created` quando o registro e novo, `200 OK` quando a chave ja foi processada (reenvio), ou `400 Bad Request` quando a validacao de dominio falhar ou o header `Idempotency-Key` estiver ausente.
+<a id="visao"></a>
+## 1. Visão Geral Técnica
 
-**Integracoes**: PostgreSQL (via `IStrengthSessionRepository` / EF Core), Google Sign-In indiretamente atraves do `AuthenticationFilter` aplicado ao grupo `/api`. A sessao de musculacao tambem e insumo direto da regra de deteccao de sobrecarga (musculacao pesada de perna) - ver [OverloadAssessmentEndpoints](./OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md).
+**Propósito**: Registrar musculação avulsa com grupo, intensidade e duração, e opcionalmente dor no encerramento.
 
-## 2. Configuracao e Dependencias
+**Responsabilidades**: autenticar pelo grupo, aplicar escopo do usuário, executar as rotas abaixo e projetar os contratos.
 
-Este arquivo (`src/Steady.Api/Endpoints/StrengthSessionEndpoints.cs`) e uma classe estatica que expoe o metodo de extensao `MapStrengthSessionEndpoints(RouteGroupBuilder)`, chamado a partir de `Program.cs` sobre o grupo `/api`.
+**Integrações**: ASP.NET Core Minimal APIs, Steady.Domain e Steady.Infrastructure com PostgreSQL. Validação Google pertence ao filtro comum. O handler não chama provedor de explicação.
 
-**Dependencias Injetadas (via parametros do delegate da rota)**:
-- `[FromHeader(Name = Idempotency.HeaderName)] Guid? idempotencyKey`: header `Idempotency-Key` (Guid v4), obrigatorio para registrar (ADR-003).
-- `IStrengthSessionRepository`: abstracao de persistencia da sessao de musculacao (implementada por `StrengthSessionRepository`, `Steady.Infrastructure`).
-- `CurrentCorredor`: contexto do usuario autenticado, preenchido pelo `AuthenticationFilter`.
-- `CancellationToken`: propagado a partir do `HttpContext.RequestAborted`.
+**Fontes de regras**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-014](../../../specs/STORY-014/spec.bdd.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
 
-**Dependencia estatica (nao injetada)**:
-- `Steady.Api.Common.DomainFactory` (classe `internal static`): traduz excecoes de guard clause do dominio em `400 Bad Request`.
-- `Steady.Api.Common.Idempotency` (classe `internal static`): define o nome do header e a resposta `400` padrao quando ausente - mesmo componente documentado em [RunningSessionEndpoints DevDocs - U1.3](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#u13-idempotency).
+<a id="config"></a>
+## 2. Configuração e Dependências
 
-**Lista de Endpoints**:
-- **POST** `/api/strength-sessions` - Registra uma nova Sessao de Treino de Musculacao para o corredor autenticado.
+Composição: [Program.cs](../../../src/Steady.Api/Program.cs); persistência: [ServiceCollectionExtensions.cs](../../../src/Steady.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs). Cada lambda recebe os repositórios listados na rota, CurrentCorredor e CancellationToken quando há I/O. ILogger<CoachingAuditLog> aparece somente nas operações auditadas de vínculo/ficha/histórico.
 
+**Lista de endpoints**:
+
+- **POST** `/api/strength-sessions` - Registrar musculação avulsa.
+
+<a id="f-auth"></a>
+**F. Endpoint Filter - AuthenticationFilter.InvokeAsync**
+
+1. O grupo `/api` recebe o filtro em `Program.cs`; `/health` fica fora do grupo.
+2. `Authorization` deve começar exatamente com `Bearer `; token vazio, inválido ou expirado retorna 401 antes da lógica do handler. O binding do framework pode rejeitar uma requisição malformada antes da execução do filtro.
+3. `GoogleTokenValidator.ValidateAsync` usa `GoogleJsonWebSignature.ValidateAsync` com Audience restrita a `Google:ClientId`; assinatura e validade são verificadas pela biblioteca com chaves públicas cacheadas. Sem `Google:ClientId`, Program lança erro ao compor a aplicação.
+4. Identidade é `sub`. E-mail e nome opcionais são normalizados e usados como cache de exibição, sem substituir identidade. `ICorredorRepository.GetOrCreateBySubAsync` resolve/provisiona corredor; `CurrentCorredor.Id` e `Roles` são preenchidos para a requisição.
+5. `CurrentCorredor.HasRole` compara papel com ordinal exato; um token válido não concede automaticamente `Personal`. Falhas de autenticação registram path, motivo e IP, sem token.
+
+<a id="u-common"></a>
+**U1. Common/Auth e conversão**
+
+- `CurrentCorredor`: identidade e papéis resolvidos pelo filtro; o cliente não escolhe o dono dos registros.
+- `DomainFactory.TryCreate`: captura apenas `ArgumentException` (inclui guard clauses derivadas) e retorna 400 com `{ "error": "mensagem" }`; não converte todo erro de persistência ou desserialização em erro de validação.
+- `Idempotency.HeaderName`: `Idempotency-Key`; quando exigida e ausente, `MissingKey` retorna 400. Guid inválido é rejeitado pelo binding; Guid.Empty não recebe validação específica no helper.
+- Records HTTP são serializados em camelCase pelo padrão do framework. Datas `DateOnly` são `yyyy-MM-dd`. Enums de StrengthSession não recebem conversor textual global; enums convertidos explicitamente por `ToString` ou por mapping seguem as strings descritas em cada rota.
+
+```mermaid
+graph LR
+    Cliente --> Filtro
+    Filtro --> Endpoint
+    Endpoint --> Dominio
+    Endpoint --> Repositorio
+    Repositorio --> PostgreSQL
+```
+
+### Contrato `StrengthSessionRequest`
+
+Fonte: [StrengthSessionContracts.cs](../../../src/Steady.Api/Contracts/StrengthSessionContracts.cs). Os nomes abaixo são os campos HTTP com serialização padrão camelCase.
+
+| Campo | Tipo C# | Opcional/padrão |
+|---|---|---|
+| `date` | `DateOnly` | não anulável |
+| `muscleGroup` | `MuscleGroup?` | null permitido |
+| `intensity` | `Intensity?` | null permitido |
+| `durationMinutes` | `int` | não anulável |
+| `painReported` | `bool` | não anulável; padrão `false` |
+
+### Contrato `StrengthSessionResponse`
+
+Fonte: [StrengthSessionContracts.cs](../../../src/Steady.Api/Contracts/StrengthSessionContracts.cs). Os nomes abaixo são os campos HTTP com serialização padrão camelCase.
+
+| Campo | Tipo C# | Opcional/padrão |
+|---|---|---|
+| `id` | `Guid` | não anulável |
+| `date` | `DateOnly` | não anulável |
+| `muscleGroup` | `MuscleGroup` | não anulável |
+| `intensity` | `Intensity` | não anulável |
+| `durationMinutes` | `int` | não anulável |
+
+<a id="catalogo"></a>
+### Catálogo compartilhado de domínio e persistência
+
+StrengthSession.Create valida grupo/intensidade não nulos e duração positiva. Create não verifica Enum.IsDefined. Load usa Leve=3, Moderado=6, Pesado=9, mas não é retornado nem calculado no handler.
+
+StrengthSessionRepository.AddAsync consulta chave por corredor, insere sessão e, quando solicitado, dor na mesma SaveChangesAsync. Diferentemente de corrida e execução de ficha, não insere ReviewOutboxEntity. Consultas por id e histórico filtram CorredorId.
+
+<a id="rotas"></a>
 ## 3. Detalhamento por Rota
 
-### 3.1. Registrar Sessao de Treino de Musculacao
+<a id="rota-1"></a>
+### 3.1. Registrar musculação avulsa
 
 **Rota**: `POST /api/strength-sessions`
 
-**Autenticacao**: obrigatoria (Bearer ID token do Google) - aplicada pelo `AuthenticationFilter` no grupo `/api` (ver [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)).
+**Entrada**: StrengthSessionRequest; Idempotency-Key obrigatório. Header Authorization: Bearer obrigatório.
 
-**Header obrigatorio**: `Idempotency-Key: {guid v4}` (ADR-003). Gerado pelo app no momento em que o registro entra na fila local de sincronizacao offline - garante que um reenvio apos falha de rede nao cria um treino duplicado.
+**Saída**: StrengthSessionResponse. Estruturas e tipos completos constam na seção de contratos.
 
-**Entrada** (`StrengthSessionRequest`, `src/Steady.Api/Contracts/StrengthSessionContracts.cs`):
-```json
-{
-  "date": "2026-08-10",
-  "muscleGroup": "PernaFrontal",
-  "intensity": "Pesado",
-  "durationMinutes": 45
-}
-```
-`muscleGroup` e `intensity` sao enums nulaveis (`MuscleGroup?`, `Intensity?`) - permite que o request chegue sem esses campos para acionar a validacao de dominio (em vez de falhar no model binding).
+**Status**: 201 novo; 200 reenvio; 400 entrada inválida; todas as rotas podem retornar 401 no filtro. Binding inválido pode retornar 400 antes do handler.
 
-Valores possiveis de `MuscleGroup` (`src/Steady.Domain/Training/MuscleGroup.cs`): `PeitoTriceps`, `Ombro`, `PernaFrontal`, `PernaPosterior`, `BicepsCostas`.
-Valores possiveis de `Intensity` (`src/Steady.Domain/Training/Intensity.cs`): `Leve`, `Moderado`, `Pesado`.
-
-**Saida - 201 Created** (`StrengthSessionResponse`, primeira vez que a chave e processada):
-```json
-{
-  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "date": "2026-08-10",
-  "muscleGroup": "PernaFrontal",
-  "intensity": "Pesado",
-  "durationMinutes": 45
-}
-```
-Header `Location`: `/api/training-sessions/{id}` (mesma inconsistencia observada em `RunningSessionEndpoints` - ver [Observacoes Tecnicas](#4-observacoes-tecnicas)).
-
-**Saida - 200 OK** (`StrengthSessionResponse`, reenvio com a mesma `Idempotency-Key` ja processada para este corredor - ADR-003): mesmo corpo do `201` acima, sem header `Location`, sem criar uma segunda linha.
-
-**Saida - 400 Bad Request** (exemplos):
-```json
-{
-  "error": "O grupo muscular é obrigatório para registrar uma sessão de musculação."
-}
-```
-```json
-{
-  "error": "A intensidade é obrigatória para registrar uma sessão de musculação."
-}
-```
-```json
-{
-  "error": "O header Idempotency-Key é obrigatório para registrar."
-}
-```
-
-**Saida - 401 Unauthorized**: sem header `Authorization: Bearer {token}`, ou token invalido/expirado.
-
-#### Fluxo de Execucao
+#### Fluxo de Execução
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant Client as Cliente
     participant AuthenticationFilter
     participant Endpoint as StrengthSessionEndpoints
-    participant Domain as StrengthSession (Steady.Domain)
-    participant Repository as StrengthSessionRepository
+    participant Domain as Dominio
+    participant Repository as Repositorios
     participant Database as PostgreSQL
-
-    Client->>+AuthenticationFilter: POST /api/strength-sessions (Bearer token, header Idempotency-Key, JSON)
-    AuthenticationFilter->>AuthenticationFilter: valida token e resolve Corredor (ver F.1)
-    alt Token ausente/invalido/expirado
-        AuthenticationFilter-->>Client: 401 Unauthorized
+    Client->>AuthenticationFilter: POST /api/strength-sessions + Bearer
+    AuthenticationFilter->>AuthenticationFilter: Validar token Google e audiencia
+    alt Token invalido
+        AuthenticationFilter-->>Client: 401
     else Token valido
-        AuthenticationFilter->>+Endpoint: next() com CurrentCorredor.Id preenchido
-        alt Header Idempotency-Key ausente
-            Endpoint-->>Client: 400 Bad Request (Idempotency.MissingKey)
-        else Header presente
-            Endpoint->>+Domain: StrengthSession.Create(date, muscleGroup, intensity, durationMinutes)
-            alt Guard clause falha (grupo/intensidade ausente ou duracao invalida)
-                Domain-->>Endpoint: throw ArgumentException/ArgumentOutOfRangeException
-                Endpoint-->>Client: 400 Bad Request (mensagem de dominio)
-            else Dados validos
-                Domain-->>-Endpoint: instancia StrengthSession
-                Endpoint->>+Repository: AddAsync(currentCorredor.Id, session, idempotencyKey, ct)
-                Repository->>+Database: SELECT strength_sessions WHERE corredor_id + idempotency_key
-                Database-->>-Repository: chave ja existe?
-                alt Chave ja processada (reenvio)
-                    Repository-->>-Endpoint: SaveResult(entity existente, Created=false)
-                    Endpoint-->>-Client: 200 OK (StrengthSessionResponse, sem novo INSERT)
-                else Chave nova
-                    Repository->>+Database: INSERT INTO strength_sessions (com idempotency_key)
-                    Database-->>-Repository: linha persistida (Id gerado)
-                    Repository-->>-Endpoint: SaveResult(entity nova, Created=true)
-                    Endpoint-->>-Client: 201 Created (StrengthSessionResponse)
-                end
-            end
-        end
+        AuthenticationFilter->>Repository: GetOrCreateBySubAsync
+        Repository->>Database: Resolver conta e cache do provedor
+        Database-->>Repository: Conta e roles
+        Repository-->>AuthenticationFilter: Corredor
+        AuthenticationFilter->>Endpoint: CurrentCorredor preenchido
+        Endpoint->>Domain: Validar factories e criar snapshot
+        Domain-->>Endpoint: Entidade ou ArgumentException (400)
+        Endpoint->>Repository: IStrengthSessionRepository.AddAsync
+        Repository->>Database: Gravar ou devolver registro existente
+        Database-->>Repository: Resultado
+        Repository-->>Endpoint: Entidade, lista ou estado
+        Endpoint-->>Client: Status e contrato descritos nesta rota
     end
 ```
 
 #### Detalhamento do Fluxo
 
-**E. Endpoint (StrengthSessionEndpoints)**
+<a id="e-1"></a>
+**E.1. Lambda de rota em MapStrengthSessionEndpoints**
 
-E.1. `MapStrengthSessionEndpoints()` - handler de `POST /strength-sessions`
-- Recebe `StrengthSessionRequest`, `idempotencyKey` do header, `IStrengthSessionRepository`, `CurrentCorredor` e `CancellationToken` por injecao de parametros.
-- Se `idempotencyKey is null`, retorna imediatamente `Idempotency.MissingKey()` - `400 Bad Request`, antes de qualquer validacao de dominio.
-- Chama `DomainFactory.TryCreate` passando uma factory que invoca `StrengthSession.Create(...)` -> [U1.1](#u11-domainfactorytrycreate) -> [D1.1](#d11-strengthsessioncreate).
-- Se `TryCreate` retornar `false`, devolve o `IResult` de erro (`400 Bad Request`).
-- Se `TryCreate` retornar `true`, chama `repository.AddAsync(currentCorredor.Id, session!, idempotencyKey.Value, cancellationToken)` -> [R1.1](#r11-strengthsessionrepositoryaddasync), que retorna `SaveResult<StrengthSessionEntity>` (`Entity` + `Created`).
-- Monta `StrengthSessionResponse` a partir de `entity`.
-- Se `created == true`: `Results.Created($"/api/training-sessions/{entity.Id}", response)` -> `201 Created`. Se `created == false` (reenvio): `Results.Ok(response)` -> `200 OK`.
+Exige chave; cria StrengthSession com grupo e intensidade obrigatórios e duração positiva; persiste painReported; responde com enums numéricos, pois Program não instala conversor textual de enums.
 
-**F. Endpoint Filter (AuthenticationFilter)**
+Navegação: [F. autenticação](#f-auth), [D1. domínio](#d-1), [R1. persistência](#r-1), [U1. suporte](#u-common).
 
-<a id="f1-authenticationfilterinvokeasync"></a>
-F.1. `InvokeAsync()` - aplicado a todo o grupo `/api`, executado antes de qualquer endpoint mapeado neste arquivo. Mesmo comportamento documentado em [RunningSessionEndpoints DevDocs - F.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#f1-authenticationfilterinvokeasync): valida o Bearer token do Google, resolve/cria o `Corredor` via `sub`, preenche `CurrentCorredor.Id`, ou retorna `401` antes de alcancar o handler.
+<a id="d-1"></a>
+**D1.1. Domínio no fluxo**
 
-**D1. Domain (StrengthSession, Steady.Domain.Training)**
+StrengthSession.Create valida grupo/intensidade não nulos e duração positiva. Create não verifica Enum.IsDefined. Load usa Leve=3, Moderado=6, Pesado=9, mas não é retornado nem calculado no handler.
 
-<a id="d11-strengthsessioncreate"></a>
-D1.1. `StrengthSession.Create(date, muscleGroup, intensity, durationMinutes)` - factory estatica, construtor privado.
-- Guard clause: `muscleGroup is null` -> `ArgumentException` ("O grupo muscular é obrigatório para registrar uma sessão de musculação.").
-- Guard clause: `intensity is null` -> `ArgumentException` ("A intensidade é obrigatória para registrar uma sessão de musculação.").
-- Guard clause: `durationMinutes <= 0` -> `ArgumentOutOfRangeException` ("A duração deve ser maior que zero.").
-- Regras de negocio #2 do `specs/STORY-001/spec.bdd.md`.
-- Se todos os guards passarem, retorna uma instancia imutavel de `StrengthSession` com `MuscleGroup.Value` e `Intensity.Value` (desempacotados dos nulaveis).
-- Expoe a propriedade calculada `Load` (`DurationMinutes * IntensityWeight(Intensity)`, onde `Leve=3`, `Moderado=6`, `Pesado=9` - session-RPE, Foster 2001), nao usada nesta rota mas consumida por [OverloadAssessmentEndpoints](./OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md).
+<a id="r-1"></a>
+**R1.1. Métodos e persistência**
 
-**U1. Common/Auth (DomainFactory, CurrentCorredor)**
+Chamada desta rota: `IStrengthSessionRepository.AddAsync`.
 
-<a id="u11-domainfactorytrycreate"></a>
-U1.1. `DomainFactory.TryCreate<T>(factory, out value, out error)` - identico ao comportamento documentado em [RunningSessionEndpoints DevDocs - U1.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#u11-domainfactorytrycreate): captura `ArgumentException` (e subtipos como `ArgumentOutOfRangeException`) e traduz para `400 Bad Request` reaproveitando a mensagem de dominio.
+A operação específica e seu escopo estão descritos no fluxo acima; detalhes de query, snapshot, transação e reenvio estão no [catálogo de persistência](#catalogo). As consultas próprias filtram o dono no banco; leitura pelo personal exige o vínculo quando indicado. Nenhuma autorização por vínculo é acrescentada implicitamente pelo filtro comum.
 
-U1.2. `CurrentCorredor` - identico ao documentado em [RunningSessionEndpoints DevDocs](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#3-1-registrar-sessao-de-treino-de-corrida): preenchido por [F.1](#f1-authenticationfilterinvokeasync), consumido pelo handler para escopar a persistencia.
+[Voltar ao endpoint](#e-1). O [filtro](#f-auth) resolve autenticação antes da lógica; os [utilitários](#u-common) não adicionam autorização por vínculo automaticamente.
 
-U1.3. `Idempotency` - identico ao documentado em [RunningSessionEndpoints DevDocs - U1.3](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#u13-idempotency): `Idempotency.HeaderName` e `Idempotency.MissingKey()` (ADR-003).
+<a id="observacoes"></a>
+## 4. Observações Técnicas
 
-**R1. Repository (StrengthSessionRepository, Steady.Infrastructure.Repositories)**
+Não confundir sessão avulsa com StrengthWorkoutExecution: são contratos e tabelas diferentes. Musculação avulsa não produz intenção de revisão no código atual.
 
-<a id="r11-strengthsessionrepositoryaddasync"></a>
-R1.1. `StrengthSessionRepository.AddAsync(corredorId, session, idempotencyKey, cancellationToken)` - retorna `Task<SaveResult<StrengthSessionEntity>>`, mesmo padrao documentado em [RunningSessionEndpoints DevDocs - R1.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#r11-runningsessionrepositoryaddasync).
-- Consulta `dbContext.StrengthSessions.FindByIdempotencyKeyAsync(corredorId, idempotencyKey, cancellationToken)`; se ja existir, retorna `new SaveResult<StrengthSessionEntity>(existing, Created: false)` sem `INSERT`.
-- Se nao existir: monta um `StrengthSessionEntity` com `Id = Guid.NewGuid()`, `CorredorId = corredorId` (isolamento por corredor) e `IdempotencyKey = idempotencyKey`.
-- Copia `Date`, `MuscleGroup`, `Intensity`, `DurationMinutes` da instancia de dominio validada.
-- `dbContext.StrengthSessions.Add(entity)` seguido de `await dbContext.SaveChangesAsync(cancellationToken)` - grava na tabela `strength_sessions`. `MuscleGroup` e `Intensity` sao persistidos como `string` (`HasConversion<string>()` em `SteadyDbContext.OnModelCreating`), nao como inteiro do enum.
-- Retorna `new SaveResult<StrengthSessionEntity>(entity, Created: true)`. O indice unico `(corredor_id, idempotency_key)` e a garantia final contra corrida entre envios simultaneos.
+**Performance**: consultas são assíncronas com CancellationToken; onde a coleção não possui parâmetros de limite, o resultado é materializado integralmente. Não há paralelização de chamadas ao mesmo contexto no handler.
 
-## 4. Observacoes Tecnicas
+**Tratamento de erros**: status acima descrevem caminhos explícitos; exceções inesperadas não têm tradução local genérica. 404 não deve ser interpretado como permissão de procurar dados de outro corredor.
 
-- **Performance**: `AddAsync` faz uma consulta `SELECT` por `(corredor_id, idempotency_key)` antes do possivel `INSERT` (mesma mudanca documentada em [RunningSessionEndpoints DevDocs](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#4-observacoes-tecnicas)), coberta pelo indice unico composto.
-- **Tratamento de Erros**: erros de guard clause do dominio viram `400` com a mensagem original. Header `Idempotency-Key` ausente vira `400` via `Idempotency.MissingKey()`. Excecoes fora desses casos (ex.: falha do PostgreSQL) nao sao tratadas explicitamente - mesmo debito ja identificado em [RunningSessionEndpoints Debts](../TechnicalDebtsDocs/RunningSessionEndpoints-Treino-Corrida-Debts.md).
-- **Integracoes Criticas**: PostgreSQL e o `AuthenticationFilter`/Google Sign-In.
-- **Enums como nulaveis no contrato**: `MuscleGroup?`/`Intensity?` no `StrengthSessionRequest` sao uma decisao deliberada para permitir que ausencia do campo chegue ate a validacao de dominio (gerando `400` com mensagem especifica) em vez de falhar silenciosamente no model binding do ASP.NET Core com uma mensagem generica.
-- **Idempotencia resolve o risco de duplicata por reenvio (ADR-003)**: mesmo mecanismo documentado em [RunningSessionEndpoints DevDocs](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#4-observacoes-tecnicas) - reenvio da fila offline devolve `200 OK` com o registro existente em vez de criar uma segunda linha, protegendo a carga de musculacao usada por `OverloadDetectionService` (o gatilho "perna pesada" do ADR-001) contra inflacao por duplicata.
-- **Mesma inconsistencia de `Location`** identificada em `RunningSessionEndpoints` - a resposta `200 OK` de reenvio tambem nao envia `Location`. Ver [TechnicalDebtsDocs](../TechnicalDebtsDocs/StrengthSessionEndpoints-Treino-Forca-Debts.md).
+**Documentos relacionados**: [Regras](../BusinessRulesDocs/Registro-de-Musculacao-Treino-Forca-Rules.md), [Débitos](../TechnicalDebtsDocs/StrengthSessionEndpoints-Treino-Forca-Debts.md), [Índice](README.md).

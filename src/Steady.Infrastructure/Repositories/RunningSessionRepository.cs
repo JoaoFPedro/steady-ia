@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Steady.Domain.Adherence;
 using Steady.Domain.Training;
 using Steady.Infrastructure.Persistence;
 
@@ -10,6 +11,7 @@ public sealed class RunningSessionRepository(SteadyDbContext dbContext) : IRunni
         Guid corredorId,
         RunningSession session,
         Guid idempotencyKey,
+        bool painReportedAtCompletion,
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.RunningSessions
@@ -31,6 +33,34 @@ public sealed class RunningSessionRepository(SteadyDbContext dbContext) : IRunni
         };
 
         dbContext.RunningSessions.Add(entity);
+        var activeSheetId = await dbContext.TrainingSheets
+            .Where(sheet => sheet.CorredorId == corredorId && sheet.IsActive)
+            .Select(sheet => (Guid?)sheet.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+        dbContext.ReviewOutbox.Add(new ReviewOutboxEntity
+        {
+            Id = Guid.NewGuid(),
+            CorredorId = corredorId,
+            ExecutionId = entity.Id,
+            TrainingSheetId = activeSheetId,
+            ExecutionKind = WorkoutExecutionKind.Running,
+            IdempotencyKey = idempotencyKey,
+            ExecutionDate = session.Date,
+            PainReportedAtCompletion = painReportedAtCompletion,
+            Status = ReviewOutboxStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        });
+        if (painReportedAtCompletion)
+        {
+            dbContext.PainLogs.Add(new PainLogEntity
+            {
+                Id = Guid.NewGuid(),
+                CorredorId = corredorId,
+                Date = session.Date,
+                Region = "Informada no encerramento",
+                IdempotencyKey = idempotencyKey
+            });
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new SaveResult<RunningSessionEntity>(entity, Created: true);

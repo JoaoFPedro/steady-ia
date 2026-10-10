@@ -24,4 +24,6 @@ public readonly record struct NumericRange<T> where T : struct, IComparable<T>
 
         return new NumericRange<T>(min, max);
     }
+
+    public static NumericRange<T> Create(T min) => new(min, null);
 }

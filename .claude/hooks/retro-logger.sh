@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SDD Kit — retro-logger hook (Stop)
+# isabel — retro-logger hook (Stop)
 # Calcula duração do turno e sessão, detecta decisões e erros de processo,
 # persiste em .sdd/metrics/sessions/YYYY-MM-DD.md.
 # Exibe resumo apenas quando há eventos notáveis (decisões ou erros).
@@ -60,7 +60,7 @@ except Exception:
   fi
 fi
 
-# ─── Último comando SDD da sessão ─────────────────────────────────────────────
+# ─── Último comando isabel da sessão ─────────────────────────────────────────────
 LAST_COMMAND=""
 [ -f "$COMMANDS_FILE" ] && LAST_COMMAND=$(tail -1 "$COMMANDS_FILE" 2>/dev/null)
 
@@ -91,7 +91,7 @@ fi
 ERRORS=""
 if [ -f "$PENDING_SYNC" ]; then
   STORY_ID=$(cat "$PENDING_SYNC" 2>/dev/null | tr -d '[:space:]')
-  ERRORS="${ERRORS}\n  - process-violation: /implement sem spec BDD (${STORY_ID:-story-desconhecida})"
+  ERRORS="${ERRORS}\n  - process-violation: /build sem spec BDD (${STORY_ID:-story-desconhecida})"
 fi
 
 # ─── Grava entrada no log ─────────────────────────────────────────────────────
@@ -121,17 +121,17 @@ fi
   echo ""
 } >> "$LOG_FILE"
 
-# ─── Linha de timing — sempre visível quando há comando SDD ──────────────────
+# ─── Linha de timing — sempre visível quando há comando isabel ──────────────────
 if [ -n "$LAST_COMMAND" ]; then
   TIMING="${LAST_COMMAND} → ${TURN_DURATION}${SESSION_ELAPSED:+ | sessão: ${SESSION_ELAPSED}}"
   echo ""
-  echo "[SDD] ${TIMING}"
+  echo "[isabel] ${TIMING}"
   echo ""
 fi
 
 # ─── Box de retro — apenas quando há eventos notáveis ────────────────────────
 if [ -n "$DECISIONS" ] || [ -n "$ERRORS" ]; then
-  echo "╔══ SDD Retro ══════════════════════════════════════════════════╗"
+  echo "╔══ isabel Retro ══════════════════════════════════════════╗"
   if [ -n "$DECISIONS" ]; then
     echo "  Decisões:"
     echo -e "$DECISIONS"

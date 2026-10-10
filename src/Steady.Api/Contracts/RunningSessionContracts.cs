@@ -5,7 +5,8 @@ public sealed record RunningSessionRequest(
     double DistanceKm,
     int DurationMinutes,
     double AveragePaceMinPerKm,
-    int PerceivedEffort);
+    int PerceivedEffort,
+    bool PainReported = false);
 
 public sealed record RunningSessionResponse(
     Guid Id,

@@ -18,7 +18,8 @@ public static class TrainingSheetDocuments
         int Sets,
         int Repetitions,
         int? DurationSeconds = null,
-        string? Observation = null);
+        string? Observation = null,
+        Guid? ExerciseKey = null);
 
     /// <summary>Espelha <see cref="NumericRange{T}"/>. Ausente no JSON = campo não prescrito.</summary>
     private sealed record NumericRangeDocument<T>(T Min, T? Max) where T : struct;
@@ -49,7 +50,9 @@ public static class TrainingSheetDocuments
         int Repetitions,
         decimal? LoadKg,
         string? Note,
-        bool Skipped);
+        bool Skipped,
+        Guid? ExerciseKey = null,
+        int? DurationSeconds = null);
 
     public static string Serialize(TrainingSheet sheet)
     {
@@ -57,7 +60,7 @@ public static class TrainingSheetDocuments
             ((StrengthWorkout)workout).Exercises
                 .Select(item => new ExerciseDocument(
                     item.Id, item.Name, item.Sets, item.Repetitions,
-                    item.DurationSeconds, item.Observation))
+                    item.DurationSeconds, item.Observation, item.ExerciseKey))
                 .ToArray();
 
         var run = (RunningWorkout)sheet.Workout(WorkoutType.Run);
@@ -81,7 +84,7 @@ public static class TrainingSheetDocuments
             StrengthWorkout.Create(type, exercises
                 .Select(item => ExercisePrescription.Create(
                     item.Id, item.Name, item.Sets, item.Repetitions,
-                    item.DurationSeconds, item.Observation))
+                    item.DurationSeconds, item.Observation, item.ExerciseKey))
                 .ToArray());
 
         return TrainingSheet.Create(
@@ -132,7 +135,9 @@ public static class TrainingSheetDocuments
                 item.Repetitions,
                 item.LoadKg,
                 item.Note,
-                item.Skipped)).ToArray(),
+                item.Skipped,
+                item.ExerciseKey,
+                item.DurationSeconds)).ToArray(),
             JsonOptions);
 
     public static IReadOnlyList<ExerciseExecution> DeserializeExecution(string json)
@@ -142,10 +147,12 @@ public static class TrainingSheetDocuments
 
         return documents.Select(item => item.Skipped
             ? ExerciseExecution.SkippedExercise(
-                item.ExerciseId, item.Name, item.Sets, item.Repetitions, item.Note)
+                item.ExerciseId, item.Name, item.Sets, item.Repetitions, item.Note,
+                item.ExerciseKey, item.DurationSeconds)
             : ExerciseExecution.Executed(
                 item.ExerciseId, item.Name, item.Sets, item.Repetitions,
-                item.LoadKg ?? throw new InvalidOperationException("Execução sem carga."), item.Note))
+                item.LoadKg ?? throw new InvalidOperationException("Execução sem carga."), item.Note,
+                item.ExerciseKey, item.DurationSeconds))
             .ToArray();
     }
 }

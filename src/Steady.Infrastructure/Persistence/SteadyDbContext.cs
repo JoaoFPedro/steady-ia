@@ -16,6 +16,9 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
     public DbSet<TrainingSheetEntity> TrainingSheets => Set<TrainingSheetEntity>();
     public DbSet<StrengthWorkoutExecutionEntity> StrengthWorkoutExecutions => Set<StrengthWorkoutExecutionEntity>();
     public DbSet<TrainingPlanVersionEntity> TrainingPlanVersions => Set<TrainingPlanVersionEntity>();
+    public DbSet<AdherencePolicyVersionEntity> AdherencePolicyVersions => Set<AdherencePolicyVersionEntity>();
+    public DbSet<ReviewOutboxEntity> ReviewOutbox => Set<ReviewOutboxEntity>();
+    public DbSet<WorkoutReviewEntity> WorkoutReviews => Set<WorkoutReviewEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,6 +62,89 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
             // Só uma versão vigente por vez — mesmo padrão da ficha ativa (is_active em training_sheets).
             entity.HasIndex(v => v.IsCurrent).IsUnique().HasFilter("is_current = TRUE");
             entity.Property(v => v.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<AdherencePolicyVersionEntity>(entity =>
+        {
+            entity.ToTable("adherence_policy_versions");
+            entity.HasKey(policy => policy.Id);
+            entity.Property(policy => policy.Version).HasColumnName("version");
+            entity.HasIndex(policy => policy.Version).IsUnique();
+            entity.Property(policy => policy.RunningDistancePercent).HasColumnName("running_distance_percent");
+            entity.Property(policy => policy.RunningDurationPercent).HasColumnName("running_duration_percent");
+            entity.Property(policy => policy.PerceivedEffortPoints).HasColumnName("perceived_effort_points");
+            entity.Property(policy => policy.SetsAbsolute).HasColumnName("sets_absolute");
+            entity.Property(policy => policy.RepetitionsPercent).HasColumnName("repetitions_percent");
+            entity.Property(policy => policy.LoadPercent).HasColumnName("load_percent");
+            entity.Property(policy => policy.IsCurrent).HasColumnName("is_current");
+            entity.HasIndex(policy => policy.IsCurrent).IsUnique().HasFilter("is_current = TRUE");
+            entity.Property(policy => policy.CreatedAt).HasColumnName("created_at");
+            entity.HasData(new AdherencePolicyVersionEntity
+            {
+                Id = Guid.Parse("14000000-0000-0000-0000-000000000001"),
+                Version = 1,
+                RunningDistancePercent = 0.10m,
+                RunningDurationPercent = 0.10m,
+                PerceivedEffortPoints = 2,
+                SetsAbsolute = 1,
+                RepetitionsPercent = 0.20m,
+                LoadPercent = 0.10m,
+                IsCurrent = true,
+                CreatedAt = new DateTime(2026, 8, 30, 0, 0, 0, DateTimeKind.Utc)
+            });
+        });
+
+        modelBuilder.Entity<ReviewOutboxEntity>(entity =>
+        {
+            entity.ToTable("review_outbox");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.CorredorId).HasColumnName("corredor_id");
+            entity.Property(item => item.ExecutionId).HasColumnName("execution_id");
+            entity.Property(item => item.TrainingSheetId).HasColumnName("training_sheet_id");
+            entity.Property(item => item.ExecutionKind).HasColumnName("execution_kind").HasConversion<string>();
+            entity.Property(item => item.IdempotencyKey).HasColumnName("idempotency_key");
+            entity.Property(item => item.ExecutionDate).HasColumnName("execution_date");
+            entity.Property(item => item.PainReportedAtCompletion).HasColumnName("pain_reported_at_completion");
+            entity.Property(item => item.Status).HasColumnName("status").HasConversion<string>();
+            entity.Property(item => item.Attempts).HasColumnName("attempts");
+            entity.Property(item => item.LeaseUntil).HasColumnName("lease_until");
+            entity.Property(item => item.NextAttemptAt).HasColumnName("next_attempt_at");
+            entity.Property(item => item.CreatedAt).HasColumnName("created_at");
+            entity.Property(item => item.CompletedAt).HasColumnName("completed_at");
+            entity.HasIndex(item => new { item.ExecutionKind, item.ExecutionId }).IsUnique();
+            entity.HasIndex(item => new { item.CorredorId, item.IdempotencyKey }).IsUnique();
+            entity.HasIndex(item => new { item.Status, item.NextAttemptAt });
+            entity.HasOne<CorredorEntity>().WithMany().HasForeignKey(item => item.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WorkoutReviewEntity>(entity =>
+        {
+            entity.ToTable("workout_reviews");
+            entity.HasKey(review => review.Id);
+            entity.Property(review => review.CorredorId).HasColumnName("corredor_id");
+            entity.Property(review => review.ExecutionId).HasColumnName("execution_id");
+            entity.Property(review => review.ExecutionKind).HasColumnName("execution_kind").HasConversion<string>();
+            entity.Property(review => review.ExecutionDate).HasColumnName("execution_date");
+            entity.Property(review => review.Status).HasColumnName("status").HasConversion<string>();
+            entity.Property(review => review.Action).HasColumnName("action").HasConversion<string>();
+            entity.Property(review => review.PolicyVersion).HasColumnName("policy_version");
+            entity.Property(review => review.PlanVersion).HasColumnName("plan_version");
+            entity.Property(review => review.TrainingSheetId).HasColumnName("training_sheet_id");
+            entity.Property(review => review.ComparisonJson).HasColumnName("comparison").HasColumnType("jsonb");
+            entity.Property(review => review.ExplanationStatus).HasColumnName("explanation_status").HasConversion<string>();
+            entity.Property(review => review.ExplanationJson).HasColumnName("explanation").HasColumnType("jsonb");
+            entity.Property(review => review.UnderstoodAt).HasColumnName("understood_at");
+            entity.Property(review => review.Contested).HasColumnName("contested");
+            entity.Property(review => review.CoherenceStatus).HasColumnName("coherence_status").HasConversion<string>();
+            entity.Property(review => review.NextExecutionId).HasColumnName("next_execution_id");
+            entity.Property(review => review.CoherencePolicyVersion).HasColumnName("coherence_policy_version");
+            entity.Property(review => review.CoherenceEvaluatedAt).HasColumnName("coherence_evaluated_at");
+            entity.Property(review => review.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(review => new { review.ExecutionKind, review.ExecutionId }).IsUnique();
+            entity.HasIndex(review => new { review.CorredorId, review.ExecutionDate });
+            entity.HasOne<CorredorEntity>().WithMany().HasForeignKey(review => review.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<RunningSessionEntity>(entity =>

@@ -144,6 +144,40 @@ public sealed class TrainingSheetDocumentsTests
 
         Assert.Null(exercise.DurationSeconds);
         Assert.Null(exercise.Observation);
+        Assert.Equal(exercise.Id, exercise.ExerciseKey);
+    }
+
+    [Fact]
+    public void Documento_preserva_identidade_historica_e_snapshot_de_tempo()
+    {
+        var exerciseId = Guid.NewGuid();
+        var exerciseKey = Guid.NewGuid();
+        var sheet = TrainingSheet.Create(
+            Guid.NewGuid(),
+            StrengthWorkout.Create(WorkoutType.Push, [ExercisePrescription.Create(
+                exerciseId, "Prancha", 3, 1, durationSeconds: 40, exerciseKey: exerciseKey)]),
+            Strength(WorkoutType.Pull, "Remada"),
+            Strength(WorkoutType.Lower, "Agachamento"),
+            RunningWorkout.Create(
+                RunPrescription.Create("Terça"),
+                RunPrescription.Create("Quinta"),
+                RunPrescription.Create("Sábado")));
+        var execution = StrengthWorkoutExecution.Create(
+            sheet.Id,
+            WorkoutType.Push,
+            new DateOnly(2026, 8, 30),
+            [ExerciseExecution.Executed(
+                exerciseId, "Prancha", 3, 1, 20, null, exerciseKey, durationSeconds: 40)]);
+
+        var restoredSheet = TrainingSheetDocuments.DeserializeSheet(
+            sheet.Id, TrainingSheetDocuments.Serialize(sheet));
+        var restoredExecution = TrainingSheetDocuments.DeserializeExecution(
+            TrainingSheetDocuments.Serialize(execution)).Single();
+
+        Assert.Equal(exerciseKey,
+            Assert.IsType<StrengthWorkout>(restoredSheet.Workout(WorkoutType.Push)).Exercises.Single().ExerciseKey);
+        Assert.Equal(exerciseKey, restoredExecution.ExerciseKey);
+        Assert.Equal(40, restoredExecution.DurationSeconds);
     }
 
     private static StrengthWorkout Strength(WorkoutType type, string name) =>

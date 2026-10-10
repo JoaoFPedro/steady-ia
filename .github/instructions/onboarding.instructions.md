@@ -2,19 +2,15 @@
 applyTo: ".sdd/memory/**,.sdd/STACK.md"
 ---
 
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
+
 # Onboarding do projeto
 
-Você está editando arquivos de memória do SDD Kit. Isso acontece no início de um projeto ou ao fazer onboarding em um projeto existente.
+Você está editando arquivos de memória ou blueprints do isabel. Isso acontece no início de um projeto ou ao fazer onboarding em um projeto existente.
 
 ## Se `.sdd/STACK.md` não existir ou estiver vazio
 
-Oriente o dev a rodar no terminal:
-
-```bash
-./sdd scan
-```
-
-Isso detecta automaticamente: linguagem, framework, test runner, banco, ORM, UI library, package manager.
+Oriente o dev a rodar `/onboard` (projeto com código) ou `/init` (projeto novo). Ambos detectam a stack lendo os arquivos do projeto — linguagem, framework, test runner, banco, ORM, UI library, package manager — e escrevem `.sdd/STACK.md`.
 
 ## Se `.sdd/memory/PROJECT.md` está sem preenchimento
 

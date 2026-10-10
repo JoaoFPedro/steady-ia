@@ -8,9 +8,9 @@
 
 ## 1. Resumo Executivo
 
-- **Estado Atual**: código pequeno e coeso, com boa cobertura de teste (`tests/Steady.Domain.Tests/StrengthSessionTests.cs`). Os guard clauses de obrigatoriedade (grupo muscular, intensidade) e de duração estão implementados e testados. O mapeamento `IntensityWeight` (Leve=3/Moderado=6/Pesado=9) é uma regra de negócio complexa, mas correta e rastreável a ADR-001 — não é débito técnico.
+- **Estado Atual**: código pequeno e coeso, com boa cobertura de teste (`tests/Steady.Domain.Tests/StrengthSessionTests.cs`). Os guard clauses de obrigatoriedade (grupo muscular, intensidade) e de duração estão implementados e testados. O mapeamento `IntensityWeight` (Leve=3/Moderado=6/Pesado=9) é uma regra de negócio complexa, mas correta e rastreável a ADR-001 - não é débito técnico.
 - **Principais Problemas**: uso de `Nullable<T>` para representar campo obrigatório ausente é funcional, mas é um padrão que pode confundir quem lê a assinatura pela primeira vez sem o contexto do guard clause; a mesma lacuna de "sem validação de data futura" observada em `RunningSession` também existe aqui.
-- **Impacto no Negócio**: baixo — nenhum ponto abaixo compromete a regra de sobrecarga hoje.
+- **Impacto no Negócio**: baixo - nenhum ponto abaixo compromete a regra de sobrecarga hoje.
 
 ## 2. Problemas por Criticidade
 
@@ -20,13 +20,13 @@ Nenhum problema crítico identificado.
 
 ### 🟡 Importantes
 
-- **Guard defensivo em `IntensityWeight` para "intensidade desconhecida" nunca exercitado por teste**: o `switch` de `IntensityWeight` tem um branch `_ => throw new ArgumentOutOfRangeException(...)` para lidar com um valor de `Intensity` fora do `enum` conhecido — cenário só alcançável via cast explícito inválido (ex: `(Intensity)99`), já que `Create` sempre recebe um `Intensity` do `enum` real quando não é nulo. Não há teste cobrindo esse branch.
-  - **Ação Recomendada**: é defensive coding legítimo (enums em C# não são fechados), então não precisa virar guard clause de negócio. Se quiser fechar a cobertura, adicionar um teste unitário explícito exercitando o cast inválido — baixo risco, baixa prioridade.
+- **Guard defensivo em `IntensityWeight` para "intensidade desconhecida" nunca exercitado por teste**: o `switch` de `IntensityWeight` tem um branch `_ => throw new ArgumentOutOfRangeException(...)` para lidar com um valor de `Intensity` fora do `enum` conhecido - cenário só alcançável via cast explícito inválido (ex: `(Intensity)99`), já que `Create` sempre recebe um `Intensity` do `enum` real quando não é nulo. Não há teste cobrindo esse branch.
+  - **Ação Recomendada**: é defensive coding legítimo (enums em C# não são fechados), então não precisa virar guard clause de negócio. Se quiser fechar a cobertura, adicionar um teste unitário explícito exercitando o cast inválido - baixo risco, baixa prioridade.
 
 ### 🟢 Menores
 
-- **Sem validação de data futura**: mesma lacuna de `RunningSession` — `Create` não rejeita `date` no futuro. Ver a análise equivalente em [`RunningSession-Treino-Corrida-Debts.md`](./RunningSession-Treino-Corrida-Debts.md); recomenda-se tratar as duas entidades juntas caso a decisão de produto seja "sim, validar".
-  - **Ação Recomendada**: mesma recomendação de `RunningSession` — confirmar com produto e, se aprovado, aplicar a mesma regra nas duas entidades para manter consistência.
+- **Sem validação de data futura**: mesma lacuna de `RunningSession` - `Create` não rejeita `date` no futuro. Ver a análise equivalente em [`RunningSession-Treino-Corrida-Debts.md`](./RunningSession-Treino-Corrida-Debts.md); recomenda-se tratar as duas entidades juntas caso a decisão de produto seja "sim, validar".
+  - **Ação Recomendada**: mesma recomendação de `RunningSession` - confirmar com produto e, se aprovado, aplicar a mesma regra nas duas entidades para manter consistência.
 - **`Nullable<MuscleGroup>`/`Nullable<Intensity>` como sinalizador de obrigatoriedade**: funciona, mas é um padrão que exige conhecer o guard clause para entender por que os parâmetros são anuláveis (um `enum` já tem um valor padrão implícito, então a nulidade aqui é 100% intencional para forçar quem chama a lidar com "não informado"). Não é incorreto, mas merece um comentário XML no método explicando a escolha, para reduzir a curva de entendimento de quem lê o código pela primeira vez.
   - **Ação Recomendada**: adicionar `/// <param>` ou comentário curto acima de `Create` explicando que `null` representa "campo não informado" deliberadamente. Melhoria de legibilidade, sem urgência.
 
@@ -45,15 +45,15 @@ Nenhum problema crítico identificado.
 **Objetivo**: fechar a cobertura de teste do método privado `IntensityWeight`, documentando explicitamente que o comportamento é intencional (defesa contra cast inválido).
 
 **Regras de Negócio**:
-- Nenhuma regra de negócio nova — é hardening técnico de um caminho já implementado.
+- Nenhuma regra de negócio nova - é hardening técnico de um caminho já implementado.
 
 **Especificação Técnica**:
 - Adicionar teste que force um valor de `Intensity` fora da faixa via cast explícito (ex: `(Intensity)99`) e verifique que `StrengthSession.Create` propaga a `ArgumentOutOfRangeException` de `IntensityWeight` ao acessar `Load`.
-- Nota técnica: como `IntensityWeight` só é chamado dentro do getter de `Load` (calculado sob demanda), o teste precisa acessar a propriedade `Load`, não apenas chamar `Create` — a validação de intensidade desconhecida não acontece na criação, e sim no primeiro acesso a `Load`.
+- Nota técnica: como `IntensityWeight` só é chamado dentro do getter de `Load` (calculado sob demanda), o teste precisa acessar a propriedade `Load`, não apenas chamar `Create` - a validação de intensidade desconhecida não acontece na criação, e sim no primeiro acesso a `Load`.
 
 **Critérios de Aceite**:
 - [ ] Teste unitário cobre o branch `_ => throw` de `IntensityWeight`.
-- [ ] Nenhuma mudança de comportamento em produção — é teste puro.
+- [ ] Nenhuma mudança de comportamento em produção - é teste puro.
 
 **Roteiro de Teste**:
 1. **Teste 1**: criar `StrengthSession` com `Intensity` válido, depois forçar um valor inválido via reflexão ou construir o cenário via cast antes de passar para `Create` (ex: `(Intensity)99` como argumento).
@@ -67,7 +67,7 @@ Nenhum problema crítico identificado.
 **Objetivo**: reduzir a curva de entendimento de quem lê o código pela primeira vez, deixando explícita a intenção de design.
 
 **Regras de Negócio**:
-- Nenhuma — é melhoria de documentação inline, sem impacto de comportamento.
+- Nenhuma - é melhoria de documentação inline, sem impacto de comportamento.
 
 **Especificação Técnica**:
 - Adicionar comentário XML (`/// <summary>` ou `/// <param>`) acima de `Create` explicando: "muscleGroup e intensity são anuláveis para representar explicitamente 'campo não informado' na origem (ex: request HTTP), distinto do valor padrão do enum."
@@ -77,4 +77,4 @@ Nenhum problema crítico identificado.
 - [ ] Nenhuma mudança de comportamento em produção.
 
 **Roteiro de Teste**:
-1. **Teste 1**: não aplicável — mudança é apenas documentação inline; validado por revisão de código, não por teste automatizado.
+1. **Teste 1**: não aplicável - mudança é apenas documentação inline; validado por revisão de código, não por teste automatizado.

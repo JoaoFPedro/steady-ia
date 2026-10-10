@@ -24,12 +24,14 @@ public interface ITrainingSheetRepository
         Guid corredorId,
         StrengthWorkoutExecution execution,
         Guid idempotencyKey,
+        bool painReportedAtCompletion,
         CancellationToken cancellationToken);
     Task<CombinedWorkoutSaveResult> AddCombinedExecutionAsync(
         Guid corredorId,
         StrengthWorkoutExecution strength,
         RunningSession running,
         Guid idempotencyKey,
+        bool painReportedAtCompletion,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<StrengthWorkoutExecutionEntity>> GetHistoryAsync(
         Guid personalId, Guid corredorId, CancellationToken cancellationToken);

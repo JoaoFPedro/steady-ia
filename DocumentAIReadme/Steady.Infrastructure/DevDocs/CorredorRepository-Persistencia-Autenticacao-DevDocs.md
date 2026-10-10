@@ -1,123 +1,148 @@
-# CorredorRepository - Persistencia-Autenticacao - Especificacao Tecnica
+# CorredorRepository - Persistencia-Autenticacao - Especificação Técnica
 
-## Indice
-- [1. Visao Geral Tecnica](#1-visao-geral-tecnica)
-- [2. Configuracao e Dependencias](#2-configuracao-e-dependencias)
-- [3. Detalhamento por Metodo](#3-detalhamento-por-metodo)
-  - [3.1. GetOrCreateBySubAsync - Resolve ou provisiona o Corredor autenticado](#31-getorcreatebysubasync---resolve-ou-provisiona-o-corredor-autenticado)
-- [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
+Atualizado em 2026-09-27.
 
-## 1. Visao Geral Tecnica
+## Índice
 
-**Proposito**: `CorredorRepository` resolve a identidade do corredor autenticado a partir do `sub` (subject) do ID token do Google, criando o registro automaticamente na primeira vez que esse `sub` aparece (provisionamento implicito, sem tela de cadastro).
+- [Visão geral](#visao)
+- [Métodos e contratos](#metodos)
+- [Mapeamentos](#ctx)
+- [Observações](#observacoes)
+- [Fontes](#fontes)
 
-**Responsabilidades**:
-- Buscar um `CorredorEntity` existente pelo `GoogleSub`.
-- Criar um novo `CorredorEntity` quando o `sub` ainda nao existe no banco.
-- Tratar a condicao de corrida entre requisicoes concorrentes com o mesmo `sub` novo (duas requisicoes simultaneas do primeiro login) sem duplicar o Corredor, apoiando-se no indice unico `IX_corredores_google_sub`.
+<a id="visao"></a>
+## 1. Visão geral técnica
 
-**Integracoes**: chamado por `Steady.Api.Auth.AuthenticationFilter` (nao um Endpoint, mas um `IEndpointFilter` aplicado a todo o grupo de rotas `/api` antes de qualquer logica de negocio) -- ver `DocumentAIReadme/Steady.Api/DevDocs/RunningSessionEndpoints-Treino-Corrida-DevDocs.md#f1-authenticationfilterinvokeasync` (secao "F. Endpoint Filter", fonte canonica do `AuthenticationFilter` na documentacao de `Steady.Api`). Fundamentado em [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md) e `specs/STORY-002/spec.bdd.md` (regra de negocio 2: "Se nao existir um Corredor com esse sub, um novo e criado automaticamente antes de processar a requisicao").
+Provisionar identidade e sincronizar perfil sem trocar a versão de plano.
 
-## 2. Configuracao e Dependencias
+Chamada pela camada Steady.Api; ver [índice da API](../../Steady.Api/DevDocs/README.md). Sem rotas próprias: entradas são parâmetros C#, saídas são entidades/objetos ou resultados assíncronos. O token e os papéis são validados na API; parâmetros de identidade precisam vir do contexto autenticado. PostgreSQL é acessado pelo SteadyDbContext com EF Core e Npgsql.
 
-**Dependencias Injetadas**:
-- `SteadyDbContext dbContext`: contexto EF Core injetado via construtor primario (`sealed class CorredorRepository(SteadyDbContext dbContext) : ICorredorRepository`), ciclo de vida `Scoped` (ver `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md`).
 
-**Interface implementada**: `ICorredorRepository` (`Repositories/ICorredorRepository.cs`).
+<a id="metodos"></a>
+## 2. R. Métodos e contratos
 
-**Metodos Publicos**:
-- `Task<CorredorEntity> GetOrCreateBySubAsync(string googleSub, CancellationToken cancellationToken)` - unico metodo da interface.
+- [GetOrCreateBySubAsync](#r-1)
+- [FindRunnerByEmailAsync](#r-2)
+- [GetByIdAsync](#r-3)
+- [SincronizarPerfilAsync](#r-4)
 
-## 3. Detalhamento por Metodo
+<a id="r-1"></a>
+### R. GetOrCreateBySubAsync
 
-### 3.1. GetOrCreateBySubAsync - Resolve ou provisiona o Corredor autenticado
+`public async Task<CorredorEntity> GetOrCreateBySubAsync( string googleSub, string? email, string? name, CancellationToken cancellationToken)`
 
-**Assinatura**: `Task<CorredorEntity> GetOrCreateBySubAsync(string googleSub, CancellationToken cancellationToken)`
+Busca google_sub; existente segue SincronizarPerfilAsync; novo consulta GetCurrentVersionAsync, gera Id, papel Corredor e fixa TrainingPlanVersionId. SaveChangesAsync; DbUpdateException desanexa o candidato, relê vencedor por sub e sincroniza perfil.
 
-**Entrada**:
-```json
-{
-  "googleSub": "string - claim 'sub' do ID token do Google, ja validado pelo AuthenticationFilter",
-  "cancellationToken": "CancellationToken - propagado de HttpContext.RequestAborted"
-}
-```
+Entrada: os parâmetros da assinatura, incluindo `CancellationToken` nas operações assíncronas. Saída: o tipo retornado na assinatura; `Task` transporta conclusão, resultado ou falha. Objetos de domínio chegam validados por suas fábricas; o repositório não substitui essa validação.
 
-**Saida**:
-```json
-{
-  "CorredorEntity": {
-    "Id": "Guid - identificador interno do corredor, usado como corredor_id em todas as demais tabelas",
-    "GoogleSub": "string - claim 'sub' original",
-    "CreatedAt": "DateTime (UTC) - momento do primeiro provisionamento"
-  }
-}
-```
+<a id="r-2"></a>
+### R. FindRunnerByEmailAsync
 
-#### Fluxo de Execucao
+`public async Task<CorredorEntity?> FindRunnerByEmailAsync( string email, CancellationToken cancellationToken)`
+
+Filtra email no banco, materializa candidatos e retorna o primeiro com Roles.Contains("Corredor"); e-mail não é identidade e pode repetir.
+
+Entrada: os parâmetros da assinatura, incluindo `CancellationToken` nas operações assíncronas. Saída: o tipo retornado na assinatura; `Task` transporta conclusão, resultado ou falha. Objetos de domínio chegam validados por suas fábricas; o repositório não substitui essa validação.
+
+<a id="r-3"></a>
+### R. GetByIdAsync
+
+`public Task<CorredorEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken)`
+
+Busca Id e retorna conta ou null; chamador deve autorizar esse acesso.
+
+Entrada: os parâmetros da assinatura, incluindo `CancellationToken` nas operações assíncronas. Saída: o tipo retornado na assinatura; `Task` transporta conclusão, resultado ou falha. Objetos de domínio chegam validados por suas fábricas; o repositório não substitui essa validação.
+
+<a id="r-4"></a>
+### R. SincronizarPerfilAsync
+
+`private async Task<CorredorEntity> SincronizarPerfilAsync( CorredorEntity corredor, string? email, string? name, CancellationToken cancellationToken)`
+
+Claim email/name nulo não apaga valor salvo; valores iguais não escrevem; diferenças não nulas alteram perfil e salvam.
+
+Entrada: os parâmetros da assinatura, incluindo `CancellationToken` nas operações assíncronas. Saída: o tipo retornado na assinatura; `Task` transporta conclusão, resultado ou falha. Objetos de domínio chegam validados por suas fábricas; o repositório não substitui essa validação.
+
+#### Fluxo de execução
 
 ```mermaid
 sequenceDiagram
-    participant Filter as Steady.Api.Auth.AuthenticationFilter
-    participant Repository as CorredorRepository
-    participant Context as SteadyDbContext
-    participant Database as PostgreSQL (corredores)
-
-    Filter->>+Repository: GetOrCreateBySubAsync(googleSub, ct)
-    Repository->>+Context: Corredores.FirstOrDefaultAsync(c => c.GoogleSub == googleSub)
-    Context->>+Database: SELECT * FROM corredores WHERE google_sub = @googleSub
-    Database-->>-Context: linha existente ou nenhuma
-    Context-->>-Repository: CorredorEntity ou null
-    alt Corredor ja existe
-        Repository-->>Filter: existing
-    else Corredor nao existe
-        Repository->>Repository: novo CorredorEntity (Id = Guid.NewGuid(), CreatedAt = DateTime.UtcNow)
-        Repository->>+Context: Corredores.Add(corredor)
-        Repository->>+Context: SaveChangesAsync(ct)
-        Context->>+Database: INSERT INTO corredores (Id, google_sub, created_at) VALUES (...)
-        alt Insercao bem-sucedida
-            Database-->>-Context: 1 linha afetada
-            Context-->>-Repository: ok
-            Repository-->>-Filter: corredor recem-criado
-        else Violacao do indice unico IX_corredores_google_sub
-            Database-->>Context: DbUpdateException
-            Context-->>Repository: propaga DbUpdateException
-            Repository->>Repository: Entry(corredor).State = EntityState.Detached
-            Repository->>+Context: Corredores.FirstAsync(c => c.GoogleSub == googleSub)
-            Context->>+Database: SELECT * FROM corredores WHERE google_sub = @googleSub
-            Database-->>-Context: linha criada pela requisicao concorrente
-            Context-->>-Repository: CorredorEntity
-            Repository-->>-Filter: corredor da requisicao concorrente
+    participant R as CorredorRepository
+    participant CTX as SteadyDbContext
+    participant DB as PostgreSQL
+    participant P as ITrainingPlanRepository
+    R->>CTX: FirstOrDefaultAsync(GoogleSub == sub)
+    CTX->>DB: SELECT corredores por google_sub
+    DB-->>R: Conta ou null
+    alt Conta existente
+        R->>R: SincronizarPerfilAsync(email,name)
+        opt Claim não nulo e diferente
+            R->>CTX: SaveChangesAsync
+            CTX->>DB: UPDATE email/name
+        end
+    else Nova conta
+        R->>P: GetCurrentVersionAsync
+        P-->>R: Versão vigente ou exceção
+        R->>CTX: Add(corredor), SaveChangesAsync
+        CTX->>DB: INSERT corredores
+        alt DbUpdateException
+            R->>CTX: Detached e FirstAsync(GoogleSub == sub)
+            CTX->>DB: SELECT vencedor
+            DB-->>R: Conta vencedora
+            R->>R: SincronizarPerfilAsync
+        else Gravado
+            R-->>R: Conta nova
         end
     end
 ```
 
-#### Detalhamento do Fluxo
+<a id="ctx"></a>
+## 3. CTX. Mapeamento e integridade
 
-**R. Repository (CorredorRepository)**
+### CTX. corredores
 
-R.1. GetOrCreateBySubAsync()
-- Busca um `CorredorEntity` existente com `GoogleSub == googleSub` via `FirstOrDefaultAsync` -> [CTX.1](#ctx1-corredores-dbset)
-- Se encontrado, retorna imediatamente sem escrever no banco (caminho de login recorrente).
-- Se nao encontrado, monta um novo `CorredorEntity` com `Id = Guid.NewGuid()` e `CreatedAt = DateTime.UtcNow` (gerados em memoria, nao pelo banco).
-- Adiciona a entidade ao `DbSet<CorredorEntity>` e chama `SaveChangesAsync` -> [CTX.2](#ctx2-savechangesasync)
-- **Tratamento de concorrencia**: se `SaveChangesAsync` lancar `DbUpdateException` (violacao do indice unico `google_sub`, cenario de duas requisicoes simultaneas do primeiro login do mesmo usuario), o repositorio desanexa a entidade local (`EntityState.Detached`, para nao reenviar um INSERT invalido em uma proxima operacao no mesmo `DbContext`) e busca novamente o registro -- agora garantido existente, pois foi a outra requisicao concorrente que o criou -- via `FirstAsync` -> [CTX.1](#ctx1-corredores-dbset). Isso evita expor uma excecao de infraestrutura ao chamador e evita duplicidade de Corredor para o mesmo `sub`.
-- Retorna o `CorredorEntity` (existente ou recem-criado/recem-resolvido) para o `AuthenticationFilter`, que usa `corredor.Id` para popular `CurrentCorredor.Id` do escopo da requisicao.
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-**CTX. SteadyDbContext**
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `GoogleSub` | `google_sub` | `IsRequired()` |
+| `Email` | `email` | `Tipo por convenção do provider` |
+| `Name` | `name` | `Tipo por convenção do provider` |
+| `Roles` | `roles` | `HasColumnType("text[]"); HasDefaultValue(new[] { "Corredor" })` |
+| `TrainingPlanVersionId` | `training_plan_version_id` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
 
-<a id="ctx1-corredores-dbset"></a>
-CTX.1. Corredores (DbSet&lt;CorredorEntity&gt;)
-- Exposto como propriedade `DbSet<CorredorEntity> Corredores => Set<CorredorEntity>()`.
-- Mapeado em `OnModelCreating` para a tabela `corredores`: `Id` como chave primaria, `GoogleSub` mapeado para a coluna `google_sub` (obrigatoria) com indice unico (`IX_corredores_google_sub`), `CreatedAt` mapeado para `created_at`.
-- O indice unico em `google_sub` e a garantia de integridade no nivel do banco que sustenta o tratamento de concorrencia em R.1 -- sem ele, duas requisicoes simultaneas criariam dois Corredores para o mesmo usuario.
+Índices e relações (expressões reais do modelo):
 
-<a id="ctx2-savechangesasync"></a>
-CTX.2. SaveChangesAsync(CancellationToken)
-- Metodo padrao do `DbContext` do EF Core; persiste o changeset pendente (aqui, um unico INSERT) em uma transacao implicita.
-- Propaga `DbUpdateException` quando uma constraint do banco (aqui, o indice unico) e violada.
+```csharp
+HasIndex(c => c.GoogleSub).IsUnique();
+HasOne<TrainingPlanVersionEntity>()
+                .WithMany()
+                .HasForeignKey(c => c.TrainingPlanVersionId)
+                .OnDelete(DeleteBehavior.Restrict);
+```
 
-## 4. Observacoes Tecnicas
+Coleções usam conversão para `text[]` e ValueComparer com SequenceEqual, hash agregado e cópia ToList, detectando mudança em conteúdo.
 
-- **Performance**: caminho de login recorrente (corredor ja existe) faz apenas 1 SELECT indexado por `google_sub` -- baixo custo. Caminho de primeiro login faz 1 SELECT + 1 INSERT, e no pior caso (corrida) mais 1 SELECT de recuperacao.
-- **Tratamento de Erros**: a unica excecao tratada explicitamente e `DbUpdateException` por violacao do indice unico. Outras falhas de banco (timeout, conexao indisponivel) nao sao capturadas aqui e propagam para cima -- o `AuthenticationFilter` nao trata excecoes de infraestrutura, entao uma falha de banco neste ponto resultaria em erro 500 nao tratado explicitamente (ver TechnicalDebtsDocs).
-- **Integracoes Criticas**: este repositorio e o unico ponto de origem do `CorredorId` usado por todos os demais repositorios (`RunningSessionRepository`, `StrengthSessionRepository`, `PainLogRepository`) para isolamento de dados -- ver `Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md`. Um bug aqui (ex.: duplicar Corredor) comprometeria a integridade do isolamento em toda a aplicacao.
+<a id="observacoes"></a>
+## 4. Observações técnicas
+
+Consultas usam rastreamento padrão salvo AsNoTracking explicitamente indicado. Falhas de persistência e cancelamento propagam quando não houver captura documentada. Cada chave idempotente pertence à conta, não é uma chave global entre corredores. Entidades retornadas incluem os campos persistidos listados em CTX; resultados SaveResult contêm Entity e Created.
+
+<a id="fontes"></a>
+## 5. Fontes e verificação
+
+- [docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)
+- [docs/adr/ADR-008-roles-vinculo-e-autorizacao-do-personal.md](../../../docs/adr/ADR-008-roles-vinculo-e-autorizacao-do-personal.md)
+- [docs/adr/ADR-013-plano-do-steady-como-fonte-de-prescricao.md](../../../docs/adr/ADR-013-plano-do-steady-como-fonte-de-prescricao.md)
+- [tests/Steady.Api.Tests/AuthenticationTests.cs](../../../tests/Steady.Api.Tests/AuthenticationTests.cs)
+- [src/Steady.Infrastructure/Persistence/SteadyDbContext.cs](../../../src/Steady.Infrastructure/Persistence/SteadyDbContext.cs)
+- [src/Steady.Infrastructure/Repositories/CorredorRepository.cs](../../../src/Steady.Infrastructure/Repositories/CorredorRepository.cs)
+
+Os testes citados foram inspecionados como evidência de comportamento; não foram executados nesta rodada de documentação.
+
+Especificações de comportamento relacionadas:
+
+- [STORY-002](../../../specs/STORY-002/spec.bdd.md)
+- [STORY-009](../../../specs/STORY-009/spec.bdd.md)
+- [STORY-016](../../../specs/STORY-016/spec.bdd.md)
+- [STORY-019](../../../specs/STORY-019/spec.bdd.md)

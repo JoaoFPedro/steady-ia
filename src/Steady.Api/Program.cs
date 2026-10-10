@@ -1,10 +1,18 @@
 using Steady.Api.Auth;
 using Steady.Api.Endpoints;
+using Steady.Api.Services;
 using Steady.Infrastructure.DependencyInjection;
+using Steady.Domain.Adherence;
+using Steady.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSteadyInfrastructure();
+builder.Services.AddHttpClient<ClaudeExplanationProvider>();
+builder.Services.AddScoped<IExplanationProvider>(services =>
+    string.IsNullOrWhiteSpace(builder.Configuration["Anthropic:ApiKey"])
+        ? services.GetRequiredService<UnavailableExplanationProvider>()
+        : services.GetRequiredService<ClaudeExplanationProvider>());
 
 // Falha fechada: sem o client ID, a validação do ID token não verificaria a audiência
 // e a API aceitaria token emitido para qualquer outro aplicativo (ADR-002). Como isso é
@@ -22,6 +30,7 @@ builder.Services.AddSingleton(new GoogleAuthOptions(googleClientId));
 builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
 builder.Services.AddScoped<CurrentCorredor>();
 builder.Services.AddScoped<AuthenticationFilter>();
+builder.Services.AddHostedService<ReviewOutboxWorker>();
 
 var app = builder.Build();
 
@@ -37,6 +46,7 @@ api.MapPlanRequestEndpoints();
 api.MapCoachingLinkEndpoints();
 api.MapTrainingSheetEndpoints();
 api.MapTrainingPlanEndpoints();
+api.MapWorkoutReviewEndpoints();
 
 app.Run();
 

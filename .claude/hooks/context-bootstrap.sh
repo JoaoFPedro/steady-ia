@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# SDD Kit — context-bootstrap hook (UserPromptSubmit)
-# Injeta contexto do projeto automaticamente quando um comando SDD é detectado.
+# isabel — context-bootstrap hook (UserPromptSubmit)
+# Injeta contexto do projeto automaticamente quando um comando isabel é detectado.
 # Substitui o check manual da seção "Primeira Ação" do CLAUDE.md.
 
 INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('prompt',''))" 2>/dev/null || echo "")
 
-# Silencioso para mensagens sem comando SDD
-if ! echo "$PROMPT" | grep -qE '^\s*/(init|onboard|analyze|feature|plan|spec|implement|review|sync)(\s|$)'; then
+# Silencioso para mensagens sem comando isabel
+if ! echo "$PROMPT" | grep -qE '^\s*/(init|onboard|analyze|feature|plan|triage|shape|build|check|reflect|documenta-ai)(\s|$)'; then
   exit 0
 fi
 
@@ -23,7 +23,7 @@ MISSING=""
 [ ! -f "${MEMORY_DIR}/DOMAIN.md" ]            && MISSING="${MISSING}\n  ✗ .sdd/memory/DOMAIN.md ausente — rode /init ou /onboard"
 
 if [ -n "$MISSING" ]; then
-  echo "[SDD BOOTSTRAP] Projeto sem fundação completa:"
+  echo "[isabel BOOTSTRAP] Projeto sem fundação completa:"
   echo -e "$MISSING"
   echo ""
   echo "Informe o usuário antes de continuar."
@@ -37,11 +37,11 @@ DOMAIN_ENTITIES=$(grep -A20 "^## Entidades" "${MEMORY_DIR}/DOMAIN.md" 2>/dev/nul
 KEY_PRINCIPLES=$(grep -A3 "^### Lei do Domínio\|^## Lei do Domínio" "${SDD_DIR}/PROJECT-CONSTITUTION.md" 2>/dev/null | grep "^-" | head -3 | sed 's/^- //' | tr '\n' ' | ')
 STACK_SUMMARY=$(grep -m1 "^|" "${SDD_DIR}/STACK.md" 2>/dev/null | tr -d '|' | tr -s ' ' | sed 's/^ //')
 PENDING_SYNC=""
-[ -f ".sdd/.pending-sync" ] && PENDING_SYNC="⚠️ /sync pendente para: $(cat .sdd/.pending-sync)"
+[ -f ".sdd/.pending-sync" ] && PENDING_SYNC="⚠️ /reflect pendente para: $(cat .sdd/.pending-sync)"
 
 # ─── Output injetado no contexto de Claude ───────────────────────────────────
 cat <<EOF
-[SDD CONTEXT LOADED] — leia antes de responder
+[isabel CONTEXT LOADED] — leia antes de responder
 
 Projeto: ${PROJECT_NAME:-desconhecido}
 Contexto: ${PROJECT_CONTEXT:-ver .sdd/memory/PROJECT.md}

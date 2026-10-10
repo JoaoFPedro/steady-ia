@@ -32,7 +32,7 @@ terceiro exige o mesmo cuidado, agravado por ser uma fronteira externa nova.
 
 ### Opção C: Claude API com saída estruturada
 
-- **Prós**: schema tipado torna a validação mecânica; SDK oficial; alinhado ao
+- **Prós**: schema tipado torna a validação mecânica; API oficial; alinhado ao
   ecossistema em que o projeto já é desenvolvido.
 - **Contras**: dependência externa paga, com latência e indisponibilidade
   próprias; exige contrato explícito de retenção e redaction.
@@ -45,8 +45,9 @@ Escolhemos **Opção C**.
 
 - `IExplanationProvider` no domínio/aplicação, com uma operação: fatos + ação
   autorizada → explicação estruturada ou falha. O domínio não conhece Anthropic.
-- `ClaudeExplanationProvider` na camada de infraestrutura/API, usando o SDK
-  oficial. Um teste em memória cobre todos os cenários da spec sem rede.
+- `ClaudeExplanationProvider` na camada de infraestrutura/API, usando a
+  Messages API oficial por `HttpClient`, sem acrescentar uma dependência apenas
+  para uma operação HTTP. Um teste em memória cobre os cenários sem rede.
 
 **Saída estruturada**
 

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Steady.Infrastructure.Persistence;
 using Steady.Infrastructure.Repositories;
+using Steady.Domain.Adherence;
 
 namespace Steady.Infrastructure.DependencyInjection;
 
@@ -31,6 +32,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPlanRequestRepository, PlanRequestRepository>();
         services.AddScoped<ICoachingLinkRepository, CoachingLinkRepository>();
         services.AddScoped<ITrainingSheetRepository, TrainingSheetRepository>();
+        services.AddScoped<IWorkoutReviewRepository, WorkoutReviewRepository>();
+        services.AddScoped<ReviewOutboxProcessor>();
+        services.AddScoped<ReviewExplanationRetryService>();
+        services.AddScoped<UnavailableExplanationProvider>();
 
         return services;
     }

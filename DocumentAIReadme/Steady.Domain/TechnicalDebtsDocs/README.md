@@ -1,14 +1,18 @@
-# Steady.Domain - TechnicalDebtsDocs - Índice
+# Steady.Domain - TechnicalDebtsDocs - Indice
 
-Análise de débitos técnicos de `src/Steady.Domain`, classificados por criticidade, com distinção explícita entre "regra de negócio complexa mas correta" (rastreável a ADR-001/spec, não é débito) e "débito técnico real" (lacuna, inconsistência ou gap de implementação).
+Cobertura: **12/12 unidades**. Tipos de apoio ficam agrupados com sua entidade/servico. Auditoria em 2026-09-27.
 
-| Documento | Região | Estado Geral | Descrição |
-|---|---|---|---|
-| [RunningSession-Treino-Corrida-Debts.md](./RunningSession-Treino-Corrida-Debts.md) | Treino-Corrida | Sem críticos | Gaps de validação em campos fora da spec original (ritmo médio, data futura). |
-| [StrengthSession-Treino-Forca-Debts.md](./StrengthSession-Treino-Forca-Debts.md) | Treino-Forca | Sem críticos | Cobertura de teste do guard defensivo de intensidade desconhecida; mesma lacuna de data futura. |
-| [PainLog-Treino-Dor-Debts.md](./PainLog-Treino-Dor-Debts.md) | Treino-Dor | Sem críticos, 1 Importante | Divergência entre spec BDD (indicador "doeu" explícito) e o modelo de domínio implementado (apenas Date + Region); região como texto livre sem vocabulário controlado. |
-| [OverloadDetectionService-Sobrecarga-Debts.md](./OverloadDetectionService-Sobrecarga-Debts.md) | Sobrecarga | Sem críticos, 2 Importantes | Mensagem de sugestão fixa/não personalizada; caso de borda `previousRunningLoad == 0` sem teste dedicado. Threshold de 110% e pesos de intensidade já assumidos como "sujeitos a calibração" na própria ADR-001 — não tratados como débito, mas como risco de produto já mitigado. |
-
-## Como usar
-
-Cada documento segue: Resumo Executivo → Problemas por Criticidade (🔴 Críticos / 🟡 Importantes / 🟢 Menores) → Plano de Ação → User Stories acionáveis com critérios de aceite e roteiro de teste. Nenhum item aqui listado bloqueia o uso atual do sistema — são oportunidades de robustez e evolução, não bugs em produção.
+| Documento | Descricao |
+|---|---|
+| [AdherencePolicyVersion-Aderencia-Debts](./AdherencePolicyVersion-Aderencia-Debts.md) | Comparar campos numericos com tolerancias rastreaveis por versao. |
+| [CoachingLink-Acompanhamento-Debts](./CoachingLink-Acompanhamento-Debts.md) | Controlar o ciclo de solicitacao, aceitacao e revogacao de acesso do personal. |
+| [OverloadDetectionService-Sobrecarga-Debts](./OverloadDetectionService-Sobrecarga-Debts.md) | Sobrecarga combinada: historico de 14 dias, perna pesada e aumento de carga de corrida de 10%. |
+| [PainLog-Treino-Dor-Debts](./PainLog-Treino-Dor-Debts.md) | Registro imutavel de dor por data e regiao corporal obrigatoria. |
+| [PlanRequest-Planejamento-Debts](./PlanRequest-Planejamento-Debts.md) | Preservar respostas do corredor sobre prova e disponibilidade, sem calcular exercicios. |
+| [RunningSession-Treino-Corrida-Debts](./RunningSession-Treino-Corrida-Debts.md) | Sessao de corrida com distancia, duracao, ritmo, esforco e carga calculada. |
+| [SteadyTrainingPlan-Planejamento-Debts](./SteadyTrainingPlan-Planejamento-Debts.md) | Representar uma versao do documento semanal do Steady e seu conteudo estatico. |
+| [StrengthSession-Treino-Forca-Debts](./StrengthSession-Treino-Forca-Debts.md) | Sessao de musculacao com grupo muscular, intensidade e pesos de carga 3/6/9. |
+| [TrainingSheet-Prescricao-Debts](./TrainingSheet-Prescricao-Debts.md) | Agrupar tres treinos de forca e as prescricoes de corrida de terca, quinta e sabado. |
+| [WorkoutAdherence-Aderencia-Debts](./WorkoutAdherence-Aderencia-Debts.md) | Resolver prescricoes e comparar execucoes com decisao deterministica de seguranca. |
+| [WorkoutExecution-Execucao-Debts](./WorkoutExecution-Execucao-Debts.md) | Preservar snapshot da musculacao realizada ou pulada, com identidade historica e nota. |
+| [WorkoutReview-Aderencia-Debts](./WorkoutReview-Aderencia-Debts.md) | Guardar comparacao, acao, versoes e estado da explicacao separados da execucao. |

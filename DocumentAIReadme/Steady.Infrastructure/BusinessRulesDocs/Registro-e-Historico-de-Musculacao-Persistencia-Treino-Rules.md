@@ -1,144 +1,79 @@
-# Registro e Historico de Musculacao - Persistencia-Treino - Regras de Negocio
+# Registro e Historico de Musculacao - Persistencia-Treino - Regras de Negócio
 
-## Indice
-- [1. Resumo da Funcionalidade](#1-resumo-da-funcionalidade)
-- [2. Jornada do Usuario](#2-jornada-do-usuario)
-- [3. Regras de Negocio por Funcionalidade](#3-regras-de-negocio-por-funcionalidade)
-- [4. Validacoes e Restricoes](#4-validacoes-e-restricoes)
-- [5. Fluxos de Processo](#5-fluxos-de-processo)
-- [6. Casos de Uso e Cenarios](#6-casos-de-uso-e-cenarios)
+## Índice
 
-## 1. Resumo da Funcionalidade
+- [Resumo](#resumo)
+- [Jornada](#jornada)
+- [Regras e restrições](#regras)
+- [Fluxo](#fluxo)
+- [Cenários](#cenarios)
 
-**Proposito**: guardar cada sessao de musculacao registrada pelo corredor, com grupo muscular e intensidade, para compor o historico e alimentar a deteccao de sobrecarga combinada.
+<a id="resumo"></a>
+## 1. Resumo da funcionalidade
 
-**Usuarios**: corredores autenticados.
+Guardar musculação resumida e dor, preservando o reenvio idempotente. Usuários: corredor e, nos recursos de coaching, personal autorizado por vínculo. A operação acontece nos registros/consultas do aplicativo ou no processamento de revisão. O valor é conservar histórico confiável e restringir acesso aos participantes autorizados.
 
-**Valor de Negocio**: a regra de negocio central do Steady (ver [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md)) depende especificamente de saber quando o corredor fez musculacao de **perna com intensidade pesada** -- sem essa persistencia detalhada (grupo muscular + intensidade), a deteccao de sobrecarga simplesmente nao existiria.
-
-**Frequencia de Uso**: a cada sessao de musculacao registrada.
-
-**Impacto Operacional**: alimenta, junto com o historico de corrida, o alerta de sobrecarga que e o principal diferencial do produto.
-
-## 2. Jornada do Usuario
-
-### Visao Geral da Jornada
+<a id="jornada"></a>
+## 2. Jornada do usuário
 
 ```mermaid
 journey
-    title Jornada do Corredor - Registro de musculacao
-    section Apos o treino de forca
-      Abre o app: 5: Corredor
-      Seleciona grupo muscular e intensidade: 4: Corredor
-      Informa duracao: 5: Corredor
-    section Registro
-      Sistema valida campos obrigatorios: 5: Sistema
-      Sistema salva associado ao corredor: 5: Sistema
-    section Consulta
-      Corredor ve a sessao no historico combinado: 5: Corredor
+    title Registro e Historico de Musculacao
+    section Preparação
+      Acessar conta autenticada: 5: Corredor
+      Informar ou consultar dados próprios: 4: Corredor
+    section Confirmação
+      Receber resultado da operação: 4: Corredor
+      Consultar histórico preservado: 5: Corredor
 ```
 
-### Pontos de Contato
-- **Registro (POST /api/strength-sessions)**: corredor informa grupo muscular, intensidade e duracao.
-- **Historico combinado (GET /api/training-sessions)**: musculacao aparece junto com corrida, ordenada por data.
-- **Avaliacao de sobrecarga**: musculacao de perna pesada e um dos dois gatilhos da regra combinada.
+Pontos de contato: conta autenticada, funcionalidade de treino/planejamento/coaching e histórico ou revisão. Os repositórios não exibem telas; preservam os dados usados por esses pontos de contato.
 
-## 3. Regras de Negocio por Funcionalidade
+<a id="regras"></a>
+## 3. Regras de negócio e restrições
 
-### 3.1. Registro de Sessao de Musculacao
+- **AddAsync**: Busca por corredor/chave; existente retorna Created=false. Mapeia Date, MuscleGroup, Intensity e DurationMinutes, gera Id, adiciona dor opcional e salva uma vez. Não cria ReviewOutbox: revisão detalhada pertence a TrainingSheetRepository.
+- **GetByCorredorIdAsync**: Lista somente CorredorId, sem ordem nem paginação.
+- **GetByIdAsync**: Consulta Id e CorredorId; ausência retorna null.
 
-**O que faz**: recebe uma sessao de musculacao ja validada pelo dominio e a associa ao corredor autenticado.
+A conta recebida vem da autenticação na API. Onde há personal, papel e vínculo têm funções diferentes: ter o papel não concede acesso a todo corredor. A regra específica de autorização está descrita acima e na documentação técnica. Inputs do domínio são validados antes da persistência; não há diagnóstico médico nesta camada.
 
-**Regras Aplicadas**:
-- **Grupo muscular e intensidade obrigatorios**: `StrengthSession.Create` rejeita sessoes sem esses campos antes de chegar ao repositorio (ver `specs/STORY-001/spec.bdd.md`, cenario "Tentativa de registrar sessao de musculacao sem grupo muscular ou intensidade").
-  - *Exemplo*: tentar registrar sem informar intensidade resulta em 400, sem gravar nada no banco.
-- **Cinco grupos musculares possiveis**: Peito+Triceps, Ombro, Perna Frontal, Perna Posterior, Biceps+Costas -- definidos como enum `MuscleGroup` em `Steady.Domain`.
-- **Tres niveis de intensidade**: Leve, Moderado, Pesado -- definidos como enum `Intensity`. A combinacao "Perna Frontal ou Posterior" + "Pesado" e o gatilho especifico de musculacao para a regra de sobrecarga.
-- **Persistido de forma legivel**: grupo muscular e intensidade sao gravados como texto no banco (nao como numero), facilitando auditoria direta dos dados sem precisar decodificar um enum.
-- **Dono sempre do contexto de autenticacao**: mesmo padrao de `RunningSessionRepository` -- o `CorredorId` vem do corredor autenticado, nunca do payload do cliente.
-- **Reenvio nao duplica**: a chave de idempotencia enviada no header `Idempotency-Key` (ver [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)) e gravada junto com o registro, escopada por `(corredor_id, idempotency_key)`. Existe para a fila offline do app: se a resposta se perder depois que o servidor ja persistiu o registro, o app reenvia o mesmo item da fila. Ao reconhecer a chave, o repositorio devolve a sessao ja existente em vez de criar outra.
-  - *Exemplo*: app perde conexao logo apos enviar a musculacao; ao reenviar com a mesma `Idempotency-Key`, o repositorio devolve a sessao ja salva, sem gravar uma segunda linha.
-
-**Cenarios de Uso**:
-- **Registro valido**: grupo muscular, intensidade e duracao informados corretamente.
-- **Registro invalido**: campo obrigatorio ausente, rejeitado no dominio antes da persistencia.
-
-**Resultado Esperado**: sessao disponivel no historico combinado e considerada na proxima avaliacao de sobrecarga.
-
-### 3.2. Consulta de Historico de Musculacao
-
-**O que faz**: devolve todas as sessoes de musculacao do corredor autenticado.
-
-**Regras Aplicadas**:
-- **Isolamento por corredor**: ver a regra central em `Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md`.
-- **Combinado com corrida no historico**: `TrainingHistoryEndpoints` junta o resultado deste repositorio com o de `RunningSessionRepository` para formar um unico historico ordenado por data (fora do escopo deste repositorio, mas relevante para entender o consumo).
-- **Base para deteccao de sobrecarga**: `OverloadAssessmentEndpoints` usa este historico para identificar musculacao de perna pesada nos ultimos 7 dias.
-
-**Cenarios de Uso**:
-- **Corredor com historico de musculacao**: lista completa retornada.
-- **Corredor sem musculacao registrada**: lista vazia, sem erro.
-
-**Resultado Esperado**: historico fiel e exclusivo do corredor, pronto para exibicao e para calculo de sobrecarga.
-
-## 4. Validacoes e Restricoes
-
-### Controle de Acesso
-- **Permissoes**: apenas o proprio corredor acessa suas sessoes de musculacao.
-
-### Dados e Entrada
-- **Dados Obrigatorios**: grupo muscular, intensidade e duracao (> 0) -- validados em `Steady.Domain` antes da persistencia.
-- **Formatos Aceitos**: grupo muscular e intensidade sao valores fechados (enum), nao texto livre -- previne inconsistencia de dados (ex.: "perna", "Perna", "PERNA" como valores diferentes).
-
-### Restricoes do Sistema
-- **Dependencias**: a consulta por corredor depende do indice `corredor_id` (`IX_strength_sessions_corredor_id`).
-
-## 5. Fluxos de Processo
-
-### Fluxo Principal
+<a id="fluxo"></a>
+## 4. Fluxos de processo
 
 ```mermaid
 flowchart TD
-    A[Corredor registra sessao de musculacao] --> B{Grupo muscular e intensidade informados?}
-    B -->|Nao| C[400 - campos obrigatorios ausentes]
-    B -->|Sim| D{Duracao valida maior que zero?}
-    D -->|Nao| C
-    D -->|Sim| E[Repositorio grava associando ao CorredorId]
-    E --> F[Sessao disponivel no historico combinado]
-    F --> G[Sistema verifica gatilho de perna pesada para sobrecarga]
+    A[Conta autenticada inicia operação] --> B{Identidade e condições do contrato atendidas?}
+    B -->|Não| C[Ausência ou falha conforme cenário]
+    B -->|Sim| D[Consulta ou gravação do recurso descrito]
+    D --> E{Recurso ou chave já existe?}
+    E -->|Sim| F[Usa estado persistido conforme contrato]
+    E -->|Não| G[Cria recurso ou retorna ausência]
+    F --> H[Resultado para funcionalidade]
+    G --> H
 ```
 
-### Integracoes com Outros Processos
+Integrações: autenticação fornece identidade; domínio valida prescrições/registros; persistência conserva estado; API traduz resultado para resposta.
 
-```mermaid
-graph LR
-    A[Registro de Musculacao] --> B[(strength_sessions)]
-    B --> C[Historico Combinado]
-    B --> D[Deteccao de Sobrecarga - gatilho perna pesada]
-    E[Registro de Corrida] --> F[(running_sessions)]
-    F --> D
-```
+<a id="cenarios"></a>
+## 5. Casos de uso e cenários
 
-## 6. Casos de Uso e Cenarios
+| Entrada | Pré-condição/ação | Resultado esperado |
+|---|---|---|
+| A, chave K, 2026-08-30, duração 40, dor=true | Registro novo válido | Sessão e dor confirmadas; Created=true |
+| A, mesma chave K | Reenvio | Sessão original e Created=false |
+| B, Id da sessão de A | Busca | null |
 
-### Caso de Uso 1: Corredor registra musculacao de perna pesada
-**Ator Principal**: Corredor autenticado.
-**Objetivo**: registrar o treino de forca do dia.
-**Pre-condicoes**: token valido; grupo muscular, intensidade e duracao em maos.
+A e B representam contas diferentes; K uma chave de idempotência; P um personal; R/L/F identificadores de revisão, vínculo ou ficha. Cada cenário parte do estado indicado, executa o método citado e verifica tanto o retorno quanto a ausência de mudança em dados alheios.
 
-**Fluxo Principal**:
-1. Corredor envia `POST /api/strength-sessions` com `MuscleGroup = PernaFrontal`, `Intensity = Pesado`, duracao valida.
-2. Dominio valida os campos obrigatorios.
-3. Repositorio persiste associando ao `CorredorId`.
-4. API responde 201 na primeira tentativa; se for um reenvio da fila offline com a mesma `Idempotency-Key`, a API responde 200 com a sessao ja existente, sem criar duplicata (ver ADR-003).
+Referências normativas e técnicas:
 
-**Pos-condicoes**: sessao passa a contar como possivel gatilho de musculacao para a regra de sobrecarga nos proximos 7 dias.
+- [docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)
+- [docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)
+- [tests/Steady.Api.Tests/StrengthSessionEndpointTests.cs](../../../tests/Steady.Api.Tests/StrengthSessionEndpointTests.cs)
+- [src/Steady.Infrastructure/Persistence/SteadyDbContext.cs](../../../src/Steady.Infrastructure/Persistence/SteadyDbContext.cs)
+- [Detalhamento técnico](../DevDocs/StrengthSessionRepository-Persistencia-Treino-DevDocs.md)
 
-### Matriz de Cenarios
-| Cenario | Entrada | Acao do Sistema | Resultado Esperado |
-|---------|---------|-----------------|-------------------|
-| Registro valido | PernaFrontal, Pesado, 40min | Persiste associada ao corredor | Sessao criada, 201 |
-| Reenvio com mesma Idempotency-Key | Mesmo payload e mesma chave de uma tentativa anterior ja persistida | Repositorio localiza `(corredor_id, idempotency_key)` existente e nao persiste de novo | Sessao existente devolvida, 200, sem duplicata |
-| Sem grupo muscular | grupo muscular ausente | Dominio rejeita antes da persistencia | 400, nada gravado |
-| Sem intensidade | intensidade ausente | Dominio rejeita antes da persistencia | 400, nada gravado |
-| Consulta com historico | Corredor com sessoes registradas | Filtra por corredor_id | Lista com as sessoes do corredor |
-| Consulta sem historico | Corredor sem sessoes | Filtra por corredor_id | Lista vazia |
+Especificações de comportamento relacionadas:
+
+- [STORY-003](../../../specs/STORY-003/spec.bdd.md)

@@ -24,7 +24,8 @@ public sealed record ExercisePrescriptionBody(
     int Sets,
     int Repetitions,
     int? DurationSeconds = null,
-    string? Observation = null);
+    string? Observation = null,
+    Guid? ExerciseKey = null);
 
 /// <summary>Faixa opcional: mínimo obrigatório, máximo ausente = alvo exato (ADR-012).</summary>
 public sealed record NumericRangeBody(double Min, double? Max);
@@ -49,7 +50,8 @@ public sealed record ExercisePrescriptionResponse(
     int Repetitions,
     decimal? SuggestedLoadKg,
     int? DurationSeconds,
-    string? Observation);
+    string? Observation,
+    Guid ExerciseKey);
 public sealed record NumericRangeResponse(double Min, double? Max);
 public sealed record IntRangeResponse(int Min, int? Max);
 public sealed record RunPrescriptionResponse(
@@ -80,7 +82,8 @@ public sealed record StrengthWorkoutExecutionBody(
     Guid TrainingSheetId,
     string WorkoutType,
     string Date,
-    IReadOnlyList<ExerciseExecutionBody>? Exercises);
+    IReadOnlyList<ExerciseExecutionBody>? Exercises,
+    bool PainReported = false);
 public sealed record CombinedWorkoutExecutionBody(
     StrengthWorkoutExecutionBody Strength,
     RunningSessionRequest Running);
@@ -91,7 +94,9 @@ public sealed record ExerciseExecutionResponse(
     int Repetitions,
     decimal? LoadKg,
     string? Note,
-    bool Skipped);
+    bool Skipped,
+    Guid ExerciseKey,
+    int? DurationSeconds);
 public sealed record StrengthWorkoutExecutionResponse(
     Guid Id,
     Guid TrainingSheetId,
@@ -108,4 +113,5 @@ public sealed record RunningHistoryResponse(
     int PerceivedEffort);
 public sealed record CoachingHistoryResponse(
     IReadOnlyList<StrengthWorkoutExecutionResponse> StrengthExecutions,
-    IReadOnlyList<RunningHistoryResponse> RunningSessions);
+    IReadOnlyList<RunningHistoryResponse> RunningSessions,
+    IReadOnlyList<WorkoutReviewResponse> Reviews);

@@ -3,8 +3,10 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Card, Kicker, Muted } from '../src/ui/Nocturne';
 import { color, space, textAlpha, type } from '../src/theme/nocturne';
-import { queryApi } from '../src/services';
+import { coachingApi, queryApi } from '../src/services';
 import { loadTrainingHistory, type HistoryView } from '../src/training/trainingHistory';
+import type { WorkoutReview } from '../src/coaching/types';
+import { workoutReviewView } from '../src/coaching/workoutReviewView';
 
 /**
  * Histórico de treinos — onde o corredor confere que o registro feito na rua
@@ -14,6 +16,7 @@ export default function HistoryScreen() {
   const router = useRouter();
   // `sessionLost` nunca chega ao estado: leva ao login em vez de virar tela.
   const [view, setView] = useState<Exclude<HistoryView, { status: 'sessionLost' }> | null>(null);
+  const [reviews, setReviews] = useState<Record<string, WorkoutReview>>({});
 
   useFocusEffect(
     useCallback(() => {
@@ -23,6 +26,17 @@ export default function HistoryScreen() {
         if (!active) return;
         if (loaded.status === 'sessionLost') return router.replace('/login');
         setView(loaded);
+        if (loaded.status === 'loaded') {
+          void Promise.all(loaded.items.map(async (item) => {
+            const result = await coachingApi.workoutReviewByExecution(item.id);
+            return result.status === 'ok' ? [item.id, result.data] as const : null;
+          })).then((entries) => {
+            if (!active) return;
+            const found: Record<string, WorkoutReview> = {};
+            for (const entry of entries) if (entry !== null) found[entry[0]] = entry[1];
+            setReviews(found);
+          });
+        }
       });
 
       return () => {
@@ -66,9 +80,24 @@ export default function HistoryScreen() {
           <Kicker accent>{item.kicker}</Kicker>
           <Text style={s.itemTitle}>{item.title}</Text>
           <Text style={s.itemDate}>{item.date}</Text>
+          {reviews[item.id] !== undefined && <HistoryReview review={reviews[item.id]} />}
         </Card>
       ))}
     </ScrollView>
+  );
+}
+
+function HistoryReview({ review }: { review: WorkoutReview }) {
+  const view = workoutReviewView(review);
+  return (
+    <View style={s.review}>
+      <Text style={s.reviewTitle}>{view.title}</Text>
+      {view.action !== null && <Text style={s.reviewAction}>{view.action}</Text>}
+      {view.explanation !== null && <Muted>{view.explanation}</Muted>}
+      {view.explanationUnavailable && <Muted>Explicação indisponível; comparação e recomendação preservadas.</Muted>}
+      <Text style={s.itemDate}>{review.understoodAt === null ? 'Leitura ainda não confirmada' : 'Leitura confirmada'}</Text>
+      <Text style={s.itemDate}>{view.coherence}</Text>
+    </View>
   );
 }
 
@@ -101,4 +130,7 @@ const s = StyleSheet.create({
   item: { marginBottom: space[4] },
   itemTitle: { color: color.text, fontSize: type.cardTitle, marginTop: space[2] },
   itemDate: { color: textAlpha.faint, fontSize: type.label, marginTop: space[1] },
+  review: { borderTopWidth: 1, borderTopColor: textAlpha.rule, marginTop: space[4], paddingTop: space[4] },
+  reviewTitle: { color: color.text, fontSize: type.body },
+  reviewAction: { color: color.accentRamp[300], fontSize: type.meta, marginTop: space[2] },
 });

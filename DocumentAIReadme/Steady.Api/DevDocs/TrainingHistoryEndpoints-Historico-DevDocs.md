@@ -1,226 +1,223 @@
-# TrainingHistoryEndpoints - Historico - Especificacao Tecnica
+# TrainingHistoryEndpoints - Historico - Especificação Técnica
 
-## Indice
-- [1. Visao Geral Tecnica](#1-visao-geral-tecnica)
-- [2. Configuracao e Dependencias](#2-configuracao-e-dependencias)
-- [3. Detalhamento por Rota](#3-detalhamento-por-rota)
-  - [3.1. Listar Historico Consolidado de Treinos](#31-listar-historico-consolidado-de-treinos)
-  - [3.2. Consultar Sessao de Treino por ID](#32-consultar-sessao-de-treino-por-id)
-- [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
+Auditoria de fontes: 2026-09-27. Unidade: [TrainingHistoryEndpoints.cs](../../../src/Steady.Api/Endpoints/TrainingHistoryEndpoints.cs).
 
-## 1. Visao Geral Tecnica
+## Índice
 
-**Proposito**: Expor via API HTTP a consulta do historico consolidado de treinos (corrida + musculacao) do corredor autenticado, unificando os dois tipos de sessao em um unico contrato de resposta (`TrainingSessionResponse`).
+- [1. Visão Geral Técnica](#visao)
+- [2. Configuração e Dependências](#config)
+- [3. Detalhamento por Rota](#rotas)
+- [4. Observações Técnicas](#observacoes)
+  - [3.1. Listar histórico](#rota-1)
+  - [3.2. Consultar sessão](#rota-2)
 
-**Responsabilidades**:
-- Listar todas as sessoes de corrida e musculacao do corredor autenticado, ordenadas por data decrescente.
-- Consultar uma sessao especifica (corrida ou musculacao) pelo `Id`, garantindo isolamento por corredor (404 se pertencer a outro corredor ou nao existir).
-- Unificar os dois modelos de dominio distintos (`RunningSession`, `StrengthSession`) em um unico DTO de saida (`TrainingSessionResponse`), diferenciado pelo campo `Type` ("Corrida"/"Musculacao").
+<a id="visao"></a>
+## 1. Visão Geral Técnica
 
-**Integracoes**: PostgreSQL (via `IRunningSessionRepository` e `IStrengthSessionRepository`), Google Sign-In indiretamente atraves do `AuthenticationFilter`.
+**Propósito**: Unificar corridas, musculação avulsa e execuções da ficha no histórico do corredor.
 
-## 2. Configuracao e Dependencias
+**Responsabilidades**: autenticar pelo grupo, aplicar escopo do usuário, executar as rotas abaixo e projetar os contratos.
 
-Este arquivo (`src/Steady.Api/Endpoints/TrainingHistoryEndpoints.cs`) e uma classe estatica que expoe o metodo de extensao `MapTrainingHistoryEndpoints(RouteGroupBuilder)`, chamado a partir de `Program.cs` sobre o grupo `/api`.
+**Integrações**: ASP.NET Core Minimal APIs, Steady.Domain e Steady.Infrastructure com PostgreSQL. Validação Google pertence ao filtro comum. O handler não chama provedor de explicação.
 
-**Dependencias Injetadas (via parametros do delegate de cada rota)**:
-- `IRunningSessionRepository`: le sessoes de corrida do corredor.
-- `IStrengthSessionRepository`: le sessoes de musculacao do corredor.
-- `CurrentCorredor`: contexto do usuario autenticado, preenchido pelo `AuthenticationFilter`.
-- `CancellationToken`: propagado a partir do `HttpContext.RequestAborted`.
-- `Guid id` (somente na segunda rota): identificador da sessao, vinculado via `{id:guid}` no template de rota.
+**Fontes de regras**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-013](../../../specs/STORY-013/spec.bdd.md), [STORY-018](../../../specs/STORY-018/spec.bdd.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-009](../../../docs/adr/ADR-009-ficha-ativa-e-execucao-imutavel.md).
 
-**Lista de Endpoints**:
-- **GET** `/api/training-sessions` - Lista o historico consolidado (corrida + musculacao) do corredor autenticado.
-- **GET** `/api/training-sessions/{id:guid}` - Consulta uma sessao especifica (corrida ou musculacao) pelo Id.
+<a id="config"></a>
+## 2. Configuração e Dependências
 
+Composição: [Program.cs](../../../src/Steady.Api/Program.cs); persistência: [ServiceCollectionExtensions.cs](../../../src/Steady.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs). Cada lambda recebe os repositórios listados na rota, CurrentCorredor e CancellationToken quando há I/O. ILogger<CoachingAuditLog> aparece somente nas operações auditadas de vínculo/ficha/histórico.
+
+**Lista de endpoints**:
+
+- **GET** `/api/training-sessions` - Listar histórico.
+- **GET** `/api/training-sessions/{id:guid}` - Consultar sessão.
+
+<a id="f-auth"></a>
+**F. Endpoint Filter - AuthenticationFilter.InvokeAsync**
+
+1. O grupo `/api` recebe o filtro em `Program.cs`; `/health` fica fora do grupo.
+2. `Authorization` deve começar exatamente com `Bearer `; token vazio, inválido ou expirado retorna 401 antes da lógica do handler. O binding do framework pode rejeitar uma requisição malformada antes da execução do filtro.
+3. `GoogleTokenValidator.ValidateAsync` usa `GoogleJsonWebSignature.ValidateAsync` com Audience restrita a `Google:ClientId`; assinatura e validade são verificadas pela biblioteca com chaves públicas cacheadas. Sem `Google:ClientId`, Program lança erro ao compor a aplicação.
+4. Identidade é `sub`. E-mail e nome opcionais são normalizados e usados como cache de exibição, sem substituir identidade. `ICorredorRepository.GetOrCreateBySubAsync` resolve/provisiona corredor; `CurrentCorredor.Id` e `Roles` são preenchidos para a requisição.
+5. `CurrentCorredor.HasRole` compara papel com ordinal exato; um token válido não concede automaticamente `Personal`. Falhas de autenticação registram path, motivo e IP, sem token.
+
+<a id="u-common"></a>
+**U1. Common/Auth e conversão**
+
+- `CurrentCorredor`: identidade e papéis resolvidos pelo filtro; o cliente não escolhe o dono dos registros.
+- `DomainFactory.TryCreate`: captura apenas `ArgumentException` (inclui guard clauses derivadas) e retorna 400 com `{ "error": "mensagem" }`; não converte todo erro de persistência ou desserialização em erro de validação.
+- `Idempotency.HeaderName`: `Idempotency-Key`; quando exigida e ausente, `MissingKey` retorna 400. Guid inválido é rejeitado pelo binding; Guid.Empty não recebe validação específica no helper.
+- Records HTTP são serializados em camelCase pelo padrão do framework. Datas `DateOnly` são `yyyy-MM-dd`. Enums de StrengthSession não recebem conversor textual global; enums convertidos explicitamente por `ToString` ou por mapping seguem as strings descritas em cada rota.
+
+```mermaid
+graph LR
+    Cliente --> Filtro
+    Filtro --> Endpoint
+    Endpoint --> Dominio
+    Endpoint --> Repositorio
+    Repositorio --> PostgreSQL
+```
+
+### Contrato `TrainingSessionResponse`
+
+Fonte: [TrainingSessionResponse.cs](../../../src/Steady.Api/Contracts/TrainingSessionResponse.cs). Os nomes abaixo são os campos HTTP com serialização padrão camelCase.
+
+| Campo | Tipo C# | Opcional/padrão |
+|---|---|---|
+| `id` | `Guid` | não anulável |
+| `type` | `string` | não anulável |
+| `date` | `DateOnly` | não anulável |
+| `durationMinutes` | `int?` | null permitido |
+| `distanceKm` | `double?` | null permitido |
+| `averagePaceMinPerKm` | `double?` | null permitido |
+| `perceivedEffort` | `int?` | null permitido |
+| `muscleGroup` | `string?` | null permitido |
+| `intensity` | `string?` | null permitido |
+| `workoutType` | `string?` | null permitido; padrão `null` |
+
+<a id="catalogo"></a>
+### Catálogo compartilhado de domínio e persistência
+
+Não invoca factories ou serviços de domínio. A composição é uma projeção dos registros já persistidos. Nenhuma duração ou intensidade é inferida para execução de ficha.
+
+As consultas filtram CorredorId. O histórico de ficha usa GetExecutionsForRunnerAsync sem exigir vínculo atual; o detalhe busca somente RunningSessions e StrengthSessions. A ordenação final é em memória por Date, sem desempate adicional.
+
+<a id="rotas"></a>
 ## 3. Detalhamento por Rota
 
-### 3.1. Listar Historico Consolidado de Treinos
+<a id="rota-1"></a>
+### 3.1. Listar histórico
 
 **Rota**: `GET /api/training-sessions`
 
-**Autenticacao**: obrigatoria (Bearer ID token do Google) - aplicada pelo `AuthenticationFilter` no grupo `/api`.
+**Entrada**: Sem corpo; sem paginação. Header Authorization: Bearer obrigatório.
 
-**Entrada**: nenhum parametro - usa exclusivamente o `CurrentCorredor.Id` resolvido pela autenticacao.
+**Saída**: Lista de TrainingSessionResponse. Estruturas e tipos completos constam na seção de contratos.
 
-**Saida - 200 OK** (`List<TrainingSessionResponse>`, `src/Steady.Api/Contracts/TrainingSessionResponse.cs`):
-```json
-[
-  {
-    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "type": "Corrida",
-    "date": "2026-08-10",
-    "durationMinutes": 55,
-    "distanceKm": 10.5,
-    "averagePaceMinPerKm": 5.24,
-    "perceivedEffort": 7,
-    "muscleGroup": null,
-    "intensity": null
-  },
-  {
-    "id": "9c858901-8a57-4791-81fe-4c455b099bc9",
-    "type": "Musculacao",
-    "date": "2026-08-09",
-    "durationMinutes": 45,
-    "distanceKm": null,
-    "averagePaceMinPerKm": null,
-    "perceivedEffort": null,
-    "muscleGroup": "PernaFrontal",
-    "intensity": "Pesado"
-  }
-]
-```
-Sem sessoes: retorna `[]` (lista vazia), nunca erro (spec STORY-002, cenario de edge case "Corredor sem historico consulta seu historico de treinos").
+**Status**: 200 lista, inclusive vazia; todas as rotas podem retornar 401 no filtro. Binding inválido pode retornar 400 antes do handler.
 
-**Saida - 401 Unauthorized**: sem header `Authorization: Bearer {token}`, ou token invalido/expirado.
-
-#### Fluxo de Execucao
+#### Fluxo de Execução
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant Client as Cliente
     participant AuthenticationFilter
     participant Endpoint as TrainingHistoryEndpoints
-    participant RunningRepo as RunningSessionRepository
-    participant StrengthRepo as StrengthSessionRepository
+    participant Domain as Dominio
+    participant Repository as Repositorios
     participant Database as PostgreSQL
-
-    Client->>+AuthenticationFilter: GET /api/training-sessions (Bearer token)
-    AuthenticationFilter->>AuthenticationFilter: valida token e resolve Corredor (ver F.1)
-    alt Token ausente/invalido/expirado
-        AuthenticationFilter-->>Client: 401 Unauthorized
+    Client->>AuthenticationFilter: GET /api/training-sessions + Bearer
+    AuthenticationFilter->>AuthenticationFilter: Validar token Google e audiencia
+    alt Token invalido
+        AuthenticationFilter-->>Client: 401
     else Token valido
-        AuthenticationFilter->>+Endpoint: next() com CurrentCorredor.Id preenchido
-        Endpoint->>+RunningRepo: GetByCorredorIdAsync(currentCorredor.Id, ct)
-        RunningRepo->>+Database: SELECT running_sessions WHERE corredor_id = ...
-        Database-->>-RunningRepo: linhas de corrida
-        RunningRepo-->>-Endpoint: IReadOnlyList RunningSessionEntity
-        Endpoint->>+StrengthRepo: GetByCorredorIdAsync(currentCorredor.Id, ct)
-        StrengthRepo->>+Database: SELECT strength_sessions WHERE corredor_id = ...
-        Database-->>-StrengthRepo: linhas de musculacao
-        StrengthRepo-->>-Endpoint: IReadOnlyList StrengthSessionEntity
-        Endpoint->>Endpoint: mapeia ambas as listas para TrainingSessionResponse, concatena e ordena por Date desc
-        Endpoint-->>-Client: 200 OK (List de TrainingSessionResponse)
+        AuthenticationFilter->>Repository: GetOrCreateBySubAsync
+        Repository->>Database: Resolver conta e cache do provedor
+        Database-->>Repository: Conta e roles
+        Repository-->>AuthenticationFilter: Corredor
+        AuthenticationFilter->>Endpoint: CurrentCorredor preenchido
+        Endpoint->>Repository: IRunningSessionRepository.GetByCorredorIdAsync + IStrengthSessionRepository.GetByCorredorIdAsync + ITrainingSheetRepository.GetExecutionsForRunnerAsync
+        Repository->>Database: Consultar dados com escopo autorizado
+        Database-->>Repository: Resultado
+        Repository-->>Endpoint: Entidade, lista ou estado
+        Note over Endpoint,Domain: Sem chamada direta de regra de dominio neste handler
+        Endpoint-->>Client: Status e contrato descritos nesta rota
     end
 ```
 
 #### Detalhamento do Fluxo
 
-**E. Endpoint (TrainingHistoryEndpoints)**
+<a id="e-1"></a>
+**E.1. Lambda de rota em MapTrainingHistoryEndpoints**
 
-E.1. `MapTrainingHistoryEndpoints()` - handler de `GET /training-sessions`
-- Recebe `IRunningSessionRepository`, `IStrengthSessionRepository`, `CurrentCorredor` e `CancellationToken` por injecao de parametros.
-- Chama `runningRepository.GetByCorredorIdAsync(currentCorredor.Id, ct)` -> [R1.1](#r11-runningsessionrepositorygetbycorredoridasync).
-- Chama `strengthRepository.GetByCorredorIdAsync(currentCorredor.Id, ct)` -> [R2.1](#r21-strengthsessionrepositorygetbycorredoridasync).
-- Mapeia entidades de corrida para `TrainingSessionResponse` com `Type = "Corrida"`, preenchendo `DistanceKm`, `AveragePaceMinPerKm`, `PerceivedEffort` e deixando `MuscleGroup`/`Intensity` como `null`.
-- Mapeia entidades de musculacao para `TrainingSessionResponse` com `Type = "Musculacao"`, preenchendo `MuscleGroup`/`Intensity` (convertidos para `string` via `.ToString()`) e deixando `DistanceKm`/`AveragePaceMinPerKm`/`PerceivedEffort` como `null`.
-- Concatena as duas listas (`.Concat(...)`) e ordena por `Date` decrescente (`.OrderByDescending(s => s.Date)`).
-- Retorna `Results.Ok(sessions)` -> `200 OK`.
+Lê as três origens sequencialmente; corrida usa Type Corrida, força avulsa e ficha usam Musculacao; ficha tem durationMinutes null e workoutType push/pull/lower; converte sua data yyyy-MM-dd; concatena e ordena data decrescente.
 
-**F. Endpoint Filter (AuthenticationFilter)**
+Navegação: [F. autenticação](#f-auth), [D1. domínio](#d-1), [R1. persistência](#r-1), [U1. suporte](#u-common).
 
-<a id="f1-authenticationfilterinvokeasync"></a>
-F.1. `InvokeAsync()` - aplicado a todo o grupo `/api`. Mesmo comportamento documentado em [RunningSessionEndpoints DevDocs - F.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#f1-authenticationfilterinvokeasync).
+<a id="d-1"></a>
+**D1.1. Domínio no fluxo**
 
-**D1. Domain**
+Não invoca factories ou serviços de domínio. A composição é uma projeção dos registros já persistidos. Nenhuma duração ou intensidade é inferida para execução de ficha.
 
-Nao ha chamada a factories de dominio nesta rota - o mapeamento e feito diretamente das entidades de persistencia (`RunningSessionEntity`/`StrengthSessionEntity`) para o DTO de resposta (`TrainingSessionResponse`), sem passar por `RunningSession.Create`/`StrengthSession.Create`. Diferente de [OverloadAssessmentEndpoints](./OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md), que reconstroi objetos de dominio para aplicar `OverloadDetectionService`.
+<a id="r-1"></a>
+**R1.1. Métodos e persistência**
 
-**R1. Repository (RunningSessionRepository)**
+Chamada desta rota: `IRunningSessionRepository.GetByCorredorIdAsync + IStrengthSessionRepository.GetByCorredorIdAsync + ITrainingSheetRepository.GetExecutionsForRunnerAsync`.
 
-<a id="r11-runningsessionrepositorygetbycorredoridasync"></a>
-R1.1. `RunningSessionRepository.GetByCorredorIdAsync(corredorId, cancellationToken)` - identico ao documentado em [OverloadAssessmentEndpoints DevDocs - R1.1](./OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md#r11-runningsessionrepositorygetbycorredoridasync). Filtro por `CorredorId` direto no banco.
+A operação específica e seu escopo estão descritos no fluxo acima; detalhes de query, snapshot, transação e reenvio estão no [catálogo de persistência](#catalogo). As consultas próprias filtram o dono no banco; leitura pelo personal exige o vínculo quando indicado. Nenhuma autorização por vínculo é acrescentada implicitamente pelo filtro comum.
 
-**R2. Repository (StrengthSessionRepository)**
+[Voltar ao endpoint](#e-1). O [filtro](#f-auth) resolve autenticação antes da lógica; os [utilitários](#u-common) não adicionam autorização por vínculo automaticamente.
 
-<a id="r21-strengthsessionrepositorygetbycorredoridasync"></a>
-R2.1. `StrengthSessionRepository.GetByCorredorIdAsync(corredorId, cancellationToken)` - identico ao documentado em [OverloadAssessmentEndpoints DevDocs - R2.1](./OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md#r21-strengthsessionrepositorygetbycorredoridasync).
-
----
-
-### 3.2. Consultar Sessao de Treino por ID
+<a id="rota-2"></a>
+### 3.2. Consultar sessão
 
 **Rota**: `GET /api/training-sessions/{id:guid}`
 
-**Autenticacao**: obrigatoria (Bearer ID token do Google) - aplicada pelo `AuthenticationFilter` no grupo `/api`.
+**Entrada**: id: Guid da sessão. Header Authorization: Bearer obrigatório.
 
-**Entrada**: `id` (`Guid`) - identificador da sessao (corrida ou musculacao), vinculado via constraint de rota `{id:guid}`.
+**Saída**: TrainingSessionResponse. Estruturas e tipos completos constam na seção de contratos.
 
-**Saida - 200 OK** (`TrainingSessionResponse`): mesma estrutura da rota de listagem, com um unico objeto (nao array).
+**Status**: 200 encontrada; 404 ausente ou de outro corredor; todas as rotas podem retornar 401 no filtro. Binding inválido pode retornar 400 antes do handler.
 
-**Saida - 404 Not Found**: quando o `id` nao corresponde a nenhuma sessao de corrida **nem** de musculacao pertencente ao corredor autenticado - inclusive quando a sessao existe mas pertence a outro corredor (nao revela a existencia do recurso, conforme regra de negocio #4 de `specs/STORY-002/spec.bdd.md` e [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)).
-
-**Saida - 401 Unauthorized**: sem header `Authorization: Bearer {token}`, ou token invalido/expirado.
-
-#### Fluxo de Execucao
+#### Fluxo de Execução
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant Client as Cliente
     participant AuthenticationFilter
     participant Endpoint as TrainingHistoryEndpoints
-    participant RunningRepo as RunningSessionRepository
-    participant StrengthRepo as StrengthSessionRepository
+    participant Domain as Dominio
+    participant Repository as Repositorios
     participant Database as PostgreSQL
-
-    Client->>+AuthenticationFilter: GET /api/training-sessions/{id} (Bearer token)
-    AuthenticationFilter->>AuthenticationFilter: valida token e resolve Corredor (ver F.1)
-    alt Token ausente/invalido/expirado
-        AuthenticationFilter-->>Client: 401 Unauthorized
+    Client->>AuthenticationFilter: GET /api/training-sessions/{id:guid} + Bearer
+    AuthenticationFilter->>AuthenticationFilter: Validar token Google e audiencia
+    alt Token invalido
+        AuthenticationFilter-->>Client: 401
     else Token valido
-        AuthenticationFilter->>+Endpoint: next() com CurrentCorredor.Id preenchido
-        Endpoint->>+RunningRepo: GetByIdAsync(currentCorredor.Id, id, ct)
-        RunningRepo->>+Database: SELECT running_sessions WHERE corredor_id = ... AND id = ...
-        Database-->>-RunningRepo: linha ou null
-        RunningRepo-->>-Endpoint: RunningSessionEntity ou null
-        alt Encontrado como corrida
-            Endpoint-->>Client: 200 OK (TrainingSessionResponse, Type=Corrida)
-        else Nao encontrado como corrida
-            Endpoint->>+StrengthRepo: GetByIdAsync(currentCorredor.Id, id, ct)
-            StrengthRepo->>+Database: SELECT strength_sessions WHERE corredor_id = ... AND id = ...
-            Database-->>-StrengthRepo: linha ou null
-            StrengthRepo-->>-Endpoint: StrengthSessionEntity ou null
-            alt Encontrado como musculacao
-                Endpoint-->>Client: 200 OK (TrainingSessionResponse, Type=Musculacao)
-            else Nao encontrado em nenhuma das duas tabelas (ou pertence a outro corredor)
-                Endpoint-->>-Client: 404 Not Found
-            end
-        end
+        AuthenticationFilter->>Repository: GetOrCreateBySubAsync
+        Repository->>Database: Resolver conta e cache do provedor
+        Database-->>Repository: Conta e roles
+        Repository-->>AuthenticationFilter: Corredor
+        AuthenticationFilter->>Endpoint: CurrentCorredor preenchido
+        Endpoint->>Repository: IRunningSessionRepository.GetByIdAsync + IStrengthSessionRepository.GetByIdAsync
+        Repository->>Database: Consultar dados com escopo autorizado
+        Database-->>Repository: Resultado
+        Repository-->>Endpoint: Entidade, lista ou estado
+        Note over Endpoint,Domain: Sem chamada direta de regra de dominio neste handler
+        Endpoint-->>Client: Status e contrato descritos nesta rota
     end
 ```
 
 #### Detalhamento do Fluxo
 
-**E. Endpoint (TrainingHistoryEndpoints)**
+<a id="e-2"></a>
+**E.2. Lambda de rota em MapTrainingHistoryEndpoints**
 
-E.2. `MapTrainingHistoryEndpoints()` - handler de `GET /training-sessions/{id:guid}`
-- Recebe `Guid id`, `IRunningSessionRepository`, `IStrengthSessionRepository`, `CurrentCorredor` e `CancellationToken`.
-- Chama `runningRepository.GetByIdAsync(currentCorredor.Id, id, ct)` -> [R1.2](#r12-runningsessionrepositorygetbyidasync). Se encontrado, retorna `200 OK` com `Type = "Corrida"` imediatamente (early return).
-- Se nao encontrado como corrida, chama `strengthRepository.GetByIdAsync(currentCorredor.Id, id, ct)` -> [R2.2](#r22-strengthsessionrepositorygetbyidasync). Se encontrado, retorna `200 OK` com `Type = "Musculacao"`.
-- Se nao encontrado em nenhuma das duas consultas, retorna `Results.NotFound()` -> `404`.
+Procura corrida com id e dono; se não existe, procura força avulsa; retorna 404 se nenhuma for encontrada. Esta rota não consulta execução de ficha.
 
-**F. Endpoint Filter (AuthenticationFilter)**
+Navegação: [F. autenticação](#f-auth), [D1. domínio](#d-2), [R1. persistência](#r-2), [U1. suporte](#u-common).
 
-Mesmo comportamento de [F.1](#f1-authenticationfilterinvokeasync), aplicado tambem a esta rota (grupo `/api` inteiro).
+<a id="d-2"></a>
+**D1.2. Domínio no fluxo**
 
-**D1. Domain**
+Não invoca factories ou serviços de domínio. A composição é uma projeção dos registros já persistidos. Nenhuma duração ou intensidade é inferida para execução de ficha.
 
-Nao ha chamada a factories de dominio - mapeamento direto de entidade de persistencia para DTO de resposta, igual a rota de listagem.
+<a id="r-2"></a>
+**R1.2. Métodos e persistência**
 
-**R1. Repository (RunningSessionRepository)**
+Chamada desta rota: `IRunningSessionRepository.GetByIdAsync + IStrengthSessionRepository.GetByIdAsync`.
 
-<a id="r12-runningsessionrepositorygetbyidasync"></a>
-R1.2. `RunningSessionRepository.GetByIdAsync(corredorId, sessionId, cancellationToken)` - `dbContext.RunningSessions.FirstOrDefaultAsync(s => s.CorredorId == corredorId && s.Id == sessionId, ct)`. O filtro combinado por `CorredorId` **e** `Id` no mesmo `WHERE` e o mecanismo que garante o isolamento (uma sessao de outro corredor simplesmente nao e encontrada, retornando `null`, nao lancando excecao de autorizacao) - implementa diretamente a regra de negocio #4 de `specs/STORY-002/spec.bdd.md` (404 sem revelar existencia).
+A operação específica e seu escopo estão descritos no fluxo acima; detalhes de query, snapshot, transação e reenvio estão no [catálogo de persistência](#catalogo). As consultas próprias filtram o dono no banco; leitura pelo personal exige o vínculo quando indicado. Nenhuma autorização por vínculo é acrescentada implicitamente pelo filtro comum.
 
-**R2. Repository (StrengthSessionRepository)**
+[Voltar ao endpoint](#e-2). O [filtro](#f-auth) resolve autenticação antes da lógica; os [utilitários](#u-common) não adicionam autorização por vínculo automaticamente.
 
-<a id="r22-strengthsessionrepositorygetbyidasync"></a>
-R2.2. `StrengthSessionRepository.GetByIdAsync(corredorId, sessionId, cancellationToken)` - equivalente a R1.2, sobre `dbContext.StrengthSessions`.
+<a id="observacoes"></a>
+## 4. Observações Técnicas
 
-## 4. Observacoes Tecnicas
+Histórico próprio permanece acessível depois do encerramento do vínculo. DTO tem durationMinutes opcional e workoutType opcional. A execução da ficha aparece na lista, mas não possui detalhe nesta rota.
 
-- **Performance - listagem sem paginacao**: `GET /api/training-sessions` traz **todas** as sessoes do corredor de uma vez, sem `skip`/`take`/paginacao, e ordena em memoria apos concatenar duas listas ja materializadas (`.ToListAsync()` em cada repositorio, seguido de `.Concat().OrderByDescending()` no C#, nao no banco). Ver [TechnicalDebtsDocs](../TechnicalDebtsDocs/TrainingHistoryEndpoints-Historico-Debts.md).
-- **Performance - consulta por ID com duas queries sequenciais**: `GET /api/training-sessions/{id}` sempre tenta `RunningSessionRepository` primeiro; se a sessao for de musculacao, isso custa uma consulta "no banco" a mais (`SELECT` que retorna vazio) antes de encontrar o resultado correto. Nao ha um identificador de tipo (`Type`) no `id` para decidir de antemao qual tabela consultar.
-- **Tratamento de Erros**: nao ha validacao de entrada alem da constraint de rota `{id:guid}` (o proprio ASP.NET Core retorna `400` automaticamente se o segmento nao for um GUID valido, antes mesmo de alcancar o handler). Excecoes de infraestrutura nao tratadas seguem o mesmo debito generico ja identificado nos demais endpoints.
-- **Isolamento por corredor**: validado por teste de integracao dedicado (`tests/Steady.Api.Tests/AuthorizationTests.cs::AcessoADadoDeOutroCorredor_Retorna404`), cobrindo exatamente o cenario de erro da spec STORY-002.
+**Performance**: consultas são assíncronas com CancellationToken; onde a coleção não possui parâmetros de limite, o resultado é materializado integralmente. Não há paralelização de chamadas ao mesmo contexto no handler.
+
+**Tratamento de erros**: status acima descrevem caminhos explícitos; exceções inesperadas não têm tradução local genérica. 404 não deve ser interpretado como permissão de procurar dados de outro corredor.
+
+**Documentos relacionados**: [Regras](../BusinessRulesDocs/Historico-de-Treinos-Historico-Rules.md), [Débitos](../TechnicalDebtsDocs/TrainingHistoryEndpoints-Historico-Debts.md), [Índice](README.md).

@@ -1,7 +1,7 @@
 # Playbook
 
 > Guia prático de patterns, anti-patterns e refactorings.
-> Consulte durante o REFACTOR do TDD e no /review.
+> Consulte durante o REFACTOR do TDD e no /check.
 
 ---
 
@@ -501,11 +501,11 @@ Evita cascata de falhas. O sistema degrada com graça em vez de travar.
 
 > Engineer & QA é responsável pela segurança da implementação. A spec define o comportamento; o Engineer garante que ele seja seguro.
 > O sensor computacional (pre-commit hook) detecta automaticamente secrets e padrões perigosos.
-> O sensor inferencial (`/review`) valida semântica e intenção.
+> O sensor inferencial (`/check`) valida semântica e intenção.
 
 ### Referência rápida — OWASP Top 10 (2021)
 
-| # | Categoria | Sensor automático | Checklist /review |
+| # | Categoria | Sensor automático | Checklist /check |
 |---|-----------|-------------------|-------------------|
 | A01 | Broken Access Control | ✗ (inferencial) | ✓ |
 | A02 | Cryptographic Failures | ✓ pre-commit (secrets) | ✓ |
@@ -557,7 +557,7 @@ if (!order) throw new NotFoundError()  // não revela que existe
 password_hash = md5(password)
 
 // Errado — secret hardcoded
-const JWT_SECRET = "minha-chave-secreta-123"
+JWT secret embutido com um valor literal
 
 // Errado — token em localStorage (acessível por XSS)
 localStorage.setItem('token', jwt)
@@ -627,7 +627,7 @@ execFile('convert', [filename, 'output.pdf'])
 
 **Sintoma**: ausência de threat modeling na spec; fluxos sem limites de tentativa; recuperação de senha por pergunta secreta.
 
-**Detectar na fase de /spec (Three Amigos)**:
+**Detectar na fase de /shape (Three Amigos)**:
 - "O que acontece se este endpoint for chamado 1000x por minuto?"
 - "Um usuário pode inferir dados de outro pela resposta?"
 - "O fluxo de reset de senha pode ser abusado?"
@@ -799,10 +799,8 @@ Secrets nunca no código, nunca em config files commitados. O pre-commit hook bl
 
 ```
 # Padrões que o hook detecta e bloqueia:
-password = "valor_fixo"        → bloqueado
-api_key = "sk-abc123..."       → bloqueado
-JWT_SECRET = "minha-chave"     → bloqueado
-AWS_SECRET_ACCESS_KEY = "..."  → bloqueado
+atribuição de password ou API key com valor literal → bloqueado
+secret ou token de provedor conhecido embutido → bloqueado
 .env (arquivo inteiro)         → bloqueado
 
 # Correto — sempre via ambiente
@@ -839,12 +837,12 @@ Cada componente acessa apenas o que precisa:
 
 ## 7. Harness Layers
 
-> As três camadas de controle do SDD Kit. Cada uma combina sensores computacionais (determinísticos, rápidos) e inferenciais (LLM-based, semânticos).
+> As três camadas de controle do isabel. Cada uma combina sensores computacionais (determinísticos, rápidos) e inferenciais (LLM-based, semânticos).
 
 | Camada | Objetivo | Sensores computacionais | Sensores inferenciais |
 |--------|----------|------------------------|-----------------------|
-| **Behaviour** | O sistema funciona conforme especificado | Testes BDD/TDD, approved fixtures | `/sync` (drift spec ↔ código) |
-| **Maintainability** | Qualidade interna do código é sustentável | Linters, type checkers, complexity, coverage | `/review` (análise semântica de código) |
+| **Behaviour** | O sistema funciona conforme especificado | Testes BDD/TDD, approved fixtures | `/reflect` (drift spec ↔ código) |
+| **Maintainability** | Qualidade interna do código é sustentável | Linters, type checkers, complexity, coverage | `/check` (análise semântica de código) |
 | **Architecture Fitness** | Características arquiteturais se mantêm | Testes de arquitetura, constraint validators, Fitness Functions | Revisão de ADR por LLM |
 
 **Sensores computacionais** — determinísticos, executam em milissegundos. Configure como pre-commit hook ou CI check.
@@ -888,7 +886,7 @@ Cada componente acessa apenas o que precisa:
     "story": "STORY-001",
     "scenario": "Login com credenciais válidas",
     "layer": "behaviour",
-    "approved_by": "Jefferson",
+    "approved_by": "{nome do revisor}",
     "approved_at": "2026-05-04"
   },
   "input": { "email": "user@test.com", "password": "valid123" },
@@ -926,7 +924,7 @@ Pré-commit
 
 Commit / Push
   └── Sensores inferenciais básicos
-      └── /review local pelo agente (análise de diff)
+      └── /check local pelo agente (análise de diff)
 
 Pull Request
   ├── Revisão humana (sensor inferencial crítico)
@@ -939,7 +937,7 @@ CI/CD (pós-merge)
   └── Testes E2E em ambiente staging
 
 Contínuo (drift detection)
-  ├── /sync periódico (spec ↔ código)
+  ├── /reflect periódico (spec ↔ código)
   ├── Cobertura de qualidade (degradação silenciosa)
   ├── Dependências desatualizadas ou vulneráveis
   └── Feedback de runtime: SLOs, anomalias em logs
@@ -953,7 +951,7 @@ Contínuo (drift detection)
 
 ## Checklist rápido
 
-Use durante o `/review`:
+Use durante o `/check`:
 
 **Código**
 - [ ] KISS — a solução mais simples possível?
@@ -988,4 +986,4 @@ Use durante o `/review`:
 - [ ] Toda fixture tem `_meta` rastreando o cenário BDD?
 - [ ] Sensores computacionais (lint, type check, testes) passando?
 - [ ] Nenhuma Fitness Function da PROJECT-CONSTITUTION violada?
-- [ ] `/sync` rodado após refactor significativo?
+- [ ] `/reflect` rodado após refactor significativo?

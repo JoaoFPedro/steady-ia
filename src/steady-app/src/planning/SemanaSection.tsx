@@ -66,23 +66,23 @@ export function SemanaSection({
   const [expanded, setExpanded] = useState<string | null>(initialOpenDay);
 
   // O `y` de um `onLayout` é relativo ao pai, não ao topo do conteúdo rolável.
-  // O dia expandido está dois níveis abaixo, então a posição real é a soma das
-  // duas medidas — e elas não chegam em ordem garantida.
-  const posicao = useRef<{ lista?: number; dia?: number; jaAvisou?: boolean }>({});
-  const avisarQuandoSouber = (parte: 'lista' | 'dia', y: number) => {
+  // Como a Mobilidade agora vem antes desta seção, a posição real soma seção,
+  // lista e dia — e as três medidas não chegam em ordem garantida.
+  const posicao = useRef<{ secao?: number; lista?: number; dia?: number; jaAvisou?: boolean }>({});
+  const avisarQuandoSouber = (parte: 'secao' | 'lista' | 'dia', y: number) => {
     posicao.current[parte] = y;
-    const { lista, dia, jaAvisou } = posicao.current;
-    if (jaAvisou || lista === undefined || dia === undefined) return;
+    const { secao, lista, dia, jaAvisou } = posicao.current;
+    if (jaAvisou || secao === undefined || lista === undefined || dia === undefined) return;
 
     // Uma vez só. `onLayout` volta a disparar sempre que a lista se remede — e
     // ela se remede a cada dia que o corredor abre ou fecha. Sem esta trava, o
     // primeiro toque em qualquer outro dia puxaria a tela de volta para hoje.
     posicao.current.jaAvisou = true;
-    onDayLayout?.(lista + dia);
+    onDayLayout?.(secao + lista + dia);
   };
 
   return (
-    <View>
+    <View onLayout={(evento) => avisarQuandoSouber('secao', evento.nativeEvent.layout.y)}>
       <Text style={shared.kick}>Estrutura semanal (seu split)</Text>
       <View style={s.overviewTable}>
         {document.weekOverview.map((row) => (

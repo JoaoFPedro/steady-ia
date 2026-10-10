@@ -10,6 +10,7 @@ public sealed class StrengthSessionRepository(SteadyDbContext dbContext) : IStre
         Guid corredorId,
         StrengthSession session,
         Guid idempotencyKey,
+        bool painReported,
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.StrengthSessions
@@ -30,6 +31,17 @@ public sealed class StrengthSessionRepository(SteadyDbContext dbContext) : IStre
         };
 
         dbContext.StrengthSessions.Add(entity);
+        if (painReported)
+        {
+            dbContext.PainLogs.Add(new PainLogEntity
+            {
+                Id = Guid.NewGuid(),
+                CorredorId = corredorId,
+                IdempotencyKey = idempotencyKey,
+                Date = session.Date,
+                Region = "Informada no encerramento"
+            });
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new SaveResult<StrengthSessionEntity>(entity, Created: true);

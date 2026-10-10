@@ -21,7 +21,6 @@ const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'dados', label: 'Seus dados' },
   { id: 'fases', label: 'Fases' },
   { id: 'semana', label: 'Semana' },
-  { id: 'mobilidade', label: 'Mobilidade' },
   { id: 'regras', label: 'Regras' },
 ];
 
@@ -113,24 +112,26 @@ export function PlanningDocument({
         {section === 'dados' && <SeusDadosSection request={request} />}
         {section === 'fases' && <FasesSection document={document} />}
         {section === 'semana' && (
-          <SemanaSection
-            document={document}
-            statuses={dayStatuses}
-            todayIndex={todayIndex}
-            todayStatus={todayStatus}
-            initialOpenDay={openDay}
-            sheet={sheet}
-            sheetStale={sheetStale}
-            sheetLoading={sheetLoading}
-            onRegister={onRegister ?? (() => {})}
-            // Sem animação: o dia precisa já estar na tela quando ela aparece,
-            // não deslizar até lá depois (regra 1).
-            onDayLayout={(y) =>
-              body.current?.scrollTo({ y: Math.max(0, y - space[6]), animated: false })
-            }
-          />
+          <>
+            <MobilidadeSection document={document} />
+            <SemanaSection
+              document={document}
+              statuses={dayStatuses}
+              todayIndex={todayIndex}
+              todayStatus={todayStatus}
+              initialOpenDay={openDay}
+              sheet={sheet}
+              sheetStale={sheetStale}
+              sheetLoading={sheetLoading}
+              onRegister={onRegister ?? (() => {})}
+              // Sem animação: o dia precisa já estar na tela quando ela aparece,
+              // não deslizar até lá depois (regra 1).
+              onDayLayout={(y) =>
+                body.current?.scrollTo({ y: Math.max(0, y - space[6]), animated: false })
+              }
+            />
+          </>
         )}
-        {section === 'mobilidade' && <MobilidadeSection document={document} />}
         {section === 'regras' && <RegrasSection document={document} />}
       </ScrollView>
 

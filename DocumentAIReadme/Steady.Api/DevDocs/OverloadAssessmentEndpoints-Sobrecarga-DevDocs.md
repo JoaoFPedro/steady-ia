@@ -1,167 +1,152 @@
-# OverloadAssessmentEndpoints - Sobrecarga - Especificacao Tecnica
+# OverloadAssessmentEndpoints - Sobrecarga - Especificação Técnica
 
-## Indice
-- [1. Visao Geral Tecnica](#1-visao-geral-tecnica)
-- [2. Configuracao e Dependencias](#2-configuracao-e-dependencias)
-- [3. Detalhamento por Rota](#3-detalhamento-por-rota)
-  - [3.1. Consultar Avaliacao de Sobrecarga Atual](#31-consultar-avaliacao-de-sobrecarga-atual)
-- [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
+Auditoria de fontes: 2026-09-27. Unidade: [OverloadAssessmentEndpoints.cs](../../../src/Steady.Api/Endpoints/OverloadAssessmentEndpoints.cs).
 
-## 1. Visao Geral Tecnica
+## Índice
 
-**Proposito**: Expor via API HTTP o calculo de risco de sobrecarga combinada (corrida + musculacao) do corredor autenticado, a partir do historico persistido, aplicando a regra fundamentada em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md).
+- [1. Visão Geral Técnica](#visao)
+- [2. Configuração e Dependências](#config)
+- [3. Detalhamento por Rota](#rotas)
+- [4. Observações Técnicas](#observacoes)
+  - [3.1. Avaliar sobrecarga](#rota-1)
 
-**Responsabilidades**:
-- Carregar todo o historico de sessoes de corrida e musculacao do corredor autenticado.
-- Reconstruir instancias de dominio (`RunningSession`, `StrengthSession`) a partir das entidades persistidas.
-- Delegar o calculo de risco para `Steady.Domain.Overload.OverloadDetectionService.Evaluate`.
-- Retornar `200 OK` com o resultado da avaliacao (`hasRisk` + `suggestion` opcional + `hasSufficientHistory` - ver ADR-004).
+<a id="visao"></a>
+## 1. Visão Geral Técnica
 
-**Integracoes**: PostgreSQL (via `IRunningSessionRepository` e `IStrengthSessionRepository`), Google Sign-In indiretamente atraves do `AuthenticationFilter`. Nao ha chamada a servico externo alem da autenticacao.
+**Propósito**: Avaliar a combinação de corrida com musculação avulsa pesada de perna, distinguindo histórico insuficiente de ausência de risco.
 
-## 2. Configuracao e Dependencias
+**Responsabilidades**: autenticar pelo grupo, aplicar escopo do usuário, executar as rotas abaixo e projetar os contratos.
 
-Este arquivo (`src/Steady.Api/Endpoints/OverloadAssessmentEndpoints.cs`) e uma classe estatica que expoe o metodo de extensao `MapOverloadAssessmentEndpoints(RouteGroupBuilder)`, chamado a partir de `Program.cs` sobre o grupo `/api`.
+**Integrações**: ASP.NET Core Minimal APIs, Steady.Domain e Steady.Infrastructure com PostgreSQL. Validação Google pertence ao filtro comum. O handler não chama provedor de explicação.
 
-**Dependencias Injetadas (via parametros do delegate da rota)**:
-- `IRunningSessionRepository`: le todas as sessoes de corrida do corredor.
-- `IStrengthSessionRepository`: le todas as sessoes de musculacao do corredor.
-- `CurrentCorredor`: contexto do usuario autenticado, preenchido pelo `AuthenticationFilter`.
-- `CancellationToken`: propagado a partir do `HttpContext.RequestAborted`.
+**Fontes de regras**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-003](../../../specs/STORY-003/spec.bdd.md), [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md).
 
-**Dependencia estatica (nao injetada)**:
-- `Steady.Domain.Overload.OverloadDetectionService` (classe `static`): contem a regra de negocio de deteccao de sobrecarga, sem estado, sem dependencia de infraestrutura.
+<a id="config"></a>
+## 2. Configuração e Dependências
 
-**Lista de Endpoints**:
-- **GET** `/api/overload-assessment` - Retorna a avaliacao de risco de sobrecarga atual do corredor autenticado.
+Composição: [Program.cs](../../../src/Steady.Api/Program.cs); persistência: [ServiceCollectionExtensions.cs](../../../src/Steady.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs). Cada lambda recebe os repositórios listados na rota, CurrentCorredor e CancellationToken quando há I/O. ILogger<CoachingAuditLog> aparece somente nas operações auditadas de vínculo/ficha/histórico.
 
+**Lista de endpoints**:
+
+- **GET** `/api/overload-assessment` - Avaliar sobrecarga.
+
+<a id="f-auth"></a>
+**F. Endpoint Filter - AuthenticationFilter.InvokeAsync**
+
+1. O grupo `/api` recebe o filtro em `Program.cs`; `/health` fica fora do grupo.
+2. `Authorization` deve começar exatamente com `Bearer `; token vazio, inválido ou expirado retorna 401 antes da lógica do handler. O binding do framework pode rejeitar uma requisição malformada antes da execução do filtro.
+3. `GoogleTokenValidator.ValidateAsync` usa `GoogleJsonWebSignature.ValidateAsync` com Audience restrita a `Google:ClientId`; assinatura e validade são verificadas pela biblioteca com chaves públicas cacheadas. Sem `Google:ClientId`, Program lança erro ao compor a aplicação.
+4. Identidade é `sub`. E-mail e nome opcionais são normalizados e usados como cache de exibição, sem substituir identidade. `ICorredorRepository.GetOrCreateBySubAsync` resolve/provisiona corredor; `CurrentCorredor.Id` e `Roles` são preenchidos para a requisição.
+5. `CurrentCorredor.HasRole` compara papel com ordinal exato; um token válido não concede automaticamente `Personal`. Falhas de autenticação registram path, motivo e IP, sem token.
+
+<a id="u-common"></a>
+**U1. Common/Auth e conversão**
+
+- `CurrentCorredor`: identidade e papéis resolvidos pelo filtro; o cliente não escolhe o dono dos registros.
+- `DomainFactory.TryCreate`: captura apenas `ArgumentException` (inclui guard clauses derivadas) e retorna 400 com `{ "error": "mensagem" }`; não converte todo erro de persistência ou desserialização em erro de validação.
+- `Idempotency.HeaderName`: `Idempotency-Key`; quando exigida e ausente, `MissingKey` retorna 400. Guid inválido é rejeitado pelo binding; Guid.Empty não recebe validação específica no helper.
+- Records HTTP são serializados em camelCase pelo padrão do framework. Datas `DateOnly` são `yyyy-MM-dd`. Enums de StrengthSession não recebem conversor textual global; enums convertidos explicitamente por `ToString` ou por mapping seguem as strings descritas em cada rota.
+
+```mermaid
+graph LR
+    Cliente --> Filtro
+    Filtro --> Endpoint
+    Endpoint --> Dominio
+    Endpoint --> Repositorio
+    Repositorio --> PostgreSQL
+```
+
+### Contrato `OverloadAssessmentResponse`
+
+Fonte: [OverloadAssessmentResponse.cs](../../../src/Steady.Api/Contracts/OverloadAssessmentResponse.cs). Os nomes abaixo são os campos HTTP com serialização padrão camelCase.
+
+| Campo | Tipo C# | Opcional/padrão |
+|---|---|---|
+| `hasRisk` | `bool` | não anulável |
+| `suggestion` | `string?` | null permitido |
+| `hasSufficientHistory` | `bool` | não anulável |
+
+<a id="catalogo"></a>
+### Catálogo compartilhado de domínio e persistência
+
+OverloadDetectionService.Evaluate exige amplitude de histórico >=14 dias (data mais antiga até hoje, inclusive), não 14 registros diários. Janela recente hoje-6 até hoje; anterior hoje-13 até hoje-7. Risco exige PernaFrontal/PernaPosterior com Pesado na recente, carga anterior de corrida positiva e carga recente >=1.10 * anterior. Carga de corrida = duração * esforço. Sem histórico suficiente retorna InsufficientHistory; sem risco retorna suggestion null.
+
+RunningSessionRepository e StrengthSessionRepository carregam todas as sessões do dono com ToListAsync, sem corte temporal no banco. O endpoint reconstitui ambas as listas e só então aplica as janelas em memória.
+
+<a id="rotas"></a>
 ## 3. Detalhamento por Rota
 
-### 3.1. Consultar Avaliacao de Sobrecarga Atual
+<a id="rota-1"></a>
+### 3.1. Avaliar sobrecarga
 
 **Rota**: `GET /api/overload-assessment`
 
-**Autenticacao**: obrigatoria (Bearer ID token do Google) - aplicada pelo `AuthenticationFilter` no grupo `/api`.
+**Entrada**: Sem corpo; sem parâmetros. Header Authorization: Bearer obrigatório.
 
-**Entrada**: nenhum corpo ou parametro de rota/query - a avaliacao usa exclusivamente o `CurrentCorredor.Id` resolvido pela autenticacao e a data atual (`DateTime.UtcNow`) como referencia de "hoje".
+**Saída**: OverloadAssessmentResponse. Estruturas e tipos completos constam na seção de contratos.
 
-**Saida - 200 OK** (`OverloadAssessmentResponse`, `src/Steady.Api/Contracts/OverloadAssessmentResponse.cs`) - agora com tres estados distintos (ADR-004):
+**Status**: 200 inclusive sem histórico; 401 token inválido; todas as rotas podem retornar 401 no filtro. Binding inválido pode retornar 400 antes do handler.
 
-Risco identificado (sempre com `hasSufficientHistory: true` - a regra so avalia risco depois de confirmar historico suficiente):
-```json
-{
-  "hasRisk": true,
-  "suggestion": "Você teve um treino pesado de perna e sua carga de corrida aumentou nos últimos 7 dias. Considere reduzir a distância ou o ritmo da próxima corrida, ou aliviar a intensidade do próximo treino de perna, para não sobrecarregar.",
-  "hasSufficientHistory": true
-}
-```
-
-Sem risco, com historico suficiente avaliado (o app exibe "sem risco"):
-```json
-{
-  "hasRisk": false,
-  "suggestion": null,
-  "hasSufficientHistory": true
-}
-```
-
-Historico insuficiente - corredor com menos de 14 dias de historico total, ADR-001 §5 (o app exibe "reunindo dados", **nao** "sem risco" - antes do ADR-004 este caso era indistinguivel do anterior):
-```json
-{
-  "hasRisk": false,
-  "suggestion": null,
-  "hasSufficientHistory": false
-}
-```
-
-A combinacao `hasRisk: true` com `hasSufficientHistory: false` nunca ocorre - e invalida por construcao no dominio (as fabricas privadas de `OverloadAssessment` impedem essa combinacao).
-
-**Saida - 401 Unauthorized**: sem header `Authorization: Bearer {token}`, ou token invalido/expirado.
-
-Esta rota **nunca** retorna `400` - nao ha entrada de usuario a validar, apenas leitura e calculo.
-
-#### Fluxo de Execucao
+#### Fluxo de Execução
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant Client as Cliente
     participant AuthenticationFilter
     participant Endpoint as OverloadAssessmentEndpoints
-    participant RunningRepo as RunningSessionRepository
-    participant StrengthRepo as StrengthSessionRepository
+    participant Domain as Dominio
+    participant Repository as Repositorios
     participant Database as PostgreSQL
-    participant Domain as OverloadDetectionService
-
-    Client->>+AuthenticationFilter: GET /api/overload-assessment (Bearer token)
-    AuthenticationFilter->>AuthenticationFilter: valida token e resolve Corredor (ver F.1)
-    alt Token ausente/invalido/expirado
-        AuthenticationFilter-->>Client: 401 Unauthorized
+    Client->>AuthenticationFilter: GET /api/overload-assessment + Bearer
+    AuthenticationFilter->>AuthenticationFilter: Validar token Google e audiencia
+    alt Token invalido
+        AuthenticationFilter-->>Client: 401
     else Token valido
-        AuthenticationFilter->>+Endpoint: next() com CurrentCorredor.Id preenchido
-        Endpoint->>+RunningRepo: GetByCorredorIdAsync(currentCorredor.Id, ct)
-        RunningRepo->>+Database: SELECT running_sessions WHERE corredor_id = ...
-        Database-->>-RunningRepo: linhas de corrida
-        RunningRepo-->>-Endpoint: IReadOnlyList RunningSessionEntity
-        Endpoint->>+StrengthRepo: GetByCorredorIdAsync(currentCorredor.Id, ct)
-        StrengthRepo->>+Database: SELECT strength_sessions WHERE corredor_id = ...
-        Database-->>-StrengthRepo: linhas de musculacao
-        StrengthRepo-->>-Endpoint: IReadOnlyList StrengthSessionEntity
-        Endpoint->>Endpoint: reconstroi RunningSession/StrengthSession de dominio a partir das entidades
-        Endpoint->>+Domain: OverloadDetectionService.Evaluate(runningSessions, strengthSessions, today)
-        Domain-->>-Endpoint: OverloadAssessment (HasRisk, Suggestion, HasSufficientHistory)
-        Endpoint-->>-Client: 200 OK (OverloadAssessmentResponse)
+        AuthenticationFilter->>Repository: GetOrCreateBySubAsync
+        Repository->>Database: Resolver conta e cache do provedor
+        Database-->>Repository: Conta e roles
+        Repository-->>AuthenticationFilter: Corredor
+        AuthenticationFilter->>Endpoint: CurrentCorredor preenchido
+        Endpoint->>Repository: IRunningSessionRepository.GetByCorredorIdAsync + IStrengthSessionRepository.GetByCorredorIdAsync
+        Repository->>Database: Consultar dados com escopo autorizado
+        Database-->>Repository: Resultado
+        Repository-->>Endpoint: Entidade, lista ou estado
+        Endpoint->>Domain: Reconstituir sessoes e Evaluate (hoje UTC)
+        Domain-->>Endpoint: Risco e suficiencia de historico
+        Endpoint-->>Client: Status e contrato descritos nesta rota
     end
 ```
 
 #### Detalhamento do Fluxo
 
-**E. Endpoint (OverloadAssessmentEndpoints)**
+<a id="e-1"></a>
+**E.1. Lambda de rota em MapOverloadAssessmentEndpoints**
 
-E.1. `MapOverloadAssessmentEndpoints()` - handler de `GET /overload-assessment`
-- Recebe `IRunningSessionRepository`, `IStrengthSessionRepository`, `CurrentCorredor` e `CancellationToken` por injecao de parametros.
-- Chama `runningRepository.GetByCorredorIdAsync(currentCorredor.Id, ct)` -> [R1.1](#r11-runningsessionrepositorygetbycorredoridasync).
-- Chama `strengthRepository.GetByCorredorIdAsync(currentCorredor.Id, ct)` -> [R2.1](#r21-strengthsessionrepositorygetbycorredoridasync).
-- Reconstroi instancias de dominio a partir das entidades: `runningEntities.Select(e => RunningSession.Create(e.Date, e.DistanceKm, e.DurationMinutes, e.AveragePaceMinPerKm, e.PerceivedEffort))` e o equivalente para `StrengthSession.Create` -> [D2.1](#d21-runningsessioncreate-reconstrucao) / [D2.2](#d22-strengthsessioncreate-reconstrucao).
-- Calcula `today = DateOnly.FromDateTime(DateTime.UtcNow)`.
-- Chama `OverloadDetectionService.Evaluate(runningSessions, strengthSessions, today)` -> [D1.1](#d11-overloaddetectionserviceevaluate).
-- Retorna `Results.Ok(new OverloadAssessmentResponse(assessment.HasRisk, assessment.Suggestion, assessment.HasSufficientHistory))` -> `200 OK`. O terceiro campo (`HasSufficientHistory`) e o unico repasse novo desde o ADR-004 - o endpoint nao interpreta nem deriva esse valor, apenas propaga o que `OverloadDetectionService` calculou.
+Busca corridas e sessões avulsas do corredor; reconstitui factories de domínio; calcula hoje em UTC; Evaluate usa janelas fechadas de sete dias; projeta hasRisk, suggestion e hasSufficientHistory.
 
-**F. Endpoint Filter (AuthenticationFilter)**
+Navegação: [F. autenticação](#f-auth), [D1. domínio](#d-1), [R1. persistência](#r-1), [U1. suporte](#u-common).
 
-<a id="f1-authenticationfilterinvokeasync"></a>
-F.1. `InvokeAsync()` - aplicado a todo o grupo `/api`. Mesmo comportamento documentado em [RunningSessionEndpoints DevDocs - F.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#f1-authenticationfilterinvokeasync).
+<a id="d-1"></a>
+**D1.1. Domínio no fluxo**
 
-**D1. Domain (OverloadDetectionService, Steady.Domain.Overload)**
+OverloadDetectionService.Evaluate exige amplitude de histórico >=14 dias (data mais antiga até hoje, inclusive), não 14 registros diários. Janela recente hoje-6 até hoje; anterior hoje-13 até hoje-7. Risco exige PernaFrontal/PernaPosterior com Pesado na recente, carga anterior de corrida positiva e carga recente >=1.10 * anterior. Carga de corrida = duração * esforço. Sem histórico suficiente retorna InsufficientHistory; sem risco retorna suggestion null.
 
-<a id="d11-overloaddetectionserviceevaluate"></a>
-D1.1. `OverloadDetectionService.Evaluate(runningSessions, strengthSessions, today)` (`src/Steady.Domain/Overload/OverloadDetectionService.cs`) - regra fundamentada em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md) (ACWR - Gabbett 2016 - + session-RPE - Foster 2001 - + regra dos 10%). Algoritmo completo documentado no lado do dominio; aqui o essencial para entender o contrato HTTP.
-- Chama `HasSufficientHistory(...)`: calcula a data mais antiga entre todas as sessoes; se nao houver nenhuma sessao (`earliestDate is null`) ou o intervalo entre a data mais antiga e hoje for menor que `MinimumHistoryDays = 14`, retorna `OverloadAssessment.InsufficientHistory()` imediatamente - sem avaliar a regra combinada (**ADR-004**: antes deste ADR, retornava `OverloadAssessment.NoRisk()`, o que tornava "sem historico suficiente" indistinguivel de "avaliei e nao ha risco" para quem consome a API).
-- Define `recentWindow = [hoje-6, hoje]` e `previousWindow = [hoje-13, hoje-7]` (janelas moveis de 7 dias corridos, nao semana de calendario).
-- `hasHeavyLegSession`: verifica se existe alguma `StrengthSession` na `recentWindow` com `MuscleGroup` igual a `PernaFrontal` ou `PernaPosterior` **e** `Intensity.Pesado`.
-- `recentRunningLoad`/`previousRunningLoad`: soma de `RunningSession.Load` (`DurationMinutes * PerceivedEffort`) em cada janela, via `SumLoad`.
-- `isOverloaded = hasHeavyLegSession && previousRunningLoad > 0 && recentRunningLoad >= previousRunningLoad * 1.10` (constante `OverloadThreshold`).
-- Retorna `OverloadAssessment.Risk(SuggestionMessage)` (mensagem fixa, nao personalizada por numero, `HasSufficientHistory = true`) quando `isOverloaded`, senao `OverloadAssessment.NoRisk()` (`HasSufficientHistory = true`). `OverloadAssessment` tem tres fabricas privadas (`Risk`, `NoRisk`, `InsufficientHistory`) que impedem por construcao a combinacao invalida `HasRisk = true` com `HasSufficientHistory = false`.
+<a id="r-1"></a>
+**R1.1. Métodos e persistência**
 
-<a id="d21-runningsessioncreate-reconstrucao"></a>
-D2.1. `RunningSession.Create(...)` - mesma factory documentada em [RunningSessionEndpoints DevDocs - D1.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#d11-runningsessioncreate). Aqui e usada para **reconstruir** instancias de dominio a partir de dados ja persistidos e validados (nao para validar entrada nova do usuario) - as guard clauses tecnicamente rodam de novo, mas nao deveriam falhar porque os dados ja passaram pela validacao no momento do registro original.
+Chamada desta rota: `IRunningSessionRepository.GetByCorredorIdAsync + IStrengthSessionRepository.GetByCorredorIdAsync`.
 
-<a id="d22-strengthsessioncreate-reconstrucao"></a>
-D2.2. `StrengthSession.Create(...)` - mesma factory documentada em [StrengthSessionEndpoints DevDocs - D1.1](./StrengthSessionEndpoints-Treino-Forca-DevDocs.md#d11-strengthsessioncreate), usada aqui para reconstrucao a partir de dados persistidos.
+A operação específica e seu escopo estão descritos no fluxo acima; detalhes de query, snapshot, transação e reenvio estão no [catálogo de persistência](#catalogo). As consultas próprias filtram o dono no banco; leitura pelo personal exige o vínculo quando indicado. Nenhuma autorização por vínculo é acrescentada implicitamente pelo filtro comum.
 
-**R1. Repository (RunningSessionRepository)**
+[Voltar ao endpoint](#e-1). O [filtro](#f-auth) resolve autenticação antes da lógica; os [utilitários](#u-common) não adicionam autorização por vínculo automaticamente.
 
-<a id="r11-runningsessionrepositorygetbycorredoridasync"></a>
-R1.1. `RunningSessionRepository.GetByCorredorIdAsync(corredorId, cancellationToken)` - `dbContext.RunningSessions.Where(s => s.CorredorId == corredorId).ToListAsync(ct)`. Filtro por `CorredorId` direto no banco (nunca busca tudo e filtra em memoria - Playbook A01, [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)). Retorna lista vazia se o corredor nao tiver sessoes.
+<a id="observacoes"></a>
+## 4. Observações Técnicas
 
-**R2. Repository (StrengthSessionRepository)**
+O endpoint não consulta PainLogs nem StrengthWorkoutExecutions. A sugestão orienta sem bloquear registros. Factories de reconstituição são chamadas diretamente, sem DomainFactory.TryCreate; dados persistidos inválidos podem lançar exceção.
 
-<a id="r21-strengthsessionrepositorygetbycorredoridasync"></a>
-R2.1. `StrengthSessionRepository.GetByCorredorIdAsync(corredorId, cancellationToken)` - equivalente a R1.1, mas sobre `dbContext.StrengthSessions`.
+**Performance**: consultas são assíncronas com CancellationToken; onde a coleção não possui parâmetros de limite, o resultado é materializado integralmente. Não há paralelização de chamadas ao mesmo contexto no handler.
 
-## 4. Observacoes Tecnicas
+**Tratamento de erros**: status acima descrevem caminhos explícitos; exceções inesperadas não têm tradução local genérica. 404 não deve ser interpretado como permissão de procurar dados de outro corredor.
 
-- **Performance**: carrega **todo** o historico de corrida e musculacao do corredor a cada chamada (sem filtro de data no banco), mesmo que a regra so precise dos ultimos 14 dias. Para um corredor com meses/anos de historico, isso e leitura desnecessaria. Ver [TechnicalDebtsDocs](../TechnicalDebtsDocs/OverloadAssessmentEndpoints-Sobrecarga-Debts.md).
-- **Tratamento de Erros**: nao ha validacao de entrada (rota sem parametros) - o unico erro possivel e `401` (falha de autenticacao) ou falha de infraestrutura nao tratada (mesmo debito generico de middleware de excecao ja identificado nos demais endpoints).
-- **Reconstrucao de dominio via entidade de persistencia**: o endpoint reconstroi objetos de dominio chamando `RunningSession.Create`/`StrengthSession.Create` novamente sobre dados ja validados - funciona, mas acopla a leitura as mesmas guard clauses da escrita (qualquer mudanca de guard clause afeta tambem a leitura do historico).
-- **Consistencia com ADR-001**: a janela de 7 dias e o limiar de 14 dias de historico batem exatamente com o que esta documentado no ADR-001 e na spec BDD da STORY-001 - nenhuma divergencia encontrada entre codigo e documentacao.
-- **Estado de historico insuficiente explicito no contrato (ADR-004)**: `OverloadAssessmentResponse` ganhou o campo `hasSufficientHistory`. O app usa esse campo para decidir entre exibir "reunindo dados" (`false`) e "sem risco" (`true` + `hasRisk: false`) - antes da mudanca, os dois casos chegavam ao cliente como `{"hasRisk": false, "suggestion": null}` identicos, o que arriscava o app afirmar "sem risco" para um corredor cujo historico ainda nao permite avaliacao alguma. O limiar de 14 dias continua definido exclusivamente no dominio (ADR-001) - este endpoint apenas repassa o booleano calculado, nunca calcula o limiar.
+**Documentos relacionados**: [Regras](../BusinessRulesDocs/Avaliacao-de-Sobrecarga-Sobrecarga-Rules.md), [Débitos](../TechnicalDebtsDocs/OverloadAssessmentEndpoints-Sobrecarga-Debts.md), [Índice](README.md).

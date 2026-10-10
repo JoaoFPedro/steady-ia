@@ -14,9 +14,9 @@
 
 **Usuários**: corredores autenticados no Steady que complementam a corrida com treino de força.
 
-**Valor de Negócio**: é a segunda metade do dado necessário para a regra de sobrecarga (junto com a corrida) — sem saber quando o corredor fez musculação pesada de perna, o sistema não consegue relacionar isso ao aumento de carga de corrida e sugerir o ajuste certo (ver `specs/STORY-001/spec.bdd.md`).
+**Valor de Negócio**: é a segunda metade do dado necessário para a regra de sobrecarga (junto com a corrida) - sem saber quando o corredor fez musculação pesada de perna, o sistema não consegue relacionar isso ao aumento de carga de corrida e sugerir o ajuste certo (ver `specs/STORY-001/spec.bdd.md`).
 
-**Frequência de Uso**: alta — potencialmente a cada sessão de musculação realizada.
+**Frequência de Uso**: alta - potencialmente a cada sessão de musculação realizada.
 
 **Impacto Operacional**: dado incompleto (sem grupo muscular ou intensidade) nunca é salvo, evitando que a regra de sobrecarga rode com dados incompletos.
 
@@ -55,12 +55,12 @@ journey
   - *Exemplo*: tentar registrar uma sessão sem informar a intensidade é rejeitado com a mensagem "A intensidade é obrigatória para registrar uma sessão de musculação."
 - **Duração deve ser maior que zero**: a duração é usada para calcular a carga de treino da sessão.
   - *Exemplo*: registrar uma sessão de musculação com 0 minutos é rejeitado com a mensagem "A duração deve ser maior que zero."
-- **Peso da intensidade para cálculo de carga**: internamente, cada nível de intensidade tem um peso equivalente ao esforço percebido de corrida — Leve = 3, Moderado = 6, Pesado = 9. Isso permite comparar a carga de musculação com a carga de corrida na mesma escala.
+- **Peso da intensidade para cálculo de carga**: internamente, cada nível de intensidade tem um peso equivalente ao esforço percebido de corrida - Leve = 3, Moderado = 6, Pesado = 9. Isso permite comparar a carga de musculação com a carga de corrida na mesma escala.
 
 **Cenários de Uso**:
 - **Cenário Principal**: corredor termina o treino de força e registra grupo muscular, intensidade e duração reais.
 - **Cenário Alternativo**: não há variação alternativa documentada além do fluxo principal.
-- **Cenário de Exceção**: corredor tenta registrar sem grupo muscular, sem intensidade, ou com duração inválida — o sistema rejeita o registro e indica o(s) campo(s) faltante(s).
+- **Cenário de Exceção**: corredor tenta registrar sem grupo muscular, sem intensidade, ou com duração inválida - o sistema rejeita o registro e indica o(s) campo(s) faltante(s).
 
 **Resultado Esperado**: a sessão fica salva e disponível no histórico de treinos do corredor. Se for uma sessão de perna (frontal ou posterior) com intensidade pesada, ela passa a ser um dos dois fatores observados pela regra de sobrecarga nos próximos 7 dias.
 

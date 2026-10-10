@@ -10,6 +10,7 @@ import type {
   RunnerSearch,
   TrainingSheet,
   TrainingSheetDraft,
+  WorkoutReview,
 } from '../coaching/types';
 import type { TrainingPlanDocument } from '../planning/trainingPlanDocument';
 import type { SteadyTrainingPlanReader } from '../planning/steadyTrainingPlanReader';
@@ -33,6 +34,19 @@ export class HttpCoachingApi implements CoachingApi, SteadyTrainingPlanReader {
   linkedRunners() { return this.get<LinkedRunner[]>('/api/coaching/runners'); }
   history(corredorId: string) {
     return this.get<CoachingHistory>(`/api/coaching/runners/${corredorId}/history`);
+  }
+  latestWorkoutReview() { return this.get<WorkoutReview>('/api/workout-reviews/latest'); }
+  workoutReviewByExecution(executionId: string) {
+    return this.get<WorkoutReview>(`/api/workout-reviews/by-execution/${executionId}`);
+  }
+  acknowledgeWorkoutReview(reviewId: string) {
+    return this.command('POST', `/api/workout-reviews/${reviewId}/understood`);
+  }
+  retryWorkoutReview(reviewId: string) {
+    return this.command('POST', `/api/workout-reviews/${reviewId}/retry`);
+  }
+  contestWorkoutReview(reviewId: string) {
+    return this.command('POST', `/api/workout-reviews/${reviewId}/contest`);
   }
 
   /** O plano do Steady (ADR-013) — mesmo tratamento que `activeTrainingSheet`: sem parsing defensivo, é a própria API do Steady do outro lado. */

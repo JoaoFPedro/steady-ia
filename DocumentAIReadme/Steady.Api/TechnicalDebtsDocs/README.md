@@ -1,21 +1,18 @@
-# TechnicalDebtsDocs - Steady.Api - Indice
+# Steady.Api - TechnicalDebtsDocs
 
-Analise de debitos tecnicos por classe de Endpoints do `src/Steady.Api`, com criticidade e plano de acao.
+Auditoria: 2026-09-27. Cobertura: 10/10 unidades de endpoints; arquivos de mapping são apoio, não unidades adicionais.
 
-| Arquivo | Descricao |
-|---------|-----------|
-| [RunningSessionEndpoints-Treino-Corrida-Debts.md](./RunningSessionEndpoints-Treino-Corrida-Debts.md) | Location inconsistente no 201, ausencia de middleware de excecao global |
-| [StrengthSessionEndpoints-Treino-Forca-Debts.md](./StrengthSessionEndpoints-Treino-Forca-Debts.md) | Acoplamento enum-string persistido, Location inconsistente, ausencia de middleware de excecao |
-| [PainLogEndpoints-Treino-Dor-Debts.md](./PainLogEndpoints-Treino-Dor-Debts.md) | Ausencia total de rotas de leitura para registros de dor, regiao como texto livre nao normalizado |
-| [OverloadAssessmentEndpoints-Sobrecarga-Debts.md](./OverloadAssessmentEndpoints-Sobrecarga-Debts.md) | Carga de historico completo sem filtro de data, PainLog nao integrado ao calculo |
-| [TrainingHistoryEndpoints-Historico-Debts.md](./TrainingHistoryEndpoints-Historico-Debts.md) | Ausencia de paginacao na listagem, consulta individual ineficiente para musculacao |
+| Unidade | Descrição | Rotas |
+|---|---|---|
+| [RunningSessionEndpoints](RunningSessionEndpoints-Treino-Corrida-Debts.md) | Registrar a corrida do corredor e sua intenção durável de revisão, sem esperar o provedor de explicação. | 1 |
+| [StrengthSessionEndpoints](StrengthSessionEndpoints-Treino-Forca-Debts.md) | Registrar musculação avulsa com grupo, intensidade e duração, e opcionalmente dor no encerramento. | 1 |
+| [PainLogEndpoints](PainLogEndpoints-Treino-Dor-Debts.md) | Registrar região e data de dor de forma idempotente, sem diagnóstico ou reabertura de revisão publicada. | 1 |
+| [OverloadAssessmentEndpoints](OverloadAssessmentEndpoints-Sobrecarga-Debts.md) | Avaliar a combinação de corrida com musculação avulsa pesada de perna, distinguindo histórico insuficiente de ausência de risco. | 1 |
+| [TrainingHistoryEndpoints](TrainingHistoryEndpoints-Historico-Debts.md) | Unificar corridas, musculação avulsa e execuções da ficha no histórico do corredor. | 2 |
+| [PlanRequestEndpoints](PlanRequestEndpoints-Planejamento-Debts.md) | Persistir o contexto do planejamento do corredor com identidade estável criada antes da sincronização. | 3 |
+| [TrainingPlanEndpoints](TrainingPlanEndpoints-Planejamento-Debts.md) | Ler o documento versionado associado ao corredor, mantendo prescrições e mobilidade sem calcular progressão. | 1 |
+| [CoachingLinkEndpoints](CoachingLinkEndpoints-Acompanhamento-Debts.md) | Solicitar, aceitar e encerrar vínculos de acompanhamento, com descoberta por e-mail e acesso restrito por papel. | 8 |
+| [TrainingSheetEndpoints](TrainingSheetEndpoints-Ficha-Debts.md) | Publicar ficha versionada, registrar musculação ou treino combinado e disponibilizar histórico ao personal vinculado. | 5 |
+| [WorkoutReviewEndpoints](WorkoutReviewEndpoints-Revisao-Debts.md) | Consultar revisão determinística, registrar compreensão/contestação e solicitar nova explicação sem alterar o treino. | 6 |
 
-## Debitos transversais (repetidos em multiplos arquivos)
-
-- **Ausencia de middleware global de tratamento de excecao**: excecoes fora de `ArgumentException` (ex.: falha do PostgreSQL) nao sao tratadas explicitamente em nenhum endpoint de escrita, retornando erro nao padronizado. Identificado em `RunningSessionEndpoints`, `StrengthSessionEndpoints` e `PainLogEndpoints`.
-- **Location inconsistente no 201 Created**: `RunningSessionEndpoints` e `StrengthSessionEndpoints` apontam para `/api/training-sessions/{id}` (rota de outro arquivo); `PainLogEndpoints` aponta para uma rota que nao existe. A resposta `200 OK` de reenvio (ADR-003) nao envia `Location` em nenhum dos tres.
-- **Ausencia de paginacao/filtro de data**: identificado tanto em `OverloadAssessmentEndpoints` (carga de historico sem filtro de data) quanto em `TrainingHistoryEndpoints` (listagem sem paginacao) - mesma raiz: repositorios de sessao nao aceitam filtro de data.
-
-## Debito resolvido desde a ultima revisao
-
-- **Risco de duplicata por reenvio da fila offline**: identificado como debito implicito em `RunningSessionEndpoints`, `StrengthSessionEndpoints` e `PainLogEndpoints` antes da STORY-003. Resolvido pela chave de idempotencia obrigatoria (`Idempotency-Key`) e pelo indice unico `(corredor_id, idempotency_key)` - [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md). Nao consta mais como item aberto em nenhum dos tres arquivos.
+[Índice mestre](../../README.md).

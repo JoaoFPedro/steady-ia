@@ -1,149 +1,178 @@
-# Historico de Treinos - Historico - Regras de Negocio
+# Historico de Treinos - Historico - Regras de Negócio
 
-## Indice
-- [1. Resumo da Funcionalidade](#1-resumo-da-funcionalidade)
-- [2. Jornada do Usuario](#2-jornada-do-usuario)
-- [3. Regras de Negocio por Funcionalidade](#3-regras-de-negocio-por-funcionalidade)
-- [4. Validacoes e Restricoes](#4-validacoes-e-restricoes)
-- [5. Fluxos de Processo](#5-fluxos-de-processo)
-- [6. Casos de Uso e Cenarios](#6-casos-de-uso-e-cenarios)
+## Índice
 
+- [1. Resumo da Funcionalidade](#resumo)
+- [2. Jornada do Usuário](#jornada)
+- [3. Regras de Negócio por Funcionalidade](#regras)
+- [4. Validações e Restrições](#validacoes)
+- [5. Fluxos de Processo](#fluxos)
+- [6. Casos de Uso e Cenários](#casos)
+
+<a id="resumo"></a>
 ## 1. Resumo da Funcionalidade
 
-**Proposito**: Permitir que o corredor consulte, de forma unificada, todas as suas sessoes de treino ja registradas - corrida e musculacao juntas, ordenadas da mais recente para a mais antiga - e tambem consulte uma sessao especifica pelo identificador.
+**Propósito**: Unificar corridas, musculação avulsa e execuções da ficha no histórico do corredor.
 
-**Usuarios**: Corredor amador autenticado que quer revisar seu proprio historico de treino.
+**Usuários**: corredor autenticado; personal autenticado nas ações de acompanhamento que exigem esse papel.
 
-**Valor de Negocio**: Da visibilidade ao corredor sobre a consistencia do proprio treino ao longo do tempo, alem de ser a base de dados usada pela avaliacao de sobrecarga.
+**Valor de Negócio**: manter registros e decisões acessíveis somente a quem tem autorização, com resultado consistente entre consultas e sincronização.
 
-**Frequencia de Uso**: Alta - tipicamente consultada ao abrir o app, para acompanhar o progresso.
+**Frequência de Uso**: conforme registros e consultas do usuário, sem frequência obrigatória imposta por estas rotas.
 
-**Impacto Operacional**: Nenhum efeito colateral - e uma funcionalidade somente leitura, sem alterar dados.
+**Impacto Operacional**: o servidor mantém o estado persistido; a disponibilidade de rede e da persistência determina quando o resultado pode ser confirmado.
 
-## 2. Jornada do Usuario
+**Fontes da verdade**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-013](../../../specs/STORY-013/spec.bdd.md), [STORY-018](../../../specs/STORY-018/spec.bdd.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-009](../../../docs/adr/ADR-009-ficha-ativa-e-execucao-imutavel.md). As regras abaixo distinguem comportamento observável atual e limitações identificadas no código; não criam decisão nova de produto.
 
-### Visao Geral da Jornada
+<a id="jornada"></a>
+## 2. Jornada do Usuário
+
+### Visão Geral da Jornada
+
 ```mermaid
 journey
-    title Jornada do Corredor - Historico de Treinos
+    title Jornada da funcionalidade
     section Preparacao
-      Abre o app Steady: 5: Corredor
-      Acessa a tela de historico: 4: Corredor
-    section Execucao Principal
-      Ve a lista de sessoes recentes primeiro: 5: Sistema
-      Seleciona uma sessao para ver detalhes: 4: Corredor
-    section Finalizacao
-      Consulta os detalhes da sessao escolhida: 5: Sistema
+      Entrar na conta: 5: Usuario
+      Escolher operacao: 4: Usuario
+    section Operacao
+      Informar dados ou consultar: 4: Usuario
+      Validar acesso e dados: 4: Sistema
+    section Resultado
+      Ver confirmacao ou ausencia: 5: Usuario
 ```
 
 ### Pontos de Contato
-- **Lista consolidada**: uma unica tela mostra corrida e musculacao juntas, sem precisar alternar entre secoes separadas.
-- **Ordenacao por recencia**: as sessoes mais recentes aparecem primeiro.
-- **Detalhe individual**: o corredor pode abrir uma sessao especifica para ver todos os seus dados.
 
-## 3. Regras de Negocio por Funcionalidade
+- **Conta**: a identidade vem do login Google; nome e e-mail não determinam quem é dono dos registros.
+- **Operação**: o usuário acessa as ações descritas abaixo no aplicativo; este documento descreve o serviço que as sustenta.
+- **Retorno**: confirmação, dados ou erro explícito; indisponibilidade técnica não representa histórico vazio.
 
-### 3.1. Listagem do Historico Consolidado
+<a id="regras"></a>
+## 3. Regras de Negócio por Funcionalidade
 
-**O que faz**: Retorna todas as sessoes de treino (corrida e musculacao) do corredor autenticado, em uma unica lista, da mais recente para a mais antiga.
+### 3.1. Listar histórico
 
-**Regras Aplicadas** (fonte: `specs/STORY-002/spec.bdd.md`, regras #1-#3):
-- **Autenticacao obrigatoria**: mesmo requisito de qualquer outra funcionalidade da API.
-- **Isolamento por corredor**: o corredor so recebe suas proprias sessoes, nunca de outro corredor.
-  - *Exemplo*: corredor A registra 2 sessoes e corredor B registra 1 - a consulta do corredor A retorna exatamente 2 sessoes, nunca a de B.
-- **Sem historico, lista vazia**: um corredor que ainda nao registrou nenhuma sessao recebe uma lista vazia, nao um erro.
-- **Ordenacao por data decrescente**: a sessao mais recente aparece primeiro na lista.
-- **Tipo identificado por campo**: cada item da lista indica se e "Corrida" ou "Musculacao", com os campos relevantes de cada tipo preenchidos (os campos do outro tipo ficam vazios/nulos).
+**O que faz**: Listar histórico para o usuário autorizado.
 
-**Cenarios de Uso**:
-- **Cenario Principal**: corredor com sessoes de corrida e musculacao registradas consulta o historico e ve tudo junto, mais recente primeiro.
-- **Cenario Alternativo**: corredor recem-cadastrado sem nenhuma sessao consulta o historico e ve uma lista vazia.
+**Regras Aplicadas**:
 
-**Resultado Esperado**: uma visao completa e cronologica do treino do corredor, sem misturar dados de outros usuarios.
+- **Acesso**: usa a conta autenticada e as restrições específicas da operação. Dados próprios não podem ser solicitados com um dono escolhido no corpo.
+- **Execução atual**: Lê as três origens sequencialmente; corrida usa Type Corrida, força avulsa e ficha usam Musculacao; ficha tem durationMinutes null e workoutType push/pull/lower; converte sua data yyyy-MM-dd; concatena e ordena data decrescente.
+- **Resposta observável**: 200 lista, inclusive vazia.
 
-### 3.2. Consulta de Sessao Individual
+**Cenários de Uso**:
 
-**O que faz**: Retorna os dados completos de uma sessao especifica (corrida ou musculacao) a partir do seu identificador.
+- **Principal**: pessoa autorizada consulta dados existentes e recebe a visão correspondente.
+- **Alternativo**: ausência segue a resposta da rota: lista vazia ou recurso não encontrado.
+- **Exceção**: token inválido impede a operação; papel/vínculo/dono são conferidos quando exigidos.
 
-**Regras Aplicadas** (fonte: `specs/STORY-002/spec.bdd.md`, regra #4):
-- **Isolamento estrito**: se a sessao pertencer a outro corredor, o sistema responde como se ela nao existisse (nao revela que o recurso existe para outro usuario).
-  - *Exemplo*: corredor A tenta acessar diretamente o identificador de uma sessao do corredor B - recebe a mesma resposta de "nao encontrado" que receberia para um identificador inexistente.
-- **Busca em ambos os tipos**: o sistema procura o identificador tanto entre as sessoes de corrida quanto entre as de musculacao, sem que o corredor precise informar qual tipo e.
+**Resultado Esperado**: Lista de TrainingSessionResponse.
 
-**Cenarios de Uso**:
-- **Cenario Principal**: corredor abre o detalhe de uma sessao propria a partir da lista de historico.
-- **Cenario de Excecao**: corredor tenta acessar um identificador que nao existe, ou que pertence a outro corredor - recebe "nao encontrado" em ambos os casos.
+### 3.2. Consultar sessão
 
-**Resultado Esperado**: acesso aos detalhes completos da sessao quando ela pertence ao corredor consultante; nenhuma informacao vaza sobre sessoes de outros corredores.
+**O que faz**: Consultar sessão para o usuário autorizado.
 
-## 4. Validacoes e Restricoes
+**Regras Aplicadas**:
+
+- **Acesso**: usa a conta autenticada e as restrições específicas da operação. Dados próprios não podem ser solicitados com um dono escolhido no corpo.
+- **Execução atual**: Procura corrida com id e dono; se não existe, procura força avulsa; retorna 404 se nenhuma for encontrada. Esta rota não consulta execução de ficha.
+- **Resposta observável**: 200 encontrada; 404 ausente ou de outro corredor.
+
+**Cenários de Uso**:
+
+- **Principal**: pessoa autorizada consulta dados existentes e recebe a visão correspondente.
+- **Alternativo**: ausência segue a resposta da rota: lista vazia ou recurso não encontrado.
+- **Exceção**: token inválido impede a operação; papel/vínculo/dono são conferidos quando exigidos.
+
+**Resultado Esperado**: TrainingSessionResponse.
+
+<a id="validacoes"></a>
+## 4. Validações e Restrições
 
 ### Controle de Acesso
-- **Permissoes**: qualquer corredor autenticado pode consultar seu proprio historico.
-- **Hierarquia**: nao ha niveis de acesso diferentes no MVP - isolamento e estritamente por identidade do corredor.
+
+- Todas as ações requerem sessão válida. Papel Personal é necessário somente nas rotas explicitamente descritas acima.
+- O acesso do personal a histórico/revisão depende de vínculo ativo; encerrá-lo remove esse acesso nas consultas protegidas.
 
 ### Dados e Entrada
-- **Dados Obrigatorios**: nenhum para a listagem; o identificador da sessao para a consulta individual.
-- **Formatos Aceitos**: identificador no formato GUID.
-- **Limitacoes de Volume**: nenhuma - a listagem retorna todas as sessoes existentes do corredor, sem paginacao (ver observacao tecnica na documentacao de debitos).
 
-### Restricoes do Sistema
-- **Horarios de Funcionamento**: sem restricao.
-- **Dependencias**: exige o servico de login do Google disponivel.
-- **Limitacoes Tecnicas**: os registros de dor (ver [Registro de Dor](./Registro-de-Dor-Treino-Dor-Rules.md)) nao aparecem neste historico consolidado - apenas corrida e musculacao.
+Não invoca factories ou serviços de domínio. A composição é uma projeção dos registros já persistidos. Nenhuma duração ou intensidade é inferida para execução de ficha.
 
+- Tipos e campos completos estão na [especificação técnica](../DevDocs/TrainingHistoryEndpoints-Historico-DevDocs.md).
+- Registro que exige chave de sincronização sem essa chave é recusado. Reenvio não significa edição do dado original.
+
+### Restrições do Sistema
+
+Histórico próprio permanece acessível depois do encerramento do vínculo. DTO tem durationMinutes opcional e workoutType opcional. A execução da ficha aparece na lista, mas não possui detalhe nesta rota.
+
+Não há janela de horário de funcionamento codificada nestes endpoints. O serviço depende de token válido, configuração do provedor de login e persistência.
+
+<a id="fluxos"></a>
 ## 5. Fluxos de Processo
 
 ### Fluxo Principal
+
 ```mermaid
 flowchart TD
-    A[Corredor acessa o historico] --> B{Esta autenticado?}
-    B -->|Nao| C[Recusa - 401]
-    B -->|Sim| D[Busca sessoes de corrida do corredor]
-    D --> E[Busca sessoes de musculacao do corredor]
-    E --> F[Junta as duas listas e ordena por data decrescente]
-    F --> G[Retorna a lista consolidada - 200]
+    A[Usuario escolhe operacao] --> B{Sessao valida?}
+    B -->|Nao| C[Recusar acesso]
+    B -->|Sim| D{Autorizado para a operacao?}
+    D -->|Nao| E[Recusar ou ocultar recurso]
+    D -->|Sim| F[Validar dados e executar operacao]
+    F --> G[Mostrar resultado conforme a rota]
 ```
 
-### Integracoes com Outros Processos
+### Integrações com Outros Processos
+
 ```mermaid
 graph LR
-    A[Registro de Corrida] --> D[Historico de Treinos]
-    B[Registro de Musculacao] --> D
-    D --> E[Corredor acompanha sua consistencia de treino]
+    Conta[Conta autenticada] --> Funcionalidade[Operacao solicitada]
+    Funcionalidade --> Persistencia[Dados do corredor]
+    Persistencia --> Consulta[Consulta posterior autorizada]
 ```
 
-## 6. Casos de Uso e Cenarios
+<a id="casos"></a>
+## 6. Casos de Uso e Cenários
 
-### Caso de Uso 1: Corredor revisa o proprio progresso
-**Ator Principal**: Corredor autenticado
-**Objetivo**: Ver todas as sessoes de treino registradas, mais recentes primeiro
-**Pre-condicoes**: Corredor com sessoes de corrida e/ou musculacao ja registradas
+### Caso de Uso 1: Listar histórico
 
-**Fluxo Principal**:
-1. Corredor abre a tela de historico
-2. Sistema retorna a lista consolidada, ordenada por data
-3. Corredor seleciona uma sessao para ver detalhes
+**Ator Principal**: usuário autorizado para esta ação.
 
-**Pos-condicoes**: Corredor visualiza os detalhes completos da sessao escolhida.
+**Objetivo**: Listar histórico.
 
-### Caso de Uso 2: Corredor tenta acessar sessao de outro usuario
-**Ator Principal**: Corredor autenticado mal-intencionado ou por engano (ex.: link compartilhado)
-**Objetivo**: Acessar diretamente uma sessao pelo identificador
-**Pre-condicoes**: Identificador de uma sessao que pertence a outro corredor
+**Pré-condições**: sessão válida; papel, vínculo e recurso quando exigidos pela regra acima.
 
 **Fluxo Principal**:
-1. Corredor tenta consultar a sessao pelo identificador
-2. Sistema responde como se a sessao nao existisse
 
-**Pos-condicoes**: Nenhum dado de outro corredor e exposto.
+1. Usuário escolhe a ação e informa Sem corpo; sem paginação.
+2. Sistema executa as validações de acesso e dados descritas para esta ação.
+3. Sistema devolve Lista de TrainingSessionResponse.
 
-### Matriz de Cenarios
-| Cenario | Entrada | Acao do Sistema | Resultado Esperado |
-|---------|---------|-----------------|-------------------|
-| Historico com sessoes | Corredor com 2+ sessoes registradas | Retorna lista consolidada ordenada | 200 - lista com corrida e musculacao juntas |
-| Sem historico | Corredor sem nenhuma sessao | Retorna lista vazia | 200 - `[]` |
-| Consulta individual valida | ID de sessao propria | Retorna os detalhes da sessao | 200 - dados completos |
-| Consulta individual de outro corredor | ID de sessao de outro corredor | Recusa sem revelar existencia | 404 |
-| Consulta individual inexistente | ID que nao existe | Recusa | 404 |
-| Sem autenticacao | Requisicao sem token | Recusa antes de processar | 401 |
+**Pós-condições**: 200 lista, inclusive vazia. Uma resposta de erro não deve ser exibida pelo app como confirmação.
+
+### Caso de Uso 2: Consultar sessão
+
+**Ator Principal**: usuário autorizado para esta ação.
+
+**Objetivo**: Consultar sessão.
+
+**Pré-condições**: sessão válida; papel, vínculo e recurso quando exigidos pela regra acima.
+
+**Fluxo Principal**:
+
+1. Usuário escolhe a ação e informa id: Guid da sessão.
+2. Sistema executa as validações de acesso e dados descritas para esta ação.
+3. Sistema devolve TrainingSessionResponse.
+
+**Pós-condições**: 200 encontrada; 404 ausente ou de outro corredor. Uma resposta de erro não deve ser exibida pelo app como confirmação.
+
+### Matriz de Cenários
+
+| Cenário | Entrada | Ação do Sistema | Resultado Esperado |
+|---|---|---|---|
+| Listar histórico | Sem corpo; sem paginação | Validar acesso e executar regras acima | 200 lista, inclusive vazia |
+| Consultar sessão | id: Guid da sessão | Validar acesso e executar regras acima | 200 encontrada; 404 ausente ou de outro corredor |
+| Sessão inválida | Token ausente/expirado | Recusar antes da lógica do handler | 401 |
+
+**Navegação**: [Técnica](../DevDocs/TrainingHistoryEndpoints-Historico-DevDocs.md), [Débitos](../TechnicalDebtsDocs/TrainingHistoryEndpoints-Historico-Debts.md), [Índice](README.md).

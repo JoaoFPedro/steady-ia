@@ -11,6 +11,7 @@ export type StrengthExecutionPayload = {
   trainingSheetId: string;
   workoutType: Exclude<WorkoutType, 'run'>;
   date: string;
+  painReported?: boolean;
   exercises: Array<{
     exerciseId: string;
     loadKg: number | null;

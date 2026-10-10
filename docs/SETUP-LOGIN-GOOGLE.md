@@ -78,7 +78,7 @@ Google Cloud → **Credenciais** → **Criar credenciais** → **ID do cliente O
 ## 6. Gerar o build e instalar no celular
 
 ```bash
-cd /home/jones/projetos/steady/src/steady-app
+cd /mnt/c/Projetos/steady/src/steady-app
 npx eas-cli build --profile development --platform android
 ```
 
@@ -121,8 +121,8 @@ desenvolvimento. Por isso **não é preciso refazer o build** quando o `.env` mu
 — basta reiniciar o servidor:
 
 ```bash
-cd /home/jones/projetos/steady/src/steady-app
-REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.28 npx expo start --clear
+cd /mnt/c/Projetos/steady/src/steady-app
+REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.18 npx expo start --clear
 ```
 
 Abra o app instalado no celular; ele se conecta ao servidor sozinho.
@@ -136,7 +136,7 @@ Abra o app instalado no celular; ele se conecta ao servidor sozinho.
 
 O WSL2 roda numa rede NAT própria. O `hostname -I` de dentro dele devolve algo
 como `172.17.57.156`, que **não existe** para o celular. O endereço que vale é o
-do Windows na rede local: **192.168.0.28** (interface Ethernet).
+do Windows na rede local: **192.168.0.18** (interface Ethernet).
 
 Nada que escute dentro do WSL fica visível nesse endereço automaticamente. É
 preciso encaminhar as portas — **PowerShell como Administrador**:
@@ -170,7 +170,7 @@ Por padrão o Expo anuncia o IP que enxerga — o do WSL. O app instalado tentar
 buscar o bundle em `172.17.57.156:8081` e falharia. Force o endereço:
 
 ```bash
-REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.28 npx expo start --clear
+REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.18 npx expo start --clear
 ```
 
 ## Para o teste ponta a ponta funcionar

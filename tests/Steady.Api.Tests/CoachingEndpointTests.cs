@@ -86,6 +86,53 @@ public sealed class CoachingEndpointTests(CustomWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task Renomear_linha_preserva_identidade_historica_do_exercicio()
+    {
+        var (personal, corredor, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+        await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets", ValidSheet());
+        var first = (await corredor.GetFromJsonAsync<TrainingSheetResponse>(
+            "/api/coaching/training-sheet/active"))!;
+        var original = first.Workouts.Single(workout => workout.Type == "push").Exercises.Single();
+
+        var renamed = ValidSheet() with
+        {
+            Push = [new ExercisePrescriptionBody(
+                "Supino com barra", 4, 6, ExerciseKey: original.ExerciseKey)]
+        };
+        var response = await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets", renamed);
+        var second = (await corredor.GetFromJsonAsync<TrainingSheetResponse>(
+            "/api/coaching/training-sheet/active"))!;
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        second.Workouts.Single(workout => workout.Type == "push").Exercises.Single()
+            .ExerciseKey.Should().Be(original.ExerciseKey);
+    }
+
+    [Fact]
+    public async Task Chave_que_nao_pertence_a_ficha_ativa_e_recusada()
+    {
+        var (personal, _, _) = await ActiveLinkAsync();
+        var runner = (await personal.GetFromJsonAsync<List<LinkedRunnerResponse>>(
+            "/api/coaching/runners"))!.Single();
+        await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets", ValidSheet());
+
+        var forged = ValidSheet() with
+        {
+            Push = [new ExercisePrescriptionBody(
+                "Supino reto", 4, 6, ExerciseKey: Guid.NewGuid())]
+        };
+        var response = await personal.PostAsJsonAsync(
+            $"/api/coaching/runners/{runner.CorredorId}/training-sheets", forged);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Publicar_com_campos_numericos_opcionais_preserva_faixas_e_alvo_exato()
     {
         var (personal, corredor, _) = await ActiveLinkAsync();

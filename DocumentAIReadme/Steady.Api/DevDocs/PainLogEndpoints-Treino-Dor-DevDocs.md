@@ -1,181 +1,161 @@
-# PainLogEndpoints - Treino-Dor - Especificacao Tecnica
+# PainLogEndpoints - Treino-Dor - Especificação Técnica
 
-## Indice
-- [1. Visao Geral Tecnica](#1-visao-geral-tecnica)
-- [2. Configuracao e Dependencias](#2-configuracao-e-dependencias)
-- [3. Detalhamento por Rota](#3-detalhamento-por-rota)
-  - [3.1. Registrar Dor Pos-Treino](#31-registrar-dor-pos-treino)
-- [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
+Auditoria de fontes: 2026-09-27. Unidade: [PainLogEndpoints.cs](../../../src/Steady.Api/Endpoints/PainLogEndpoints.cs).
 
-## 1. Visao Geral Tecnica
+## Índice
 
-**Proposito**: Expor via API HTTP o registro de dor/desconforto pos-treino relatado pelo corredor, persistindo em PostgreSQL. Traduz a factory de dominio `Steady.Domain.Training.PainLog` para um endpoint REST.
+- [1. Visão Geral Técnica](#visao)
+- [2. Configuração e Dependências](#config)
+- [3. Detalhamento por Rota](#rotas)
+- [4. Observações Técnicas](#observacoes)
+  - [3.1. Registrar dor](#rota-1)
 
-**Responsabilidades**:
-- Receber o payload de um registro de dor via `POST /api/pain-logs`, exigindo o header `Idempotency-Key` (ADR-003) para suportar o reenvio da fila offline do app sem duplicar o registro.
-- Delegar a validacao de negocio (regiao do corpo obrigatoria) para a factory `PainLog.Create`.
-- Persistir o registro associado ao `CorredorId` do usuario autenticado, sem exigir vinculo com uma Sessao de Treino especifica, escopando a chave de idempotencia por corredor.
-- Retornar `201 Created` quando o registro e novo, `200 OK` quando a chave ja foi processada (reenvio), ou `400 Bad Request` quando a validacao de dominio falhar ou o header `Idempotency-Key` estiver ausente.
+<a id="visao"></a>
+## 1. Visão Geral Técnica
 
-**Integracoes**: PostgreSQL (via `IPainLogRepository` / EF Core), Google Sign-In indiretamente atraves do `AuthenticationFilter`. Diferente de `RunningSessionEndpoints`/`StrengthSessionEndpoints`, o registro de dor **nao** e consumido pela regra de deteccao de sobrecarga (`OverloadDetectionService`) - serve como sinal de calibracao para revisao futura da regra (ver [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md), secao Riscos).
+**Propósito**: Registrar região e data de dor de forma idempotente, sem diagnóstico ou reabertura de revisão publicada.
 
-## 2. Configuracao e Dependencias
+**Responsabilidades**: autenticar pelo grupo, aplicar escopo do usuário, executar as rotas abaixo e projetar os contratos.
 
-Este arquivo (`src/Steady.Api/Endpoints/PainLogEndpoints.cs`) e uma classe estatica que expoe o metodo de extensao `MapPainLogEndpoints(RouteGroupBuilder)`, chamado a partir de `Program.cs` sobre o grupo `/api`.
+**Integrações**: ASP.NET Core Minimal APIs, Steady.Domain e Steady.Infrastructure com PostgreSQL. Validação Google pertence ao filtro comum. O handler não chama provedor de explicação.
 
-**Dependencias Injetadas (via parametros do delegate da rota)**:
-- `[FromHeader(Name = Idempotency.HeaderName)] Guid? idempotencyKey`: header `Idempotency-Key` (Guid v4), obrigatorio para registrar (ADR-003).
-- `IPainLogRepository`: abstracao de persistencia do registro de dor (implementada por `PainLogRepository`, `Steady.Infrastructure`).
-- `CurrentCorredor`: contexto do usuario autenticado, preenchido pelo `AuthenticationFilter`.
-- `CancellationToken`: propagado a partir do `HttpContext.RequestAborted`.
+**Fontes de regras**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-014](../../../specs/STORY-014/spec.bdd.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
 
-**Dependencia estatica (nao injetada)**:
-- `Steady.Api.Common.DomainFactory` (classe `internal static`): traduz excecoes de guard clause do dominio em `400 Bad Request`.
-- `Steady.Api.Common.Idempotency` (classe `internal static`): define o nome do header e a resposta `400` padrao quando ausente - mesmo componente documentado em [RunningSessionEndpoints DevDocs - U1.3](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#u13-idempotency).
+<a id="config"></a>
+## 2. Configuração e Dependências
 
-**Lista de Endpoints**:
-- **POST** `/api/pain-logs` - Registra um novo relato de dor/desconforto para o corredor autenticado.
+Composição: [Program.cs](../../../src/Steady.Api/Program.cs); persistência: [ServiceCollectionExtensions.cs](../../../src/Steady.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs). Cada lambda recebe os repositórios listados na rota, CurrentCorredor e CancellationToken quando há I/O. ILogger<CoachingAuditLog> aparece somente nas operações auditadas de vínculo/ficha/histórico.
 
+**Lista de endpoints**:
+
+- **POST** `/api/pain-logs` - Registrar dor.
+
+<a id="f-auth"></a>
+**F. Endpoint Filter - AuthenticationFilter.InvokeAsync**
+
+1. O grupo `/api` recebe o filtro em `Program.cs`; `/health` fica fora do grupo.
+2. `Authorization` deve começar exatamente com `Bearer `; token vazio, inválido ou expirado retorna 401 antes da lógica do handler. O binding do framework pode rejeitar uma requisição malformada antes da execução do filtro.
+3. `GoogleTokenValidator.ValidateAsync` usa `GoogleJsonWebSignature.ValidateAsync` com Audience restrita a `Google:ClientId`; assinatura e validade são verificadas pela biblioteca com chaves públicas cacheadas. Sem `Google:ClientId`, Program lança erro ao compor a aplicação.
+4. Identidade é `sub`. E-mail e nome opcionais são normalizados e usados como cache de exibição, sem substituir identidade. `ICorredorRepository.GetOrCreateBySubAsync` resolve/provisiona corredor; `CurrentCorredor.Id` e `Roles` são preenchidos para a requisição.
+5. `CurrentCorredor.HasRole` compara papel com ordinal exato; um token válido não concede automaticamente `Personal`. Falhas de autenticação registram path, motivo e IP, sem token.
+
+<a id="u-common"></a>
+**U1. Common/Auth e conversão**
+
+- `CurrentCorredor`: identidade e papéis resolvidos pelo filtro; o cliente não escolhe o dono dos registros.
+- `DomainFactory.TryCreate`: captura apenas `ArgumentException` (inclui guard clauses derivadas) e retorna 400 com `{ "error": "mensagem" }`; não converte todo erro de persistência ou desserialização em erro de validação.
+- `Idempotency.HeaderName`: `Idempotency-Key`; quando exigida e ausente, `MissingKey` retorna 400. Guid inválido é rejeitado pelo binding; Guid.Empty não recebe validação específica no helper.
+- Records HTTP são serializados em camelCase pelo padrão do framework. Datas `DateOnly` são `yyyy-MM-dd`. Enums de StrengthSession não recebem conversor textual global; enums convertidos explicitamente por `ToString` ou por mapping seguem as strings descritas em cada rota.
+
+```mermaid
+graph LR
+    Cliente --> Filtro
+    Filtro --> Endpoint
+    Endpoint --> Dominio
+    Endpoint --> Repositorio
+    Repositorio --> PostgreSQL
+```
+
+### Contrato `PainLogRequest`
+
+Fonte: [PainLogContracts.cs](../../../src/Steady.Api/Contracts/PainLogContracts.cs). Os nomes abaixo são os campos HTTP com serialização padrão camelCase.
+
+| Campo | Tipo C# | Opcional/padrão |
+|---|---|---|
+| `date` | `DateOnly` | não anulável |
+| `region` | `string` | não anulável |
+
+### Contrato `PainLogResponse`
+
+Fonte: [PainLogContracts.cs](../../../src/Steady.Api/Contracts/PainLogContracts.cs). Os nomes abaixo são os campos HTTP com serialização padrão camelCase.
+
+| Campo | Tipo C# | Opcional/padrão |
+|---|---|---|
+| `id` | `Guid` | não anulável |
+| `date` | `DateOnly` | não anulável |
+| `region` | `string` | não anulável |
+
+<a id="catalogo"></a>
+### Catálogo compartilhado de domínio e persistência
+
+PainLog.Create(Date, Region) usa IsNullOrWhiteSpace; não remove espaços nem valida catálogo de regiões ou data. A operação não chama política de segurança e não cria outbox.
+
+PainLogRepository.AddAsync encontra por corredor e chave antes da inserção em PainLogs; reenvio retorna o registro original e não substitui região/data. SaveChangesAsync persiste uma nova entidade.
+
+<a id="rotas"></a>
 ## 3. Detalhamento por Rota
 
-### 3.1. Registrar Dor Pos-Treino
+<a id="rota-1"></a>
+### 3.1. Registrar dor
 
 **Rota**: `POST /api/pain-logs`
 
-**Autenticacao**: obrigatoria (Bearer ID token do Google) - aplicada pelo `AuthenticationFilter` no grupo `/api`.
+**Entrada**: PainLogRequest; Idempotency-Key obrigatório. Header Authorization: Bearer obrigatório.
 
-**Header obrigatorio**: `Idempotency-Key: {guid v4}` (ADR-003). Gerado pelo app no momento em que o registro entra na fila local de sincronizacao offline - garante que um reenvio apos falha de rede nao cria um registro de dor duplicado.
+**Saída**: PainLogResponse. Estruturas e tipos completos constam na seção de contratos.
 
-**Entrada** (`PainLogRequest`, `src/Steady.Api/Contracts/PainLogContracts.cs`):
-```json
-{
-  "date": "2026-08-08",
-  "region": "Canela"
-}
-```
-`region` e um campo de texto livre (`string`), nao um enum fechado como `MuscleGroup`.
+**Status**: 201 novo; 200 reenvio; 400 sem chave ou região; todas as rotas podem retornar 401 no filtro. Binding inválido pode retornar 400 antes do handler.
 
-**Saida - 201 Created** (`PainLogResponse`, primeira vez que a chave e processada):
-```json
-{
-  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "date": "2026-08-08",
-  "region": "Canela"
-}
-```
-Header `Location`: `/api/pain-logs/{id}`. Diferente de `RunningSessionEndpoints`/`StrengthSessionEndpoints`, aqui o `Location` aponta para o proprio namespace de `pain-logs` - porem **nao existe** uma rota `GET /api/pain-logs/{id}` implementada (ver [Observacoes Tecnicas](#4-observacoes-tecnicas)).
-
-**Saida - 200 OK** (`PainLogResponse`, reenvio com a mesma `Idempotency-Key` ja processada para este corredor - ADR-003): mesmo corpo do `201` acima, sem header `Location`, sem criar um segundo registro.
-
-**Saida - 400 Bad Request**:
-```json
-{
-  "error": "A região do corpo é obrigatória para registrar dor."
-}
-```
-```json
-{
-  "error": "O header Idempotency-Key é obrigatório para registrar."
-}
-```
-
-**Saida - 401 Unauthorized**: sem header `Authorization: Bearer {token}`, ou token invalido/expirado.
-
-#### Fluxo de Execucao
+#### Fluxo de Execução
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant Client as Cliente
     participant AuthenticationFilter
     participant Endpoint as PainLogEndpoints
-    participant Domain as PainLog (Steady.Domain)
-    participant Repository as PainLogRepository
+    participant Domain as Dominio
+    participant Repository as Repositorios
     participant Database as PostgreSQL
-
-    Client->>+AuthenticationFilter: POST /api/pain-logs (Bearer token, header Idempotency-Key, JSON)
-    AuthenticationFilter->>AuthenticationFilter: valida token e resolve Corredor (ver F.1)
-    alt Token ausente/invalido/expirado
-        AuthenticationFilter-->>Client: 401 Unauthorized
+    Client->>AuthenticationFilter: POST /api/pain-logs + Bearer
+    AuthenticationFilter->>AuthenticationFilter: Validar token Google e audiencia
+    alt Token invalido
+        AuthenticationFilter-->>Client: 401
     else Token valido
-        AuthenticationFilter->>+Endpoint: next() com CurrentCorredor.Id preenchido
-        alt Header Idempotency-Key ausente
-            Endpoint-->>Client: 400 Bad Request (Idempotency.MissingKey)
-        else Header presente
-            Endpoint->>+Domain: PainLog.Create(date, region)
-            alt Guard clause falha (regiao vazia/nula)
-                Domain-->>Endpoint: throw ArgumentException
-                Endpoint-->>Client: 400 Bad Request (mensagem de dominio)
-            else Dados validos
-                Domain-->>-Endpoint: instancia PainLog
-                Endpoint->>+Repository: AddAsync(currentCorredor.Id, painLog, idempotencyKey, ct)
-                Repository->>+Database: SELECT pain_logs WHERE corredor_id + idempotency_key
-                Database-->>-Repository: chave ja existe?
-                alt Chave ja processada (reenvio)
-                    Repository-->>-Endpoint: SaveResult(entity existente, Created=false)
-                    Endpoint-->>-Client: 200 OK (PainLogResponse, sem novo INSERT)
-                else Chave nova
-                    Repository->>+Database: INSERT INTO pain_logs (com idempotency_key)
-                    Database-->>-Repository: linha persistida (Id gerado)
-                    Repository-->>-Endpoint: SaveResult(entity nova, Created=true)
-                    Endpoint-->>-Client: 201 Created (PainLogResponse)
-                end
-            end
-        end
+        AuthenticationFilter->>Repository: GetOrCreateBySubAsync
+        Repository->>Database: Resolver conta e cache do provedor
+        Database-->>Repository: Conta e roles
+        Repository-->>AuthenticationFilter: Corredor
+        AuthenticationFilter->>Endpoint: CurrentCorredor preenchido
+        Endpoint->>Domain: Validar factories e criar snapshot
+        Domain-->>Endpoint: Entidade ou ArgumentException (400)
+        Endpoint->>Repository: IPainLogRepository.AddAsync
+        Repository->>Database: Gravar ou devolver registro existente
+        Database-->>Repository: Resultado
+        Repository-->>Endpoint: Entidade, lista ou estado
+        Endpoint-->>Client: Status e contrato descritos nesta rota
     end
 ```
 
 #### Detalhamento do Fluxo
 
-**E. Endpoint (PainLogEndpoints)**
+<a id="e-1"></a>
+**E.1. Lambda de rota em MapPainLogEndpoints**
 
-E.1. `MapPainLogEndpoints()` - handler de `POST /pain-logs`
-- Recebe `PainLogRequest`, `idempotencyKey` do header, `IPainLogRepository`, `CurrentCorredor` e `CancellationToken` por injecao de parametros.
-- Se `idempotencyKey is null`, retorna imediatamente `Idempotency.MissingKey()` - `400 Bad Request`, antes de qualquer validacao de dominio.
-- Chama `DomainFactory.TryCreate` passando uma factory que invoca `PainLog.Create(request.Date, request.Region)` -> [U1.1](#u11-domainfactorytrycreate) -> [D1.1](#d11-painlogcreate).
-- Se `TryCreate` retornar `false`, devolve o `IResult` de erro (`400 Bad Request`).
-- Se `TryCreate` retornar `true`, chama `repository.AddAsync(currentCorredor.Id, painLog!, idempotencyKey.Value, cancellationToken)` -> [R1.1](#r11-painlogrepositoryaddasync), que retorna `SaveResult<PainLogEntity>` (`Entity` + `Created`).
-- Monta `PainLogResponse` a partir de `entity`.
-- Se `created == true`: `Results.Created($"/api/pain-logs/{entity.Id}", response)` -> `201 Created`. Se `created == false` (reenvio): `Results.Ok(response)` -> `200 OK`.
+Exige chave; PainLog.Create rejeita região nula, vazia ou em branco; preserva texto e data recebidos; salva apenas no escopo autenticado.
 
-**F. Endpoint Filter (AuthenticationFilter)**
+Navegação: [F. autenticação](#f-auth), [D1. domínio](#d-1), [R1. persistência](#r-1), [U1. suporte](#u-common).
 
-<a id="f1-authenticationfilterinvokeasync"></a>
-F.1. `InvokeAsync()` - aplicado a todo o grupo `/api`. Mesmo comportamento documentado em [RunningSessionEndpoints DevDocs - F.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#f1-authenticationfilterinvokeasync): valida o Bearer token do Google, resolve/cria o `Corredor`, preenche `CurrentCorredor.Id`, ou retorna `401`.
+<a id="d-1"></a>
+**D1.1. Domínio no fluxo**
 
-**D1. Domain (PainLog, Steady.Domain.Training)**
+PainLog.Create(Date, Region) usa IsNullOrWhiteSpace; não remove espaços nem valida catálogo de regiões ou data. A operação não chama política de segurança e não cria outbox.
 
-<a id="d11-painlogcreate"></a>
-D1.1. `PainLog.Create(date, region)` - factory estatica, construtor privado.
-- Guard clause: `string.IsNullOrWhiteSpace(region)` -> `ArgumentException` ("A região do corpo é obrigatória para registrar dor.").
-- Regra de negocio #7 do `specs/STORY-001/spec.bdd.md`: o registro de dor e independente de uma Sessao de Treino especifica - so exige data + regiao do corpo. Pode ser registrado a qualquer momento apos o treino, inclusive dias depois (nenhuma validacao de janela temporal existe no dominio).
-- Nao ha validacao de formato/lista fechada para `region` - qualquer string nao vazia e aceita (texto livre).
-- Se o guard passar, retorna uma instancia imutavel de `PainLog`.
-- Nao existe um indicador booleano "doeu/nao doeu" explicito no modelo atual - a propria existencia do registro representa "doeu" (spec nota: "escala de intensidade de dor fica binaria: doeu/nao doeu no MVP" - o "nao doeu" simplesmente nao gera registro).
+<a id="r-1"></a>
+**R1.1. Métodos e persistência**
 
-**U1. Common/Auth (DomainFactory, CurrentCorredor)**
+Chamada desta rota: `IPainLogRepository.AddAsync`.
 
-<a id="u11-domainfactorytrycreate"></a>
-U1.1. `DomainFactory.TryCreate<T>(factory, out value, out error)` - identico ao comportamento documentado em [RunningSessionEndpoints DevDocs - U1.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#u11-domainfactorytrycreate).
+A operação específica e seu escopo estão descritos no fluxo acima; detalhes de query, snapshot, transação e reenvio estão no [catálogo de persistência](#catalogo). As consultas próprias filtram o dono no banco; leitura pelo personal exige o vínculo quando indicado. Nenhuma autorização por vínculo é acrescentada implicitamente pelo filtro comum.
 
-U1.2. `CurrentCorredor` - identico ao documentado em [RunningSessionEndpoints DevDocs](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md): preenchido por [F.1](#f1-authenticationfilterinvokeasync).
+[Voltar ao endpoint](#e-1). O [filtro](#f-auth) resolve autenticação antes da lógica; os [utilitários](#u-common) não adicionam autorização por vínculo automaticamente.
 
-U1.3. `Idempotency` - identico ao documentado em [RunningSessionEndpoints DevDocs - U1.3](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#u13-idempotency): `Idempotency.HeaderName` e `Idempotency.MissingKey()` (ADR-003).
+<a id="observacoes"></a>
+## 4. Observações Técnicas
 
-**R1. Repository (PainLogRepository, Steady.Infrastructure.Repositories)**
+Location /api/pain-logs/{id} não tem MapGet correspondente neste arquivo nem nos demais endpoints. Dor avulsa posterior não reclassifica revisão, conforme STORY-014. Autenticação agora também atualiza o cache de nome/e-mail do provedor.
 
-<a id="r11-painlogrepositoryaddasync"></a>
-R1.1. `PainLogRepository.AddAsync(corredorId, painLog, idempotencyKey, cancellationToken)` - retorna `Task<SaveResult<PainLogEntity>>`, mesmo padrao documentado em [RunningSessionEndpoints DevDocs - R1.1](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#r11-runningsessionrepositoryaddasync).
-- Consulta `dbContext.PainLogs.FindByIdempotencyKeyAsync(corredorId, idempotencyKey, cancellationToken)`; se ja existir, retorna `new SaveResult<PainLogEntity>(existing, Created: false)` sem `INSERT`.
-- Se nao existir: monta um `PainLogEntity` com `Id = Guid.NewGuid()`, `CorredorId = corredorId` e `IdempotencyKey = idempotencyKey`.
-- Copia `Date` e `Region` da instancia de dominio validada.
-- `dbContext.PainLogs.Add(entity)` seguido de `await dbContext.SaveChangesAsync(cancellationToken)` - grava na tabela `pain_logs`.
-- Retorna `new SaveResult<PainLogEntity>(entity, Created: true)`. Nota: `IPainLogRepository` expoe **apenas** `AddAsync` - nao ha metodo de leitura (`GetByCorredorIdAsync`/`GetByIdAsync`) nesta interface, ao contrario de `IRunningSessionRepository`/`IStrengthSessionRepository`.
+**Performance**: consultas são assíncronas com CancellationToken; onde a coleção não possui parâmetros de limite, o resultado é materializado integralmente. Não há paralelização de chamadas ao mesmo contexto no handler.
 
-## 4. Observacoes Tecnicas
+**Tratamento de erros**: status acima descrevem caminhos explícitos; exceções inesperadas não têm tradução local genérica. 404 não deve ser interpretado como permissão de procurar dados de outro corredor.
 
-- **Performance**: `AddAsync` faz uma consulta `SELECT` por `(corredor_id, idempotency_key)` antes do possivel `INSERT` (mesma mudanca documentada em [RunningSessionEndpoints DevDocs](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#4-observacoes-tecnicas)), coberta pelo indice unico composto.
-- **Tratamento de Erros**: erros de guard clause do dominio viram `400`. Header `Idempotency-Key` ausente vira `400` via `Idempotency.MissingKey()`. Excecoes fora desses casos nao sao tratadas explicitamente (mesmo debito ja identificado em `RunningSessionEndpoints`).
-- **Integracoes Criticas**: PostgreSQL e o `AuthenticationFilter`/Google Sign-In.
-- **Idempotencia resolve o risco de duplicata por reenvio (ADR-003)**: mesmo mecanismo documentado em [RunningSessionEndpoints DevDocs](./RunningSessionEndpoints-Treino-Corrida-DevDocs.md#4-observacoes-tecnicas) - reenvio da fila offline devolve `200 OK` com o registro existente. Como `PainLog` nao alimenta a deteccao de sobrecarga (ver abaixo), o principal ganho aqui e a integridade do proprio historico de dor, nao a protecao de um calculo de risco.
-- **Ausencia de leitura**: nao existe nenhuma rota `GET` para consultar registros de dor - nem individualmente, nem em lista, nem no historico consolidado (`TrainingHistoryEndpoints` so lista corrida e musculacao). O `Location` do `201 Created` (`/api/pain-logs/{id}`) referencia uma rota que nao existe; a resposta `200 OK` de reenvio tambem nao envia `Location`. Ver [TechnicalDebtsDocs](../TechnicalDebtsDocs/PainLogEndpoints-Treino-Dor-Debts.md).
-- **Sem uso na deteccao de sobrecarga**: apesar de ser parte central da motivacao do produto (dor recorrente pos-treino), o `PainLog` nao alimenta `OverloadDetectionService.Evaluate` - a regra atual usa apenas `RunningSession` e `StrengthSession` (ver [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md)).
+**Documentos relacionados**: [Regras](../BusinessRulesDocs/Registro-de-Dor-Treino-Dor-Rules.md), [Débitos](../TechnicalDebtsDocs/PainLogEndpoints-Treino-Dor-Debts.md), [Índice](README.md).

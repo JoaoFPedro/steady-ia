@@ -1,93 +1,93 @@
-# TrainingHistoryEndpoints - Historico - Debitos Tecnicos
+# TrainingHistoryEndpoints - Historico - Débitos Técnicos
 
-## Indice
-- [1. Resumo Executivo](#1-resumo-executivo)
-- [2. Problemas por Criticidade](#2-problemas-por-criticidade)
-- [3. Plano de Acao](#3-plano-de-acao)
-- [4. User Stories para Implementacao](#4-user-stories-para-implementacao)
+Auditoria: 2026-09-27. Este relatório registra evidência do código atual, não compromisso de implementação.
 
+## Índice
+
+- [1. Resumo Executivo](#resumo)
+- [2. Problemas por Criticidade](#problemas)
+- [3. Plano de Ação](#plano)
+- [4. User Stories para Implementação](#stories)
+
+<a id="resumo"></a>
 ## 1. Resumo Executivo
-- **Estado Atual**: as duas rotas implementam corretamente o isolamento por corredor (mecanismo mais critico do ponto de vista de seguranca) e sao cobertas por testes de integracao (`TrainingHistoryEndpointTests`, `AuthorizationTests`). O principal debito e de escalabilidade: nenhuma paginacao na listagem e uma estrategia de busca ineficiente na consulta individual.
-- **Principais Problemas**: `GET /api/training-sessions` nao pagina, retornando o historico inteiro do corredor em uma unica resposta, ordenado em memoria no processo da API (nao no banco); `GET /api/training-sessions/{id}` sempre consulta a tabela de corrida primeiro, custando uma query extra sempre que o recurso e de musculacao; e o registro de dor nao aparece no historico consolidado, apesar de fazer parte conceitualmente do "historico de treino" do corredor.
-- **Impacto no Negocio**: baixo hoje, crescente com o tempo - corredores de longa data acumulam centenas/milhares de sessoes ao longo de anos de treino, tornando a resposta cada vez maior e mais lenta.
 
+- **Estado Atual**: Unificar corridas, musculação avulsa e execuções da ficha no histórico do corredor.
+- **Principais Problemas**: Lista e detalhe cobrem origens diferentes.
+- **Impacto no Negócio**: a limitação afeta previsibilidade do retorno ou evolução operacional; o comportamento observado está detalhado abaixo. Não foi executado teste de carga nesta auditoria documental.
+
+**Evidência primária**: [TrainingHistoryEndpoints.cs](../../../src/Steady.Api/Endpoints/TrainingHistoryEndpoints.cs); dependências citadas na [documentação técnica](../DevDocs/TrainingHistoryEndpoints-Historico-DevDocs.md). **Referências de comportamento**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-013](../../../specs/STORY-013/spec.bdd.md), [STORY-018](../../../specs/STORY-018/spec.bdd.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-009](../../../docs/adr/ADR-009-ficha-ativa-e-execucao-imutavel.md).
+
+<a id="problemas"></a>
 ## 2. Problemas por Criticidade
 
-### Criticos
-- Nenhum problema critico identificado - o isolamento por corredor (o mandato mais sensivel do projeto) esta implementado corretamente em ambas as rotas, com filtro direto no banco (`WHERE corredor_id = ...`).
+### Críticos
+
+Nenhum débito adicional comprovado nesta categoria durante a auditoria da unidade.
 
 ### Importantes
-- **Ausencia de paginacao em `GET /api/training-sessions`**: a rota busca `IReadOnlyList<RunningSessionEntity>` e `IReadOnlyList<StrengthSessionEntity>` completos do corredor (sem `Skip`/`Take`), concatena e ordena em memoria no processo da API. Para um corredor com anos de historico, isso significa uma resposta HTTP cada vez maior e mais lenta, sem limite.
-  - **Acao Recomendada**: adicionar paginacao (`page`/`pageSize` como query string, ou cursor-based) e mover a ordenacao/limitacao para o banco sempre que possivel.
-- **Consulta individual ineficiente para sessoes de musculacao**: `GET /api/training-sessions/{id}` sempre tenta `RunningSessionRepository.GetByIdAsync` primeiro; se o recurso for de musculacao, isso custa uma consulta adicional ao banco antes de encontrar o resultado certo. Nao ha como saber o tipo pelo `id` isoladamente (ambos usam `Guid.NewGuid()` sem prefixo ou tabela unica).
-  - **Acao Recomendada**: avaliar uma tabela unica de sessoes com coluna de discriminador (`SessionType`), ou aceitar o custo (baixo em volume absoluto, mas linear com o numero de consultas) documentando a decisao.
+
+- **Lista e detalhe cobrem origens diferentes**: GET da coleção inclui StrengthWorkoutExecution, mas GET por id consulta somente corrida e força avulsa; o id de uma linha da ficha devolve 404.
+  - **Ação Recomendada**: Definir detalhe para execução de ficha ou indicar navegação específica no contrato; testar os três tipos de linha e isolamento.
+  - **Criticidade**: Importante; classificação desta auditoria, baseada no alcance da falha descrita.
 
 ### Menores
-- **Registro de dor fora do historico consolidado**: `PainLog` nao aparece em `GET /api/training-sessions`, apesar de logicamente fazer parte do "historico" do corredor sob a perspectiva de produto. Relacionado ao debito ja registrado em [PainLogEndpoints Debts](./PainLogEndpoints-Treino-Dor-Debts.md) (ausencia de rotas de leitura para dor).
-  - **Acao Recomendada**: avaliar com produto se o historico consolidado deve incluir eventos de dor como um terceiro "tipo" na mesma lista, ou se deve permanecer em uma consulta separada.
-- **`Type` como string livre (`"Corrida"`/`"Musculacao"`) em vez de enum tipado no contrato**: `TrainingSessionResponse.Type` e uma `string` construida manualmente em cada mapeamento (`"Corrida"`, `"Musculacao"`), sem uma constante ou enum compartilhado - risco de erro de digitacao silencioso se um terceiro tipo de sessao for adicionado no futuro.
-  - **Acao Recomendada**: extrair para uma constante compartilhada ou enum serializado como string, reduzindo risco de inconsistencia entre os dois pontos de mapeamento no mesmo arquivo.
 
-## 3. Plano de Acao
-1. **Fase 1 - Criticos**: nao ha itens nesta fase.
-2. **Fase 2 - Importantes**: implementar paginacao em `GET /api/training-sessions`; avaliar estrategia de consulta unificada (ou documentar o custo aceito) para `GET /api/training-sessions/{id}`.
-3. **Fase 3 - Menores**: discutir com produto a inclusao de dor no historico consolidado; extrair `Type` para constante/enum compartilhado.
+Nenhum débito adicional comprovado nesta categoria durante a auditoria da unidade.
 
-## 4. User Stories para Implementacao
+```mermaid
+graph LR
+    Evidencia[Codigo observado] --> Limite[Limitacao identificada]
+    Limite --> Correcao[Alteracao proposta]
+    Correcao --> Validacao[Teste de comportamento e isolamento]
+```
 
-### Story 1: Paginar a listagem do historico consolidado de treinos
+<a id="plano"></a>
+## 3. Plano de Ação
 
-**Contexto Atual**: `GET /api/training-sessions` retorna todas as sessoes do corredor de uma vez, sem paginacao, com ordenacao feita em memoria apos concatenar duas listas completas trazidas do banco.
+1. **Fase 1 - Críticos**: sem item crítico comprovado nesta unidade.
+2. **Fase 2 - Importantes**: Definir detalhe para execução de ficha ou indicar navegação específica no contrato; testar os três tipos de linha e isolamento.
+3. **Fase 3 - Menores**: revisar contrato e documentação depois da correção prioritária.
 
-**Objetivo**: limitar o volume de dados retornado por chamada, mantendo a ordenacao por data decrescente, sem quebrar clientes existentes de forma abrupta.
+Antes de alterar a semântica pública, formalizar os critérios no fluxo SDD da story correspondente; este relatório não aprova nova regra de treino.
 
-**Regras de Negocio**:
-- A ordem de exibicao (mais recente primeiro) deve ser preservada.
-- Um corredor sem sessoes continua recebendo uma resposta vazia (compativel com o comportamento atual), nao um erro de paginacao invalida.
-- O isolamento por corredor (filtro por `CorredorId`) deve continuar valendo para qualquer pagina solicitada.
+<a id="stories"></a>
+## 4. User Stories para Implementação
 
-**Especificacao Tecnica**:
-- Adicionar parametros de query `page` (default 1) e `pageSize` (default a definir, ex.: 20) a rota `GET /api/training-sessions`.
-- Avaliar unificar a leitura de corrida e musculacao em nivel de banco (ex.: `UNION` via SQL bruto ou view) para permitir `ORDER BY` + `LIMIT`/`OFFSET` no banco, em vez de materializar tudo e ordenar em C#. Alternativa mais simples: paginar cada fonte separadamente e mesclar em memoria apenas o necessario para a pagina solicitada (mais complexo de acertar com duas fontes heterogeneas).
-- Manter compatibilidade: se `page`/`pageSize` nao forem informados, decidir entre (a) retornar todo o historico como hoje (comportamento atual preservado) ou (b) aplicar um `pageSize` padrao razoavel - documentar a decisao escolhida.
+### Story proposta 1: Lista e detalhe cobrem origens diferentes
 
-**Criterios de Aceite**:
-- [ ] `GET /api/training-sessions?page=1&pageSize=20` retorna no maximo 20 itens, ordenados por data decrescente.
-- [ ] Metadados de paginacao (total de itens, pagina atual, etc.) estao presentes na resposta ou em headers, conforme convencao escolhida.
-- [ ] Corredor sem sessoes continua recebendo lista vazia (nao erro) em qualquer pagina solicitada.
-- [ ] Isolamento por corredor preservado em todas as paginas.
+**Contexto Atual**: GET da coleção inclui StrengthWorkoutExecution, mas GET por id consulta somente corrida e força avulsa; o id de uma linha da ficha devolve 404.
 
-**Roteiro de Teste**:
-1. **Teste 1**: corredor com 25 sessoes registradas (mistura de corrida e musculacao).
-   - **Entrada**: `GET /api/training-sessions?page=1&pageSize=20`.
-   - **Resultado Esperado**: 20 itens retornados, os mais recentes.
-2. **Teste 2**: corredor sem nenhuma sessao.
-   - **Entrada**: `GET /api/training-sessions?page=1&pageSize=20`.
-   - **Resultado Esperado**: lista vazia, sem erro.
+**Objetivo**: Definir detalhe para execução de ficha ou indicar navegação específica no contrato; testar os três tipos de linha e isolamento.
 
-### Story 2: Reduzir custo de consulta individual para sessoes de musculacao
+**Regras de Negócio**:
 
-**Contexto Atual**: `GET /api/training-sessions/{id}` sempre consulta `RunningSessionRepository` primeiro; para sessoes de musculacao, isso implica uma consulta adicional ao banco (que retorna vazio) antes de encontrar o resultado correto na segunda tabela.
+- Preservar isolamento por corredor e as restrições de papel/vínculo existentes.
+- Não alterar o dado original de uma execução nem produzir número de prescrição ausente.
+- Preservar os caminhos de sucesso documentados nesta unidade.
 
-**Objetivo**: reduzir o numero de consultas ao banco por requisicao para o caso de sessoes de musculacao, sem alterar o contrato da rota.
+**Especificação Técnica**:
 
-**Regras de Negocio**:
-- O comportamento observavel pelo cliente (200 com os dados corretos, ou 404 quando nao encontrado/nao pertence ao corredor) nao muda.
-- O isolamento por corredor continua obrigatorio em qualquer estrategia escolhida.
+- Aplicar a alteração no endpoint/dependência indicado pela evidência, com contrato explícito.
+- Definir detalhe para execução de ficha ou indicar navegação específica no contrato; testar os três tipos de linha e isolamento.
+- Manter erro de recurso alheio sem revelar seus dados.
 
-**Especificacao Tecnica**:
-- Opcao A (mais simples): aceitar o custo atual (uma query extra por consulta de sessao de musculacao) e documentar a decisao como aceitavel para o volume esperado do MVP.
-- Opcao B: unificar corrida e musculacao em uma unica tabela com coluna `SessionType`, permitindo uma unica query por `Id` + `CorredorId`. Impacto maior (migracao de dados, mudanca de modelo em `Steady.Infrastructure`), avaliar custo-beneficio antes de priorizar.
-- Opcao C: incluir no `id` (ou em uma tabela de indice leve `Id -> SessionType`) uma forma barata de saber onde buscar antes de fazer a query completa.
+**Critérios de Aceite**:
 
-**Criterios de Aceite**:
-- [ ] Decisao documentada (comentario, ADR leve, ou aceitacao explicita do custo atual).
-- [ ] Se Opcao B ou C: numero de queries ao banco por consulta individual de sessao de musculacao reduzido de 2 para 1, sem regressao nos testes existentes de `AuthorizationTests` e `TrainingHistoryEndpointTests`.
+- [ ] O comportamento identificado deixa de ocorrer sob o cenário de reprodução.
+- [ ] O caminho principal mantém os campos e estados descritos na documentação técnica.
+- [ ] Recurso de outro corredor ou personal sem vínculo permanece inacessível.
 
 **Roteiro de Teste**:
-1. **Teste 1** (se Opcao B/C implementada): consultar uma sessao de musculacao existente pelo `Id`.
-   - **Entrada**: `GET /api/training-sessions/{id-de-musculacao}`.
-   - **Resultado Esperado**: `200` com os dados corretos, com apenas uma consulta ao banco (verificavel via log/profiling).
-2. **Teste 2**: consultar sessao de outro corredor (regressao de seguranca, deve continuar valendo em qualquer opcao escolhida).
-   - **Entrada**: `GET /api/training-sessions/{id}` de sessao pertencente a outro corredor.
-   - **Resultado Esperado**: `404`, sem revelar existencia.
+
+1. **Reprodução da limitação**: executar a condição descrita em "Contexto Atual".
+   - **Entrada**: cenário e métodos explicitados na evidência acima.
+   - **Resultado Esperado**: resposta compatível com a correção proposta, sem efeito duplicado nem vazamento.
+2. **Regressão de acesso**: repetir com conta sem autorização para o recurso.
+   - **Entrada**: identificador conhecido de outro corredor ou sessão inválida.
+   - **Resultado Esperado**: 401 no filtro ou resposta de recusa/404 prevista pelo contrato, sem dados do recurso.
+3. **Caminho principal**: executar operação válida do dono autorizado.
+   - **Entrada**: contrato documentado para a rota correspondente.
+   - **Resultado Esperado**: resultado de sucesso existente preservado.
+
+**Navegação**: [Técnica](../DevDocs/TrainingHistoryEndpoints-Historico-DevDocs.md), [Regras](../BusinessRulesDocs/Historico-de-Treinos-Historico-Rules.md), [Índice](README.md).

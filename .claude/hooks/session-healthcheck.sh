@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SDD Kit — session-healthcheck hook (Stop)
+# isabel — session-healthcheck hook (Stop)
 # Roda após cada resposta do Claude. Verifica a saúde do projeto
 # e exibe alertas apenas quando há algo que precisa de atenção.
 # Silencioso quando tudo está bem.
@@ -7,10 +7,10 @@
 ISSUES=""
 WARNINGS=""
 
-# ─── 1. /sync pendente ───────────────────────────────────────────────────────
+# ─── 1. /reflect pendente ─────────────────────────────────────────────────────
 if [ -f ".sdd/.pending-sync" ]; then
   STORY_ID=$(cat ".sdd/.pending-sync" 2>/dev/null)
-  ISSUES="${ISSUES}\n  ⛔ /sync pendente para ${STORY_ID} — /review e /feature estão bloqueados"
+  ISSUES="${ISSUES}\n  ⛔ /reflect pendente para ${STORY_ID} — /check e /feature estão bloqueados"
 fi
 
 # ─── 2. Stories sem spec BDD ─────────────────────────────────────────────────
@@ -78,7 +78,7 @@ if [ -d ".discovery" ]; then
   done
   if [ -n "$UNDECIDED" ]; then
     WARNINGS="${WARNINGS}\n  ⚠️  Discoveries sem decisão:${UNDECIDED}"
-    WARNINGS="${WARNINGS}\n     Use /discover para concluir e registrar a decisão em decision.md"
+    WARNINGS="${WARNINGS}\n     Use /triage para concluir e registrar a decisão em decision.md"
   fi
 fi
 
@@ -192,13 +192,73 @@ if [ -f "requirements.txt" ] || find . -maxdepth 2 -name "*.py" -not -path "./.g
   fi
 fi
 
+# ─── 8. Doc drift — documentação gerada desatualizada ────────────────────────
+# Compara o `commit:` do frontmatter de cada doc com o SHA atual do arquivo-fonte.
+# Divergiu, o código andou desde a geração. Sempre ⚠️ — nunca bloqueia.
+PENDING_DOCS_FILE=".sdd/.pending-docs"
+if [ -d "docs/documenta-ai" ] && command -v git &>/dev/null && git rev-parse --git-dir &>/dev/null 2>&1; then
+  STALE_NAMES=""
+  STALE_COUNT=0
+  NO_TRACE_COUNT=0
+  STALE_SOURCES=""
+
+  for doc in docs/documenta-ai/dev/*.md docs/documenta-ai/business/*.md docs/documenta-ai/debts/*.md; do
+    [ -f "$doc" ] || continue
+
+    DOC_SOURCE=$(sed -n 's/^source:[[:space:]]*//p' "$doc" 2>/dev/null | head -1)
+    DOC_COMMIT=$(sed -n 's/^commit:[[:space:]]*//p' "$doc" 2>/dev/null | head -1)
+
+    # Sem rastreabilidade: não dá para saber se envelheceu
+    if [ -z "$DOC_SOURCE" ] || [ -z "$DOC_COMMIT" ]; then
+      NO_TRACE_COUNT=$((NO_TRACE_COUNT + 1))
+      continue
+    fi
+
+    [ -f "$DOC_SOURCE" ] || continue
+
+    CUR_COMMIT=$(git log -1 --format=%H -- "$DOC_SOURCE" 2>/dev/null)
+    IS_STALE=false
+
+    # SHA do último commit da fonte difere do registrado no doc
+    if [ -n "$CUR_COMMIT" ] && [ "${CUR_COMMIT:0:${#DOC_COMMIT}}" != "$DOC_COMMIT" ]; then
+      IS_STALE=true
+    fi
+
+    # Mudança não commitada na fonte
+    if ! git diff --quiet -- "$DOC_SOURCE" 2>/dev/null; then
+      IS_STALE=true
+    fi
+
+    if [ "$IS_STALE" = true ]; then
+      STALE_COUNT=$((STALE_COUNT + 1))
+      DOC_NAME=$(basename "$doc" .md)
+      [ "$STALE_COUNT" -le 3 ] && STALE_NAMES="${STALE_NAMES} ${DOC_NAME}"
+      STALE_SOURCES="${STALE_SOURCES}${DOC_SOURCE}\n"
+    fi
+  done
+
+  if [ "$STALE_COUNT" -gt 0 ]; then
+    SUFFIX=""
+    [ "$STALE_COUNT" -gt 3 ] && SUFFIX=" +$((STALE_COUNT - 3))"
+    WARNINGS="${WARNINGS}\n  ⚠️  DOC DRIFT: ${STALE_COUNT} doc(s) desatualizados —${STALE_NAMES}${SUFFIX}"
+    WARNINGS="${WARNINGS}\n     Rode /documenta-ai --incremental para regenerar só as rotas afetadas"
+    printf "%b" "$STALE_SOURCES" | sort -u > "$PENDING_DOCS_FILE"
+  else
+    rm -f "$PENDING_DOCS_FILE"
+  fi
+
+  if [ "$NO_TRACE_COUNT" -gt 0 ]; then
+    WARNINGS="${WARNINGS}\n  ⚠️  DOC DRIFT: ${NO_TRACE_COUNT} doc(s) sem frontmatter source/commit — regere com /documenta-ai"
+  fi
+fi
+
 # ─── Saída — silencioso se tudo bem ──────────────────────────────────────────
 if [ -z "$ISSUES" ] && [ -z "$WARNINGS" ]; then
   exit 0
 fi
 
 echo ""
-echo "╔══ SDD Health Check ══════════════════════════════════════════╗"
+echo "╔══ isabel Health Check ══════════════════════════════════╗"
 
 if [ -n "$ISSUES" ]; then
   echo -e "$ISSUES"

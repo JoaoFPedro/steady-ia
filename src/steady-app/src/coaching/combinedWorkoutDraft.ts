@@ -7,6 +7,7 @@ export type RunningExecutionPayload = {
   durationMinutes: number;
   averagePaceMinPerKm: number;
   perceivedEffort: number;
+  painReported?: boolean;
 };
 
 export interface CombinedDraftStorage {
@@ -29,7 +30,12 @@ export class CombinedWorkoutDrafts {
     const strength = await this.storage.read();
     if (strength === null) throw new Error('Não há musculação aguardando corrida.');
 
-    await this.queue.enqueue('combinedWorkout', { strength, running });
+    const hasPainAnswer = strength.painReported !== undefined || running.painReported !== undefined;
+    const painReported = strength.painReported === true || running.painReported === true;
+    await this.queue.enqueue('combinedWorkout', {
+      strength: hasPainAnswer ? { ...strength, painReported } : strength,
+      running,
+    });
     await this.storage.clear();
   }
 

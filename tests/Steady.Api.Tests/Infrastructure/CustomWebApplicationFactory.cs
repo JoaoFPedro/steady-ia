@@ -26,6 +26,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         // startup, antes de as fontes de configuração do teste serem aplicadas.
         // O valor é irrelevante — o FakeGoogleTokenValidator substitui a validação real.
         builder.UseSetting("Google:ClientId", "client-id-de-teste.apps.googleusercontent.com");
+        builder.UseSetting("ReviewProcessing:Enabled", "false");
 
         builder.ConfigureAppConfiguration((_, config) =>
         {

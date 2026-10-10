@@ -10,7 +10,7 @@
 
 - **Estado Atual**: código pequeno, coeso e bem coberto por testes (`tests/Steady.Domain.Tests/RunningSessionTests.cs`). Os 3 guard clauses centrais (distância, duração, escala de esforço) estão implementados e testados exatamente como descrito na spec. Não há débito estrutural relevante.
 - **Principais Problemas**: gaps de validação em campos não cobertos pela spec original (ritmo médio, data futura) e ausência de semântica de igualdade (`Equals`/`GetHashCode`) para uma entidade que hoje só é comparável por referência.
-- **Impacto no Negócio**: baixo — nenhum dos pontos abaixo compromete a regra de sobrecarga (ADR-001) hoje. São lacunas de robustez, não bugs ativos.
+- **Impacto no Negócio**: baixo - nenhum dos pontos abaixo compromete a regra de sobrecarga (ADR-001) hoje. São lacunas de robustez, não bugs ativos.
 
 ## 2. Problemas por Criticidade
 
@@ -21,19 +21,19 @@ Nenhum problema crítico identificado.
 ### 🟡 Importantes
 
 - **`averagePaceMinPerKm` sem validação de negócio**: `Create` aceita qualquer valor para o ritmo médio, incluindo zero ou negativo, sem lançar exceção. Diferente de `distanceKm` e `durationMinutes`, que têm guard clause explícita.
-  - **Ação Recomendada**: confirmar com produto se ritmo negativo/zero é um estado válido (ex: campo opcional/calculado futuramente) ou se deve ganhar guard clause simétrica às demais (`averagePaceMinPerKm <= 0` → `ArgumentOutOfRangeException`). Não é um débito "óbvio" — é uma decisão de negócio ainda não tomada explicitamente na spec (`specs/STORY-001/spec.bdd.md` não menciona validação de ritmo).
+  - **Ação Recomendada**: confirmar com produto se ritmo negativo/zero é um estado válido (ex: campo opcional/calculado futuramente) ou se deve ganhar guard clause simétrica às demais (`averagePaceMinPerKm <= 0` --> `ArgumentOutOfRangeException`). Não é um débito "óbvio" - é uma decisão de negócio ainda não tomada explicitamente na spec (`specs/STORY-001/spec.bdd.md` não menciona validação de ritmo).
 
 ### 🟢 Menores
 
 - **Sem validação de data futura**: `Create` não rejeita `date` no futuro (ex: registrar uma corrida "de amanhã"). Pode ser intencional (permitir correção de fuso/backfill), mas não há teste nem comentário confirmando a intenção.
   - **Ação Recomendada**: se for regra de negócio real, adicionar guard clause e cenário BDD correspondente; se for intencional, registrar a decisão em comentário ou ADR curto para não virar dúvida recorrente em code review.
 - **Ausência de `Equals`/`GetHashCode`/`ToString`**: `RunningSession` é comparada apenas por referência. Testes atuais contornam isso comparando propriedade a propriedade (`Assert.Equal(date, session.Date)` etc.), o que funciona mas é verboso e frágil a novos campos.
-  - **Ação Recomendada**: se a entidade crescer ou passar a ser usada em coleções/comparações (ex: deduplicação), considerar `record class` ou overrides manuais. Baixa prioridade — não há uso atual que dependa disso.
+  - **Ação Recomendada**: se a entidade crescer ou passar a ser usada em coleções/comparações (ex: deduplicação), considerar `record class` ou overrides manuais. Baixa prioridade - não há uso atual que dependa disso.
 
 ## 3. Plano de Ação
 
 1. **Fase 1 - Críticos**: nenhuma ação necessária.
-2. **Fase 2 - Importantes**: levar a validação (ou não) de `averagePaceMinPerKm` para discussão de produto; se confirmada como regra, tratar como uma pequena extensão de spec (`spec.bdd.md`) antes de tocar no código, conforme o fluxo `/spec` → `/implement` do projeto.
+2. **Fase 2 - Importantes**: levar a validação (ou não) de `averagePaceMinPerKm` para discussão de produto; se confirmada como regra, tratar como uma pequena extensão de spec (`spec.bdd.md`) antes de tocar no código, conforme o fluxo `/spec` --> `/implement` do projeto.
 3. **Fase 3 - Menores**: revisar necessidade de validação de data futura; avaliar `Equals`/`GetHashCode` apenas se surgir um caso de uso real que precise de comparação por valor.
 
 ## 4. User Stories para Implementação
@@ -68,7 +68,7 @@ Nenhum problema crítico identificado.
 
 **Contexto Atual**: `RunningSession.Create` aceita qualquer `DateOnly`, incluindo datas futuras, sem guard clause nem documentação da intenção.
 
-**Objetivo**: eliminar a ambiguidade — decidir explicitamente se datas futuras são permitidas e por quê.
+**Objetivo**: eliminar a ambiguidade - decidir explicitamente se datas futuras são permitidas e por quê.
 
 **Regras de Negócio**:
 - A confirmar com produto: sessão de corrida não pode ter `date` posterior à data atual do sistema.

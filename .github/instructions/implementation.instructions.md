@@ -2,6 +2,8 @@
 applyTo: "src/**,tests/**"
 ---
 
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
+
 # Implementação — regras de código
 
 Você está implementando. Leia antes de agir:
@@ -15,8 +17,8 @@ Você está implementando. Leia antes de agir:
 Para cada cenário BDD:
 
 ```
-RED    — teste que falha (traduz Given/When/Then)
-GREEN  — mínimo para passar (KISS)
+RED      — teste que falha (traduz Given/When/Then)
+GREEN    — mínimo para passar (KISS)
 REFACTOR — estruturar (SOLID + DRY)
 ```
 
@@ -34,4 +36,4 @@ Salve em `tests/fixtures/` com `_meta`:
 
 ## Pós-implementação
 
-Sugira: "Rode `/sync` para manter spec e código alinhados."
+Sugira: "Rode `/reflect` para manter spec e código alinhados."

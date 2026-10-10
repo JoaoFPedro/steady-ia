@@ -1,175 +1,421 @@
-# SteadyDbContext e ServiceCollectionExtensions - Persistencia-Configuracao - Especificacao Tecnica
+# SteadyDbContext e ServiceCollectionExtensions - Persistencia-Configuracao - Especificação Técnica
 
-## Indice
-- [1. Visao Geral Tecnica](#1-visao-geral-tecnica)
-- [2. Configuracao e Dependencias](#2-configuracao-e-dependencias)
-- [3. Detalhamento por Componente](#3-detalhamento-por-componente)
-  - [3.1. AddSteadyInfrastructure - Registro de servicos de infraestrutura](#31-addsteadyinfrastructure---registro-de-servicos-de-infraestrutura)
-  - [3.2. OnModelCreating - Mapeamento objeto-relacional completo](#32-onmodelcreating---mapeamento-objeto-relacional-completo)
-  - [3.3. IIdempotentRecord e SaveResult - Utilitario de idempotencia (ADR-003)](#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003)
-- [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
+Atualizado em 2026-09-27.
 
-## 1. Visao Geral Tecnica
+## Índice
 
-**Proposito**: esta unidade cobre os dois componentes que nao pertencem a nenhum repositorio individual, mas sustentam todos eles: `SteadyDbContext` (o `DbContext` do EF Core, com todo o mapeamento objeto-relacional) e `ServiceCollectionExtensions.AddSteadyInfrastructure()` (o ponto unico de registro de DI de toda a camada `Steady.Infrastructure`).
+- [Visão e dependências](#visao)
+- [Contratos de configuração](#contratos)
+- [Mapeamentos completos](#ctx)
+- [Histórico de migrations](#migrations)
 
-**Responsabilidades**:
-- `SteadyDbContext`: expor os quatro `DbSet<>` da aplicacao (`Corredores`, `RunningSessions`, `StrengthSessions`, `PainLogs`) e definir, em `OnModelCreating`, como cada entidade de persistencia mapeia para tabela, colunas, chaves, indices e conversoes de tipo no PostgreSQL.
-- `ServiceCollectionExtensions`: registrar o `SteadyDbContext` (com a connection string resolvida em tempo de DI) e os quatro repositorios (`ICorredorRepository`, `IRunningSessionRepository`, `IStrengthSessionRepository`, `IPainLogRepository`) como servicos `Scoped` no container de Injecao de Dependencia do ASP.NET Core.
-- `IIdempotentRecord` / `IdempotentRecordQueries` / `SaveResult<TEntity>` (`Persistence/IIdempotentRecord.cs`, `Repositories/SaveResult.cs`): utilitario transversal que sustenta a chave de idempotencia introduzida pelo [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md), usado por `RunningSessionRepository`, `StrengthSessionRepository` e `PainLogRepository` -- ver [U1](#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003).
+<a id="visao"></a>
+## 1. Visão geral e dependências
 
-**Integracoes**: `AddSteadyInfrastructure()` e chamado a partir do `Program.cs` de `Steady.Api` durante o bootstrap da aplicacao -- o bootstrap em si (`Program.cs`) nao e uma unidade coberta em `DocumentAIReadme/Steady.Api/DevDocs/` (ver `DocumentAIReadme/Steady.Api/DevDocs/README.md` para a lista de unidades documentadas la, todas Endpoints). `SteadyDbContext` e consumido por todos os repositorios documentados nesta camada (`CorredorRepository`, `RunningSessionRepository`, `StrengthSessionRepository`, `PainLogRepository`). O utilitario de idempotencia (`IIdempotentRecord`/`SaveResult<TEntity>`) e consumido pelos tres repositorios de registro (`RunningSessionRepository-Persistencia-Treino-DevDocs.md`, `StrengthSessionRepository-Persistencia-Treino-DevDocs.md`, `PainLogRepository-Persistencia-Treino-DevDocs.md`), fundamentado no [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) e `specs/STORY-003/spec.bdd.md`.
+SteadyDbContext recebe DbContextOptions<SteadyDbContext> e expõe 12 conjuntos persistidos. Não contém regras de autorização globais: os filtros de corredor pertencem aos repositórios. Npgsql executa os comandos PostgreSQL; configuração e ciclo de vida são resolvidos pelo contêiner de dependências da API. Sem chamada externa nesta unidade.
 
-## 2. Configuracao e Dependencias
+<a id="contratos"></a>
+## 2. Contratos e fluxo
 
-**Dependencias Injetadas em SteadyDbContext**:
-- `DbContextOptions<SteadyDbContext> options`: opcoes de configuracao do EF Core (incluindo o provider Npgsql e a connection string), injetadas pelo container de DI via `AddDbContext`.
+<a id="di"></a>
+### R. AddSteadyInfrastructure(IServiceCollection services) -> IServiceCollection
 
-**Dependencias resolvidas dentro de AddSteadyInfrastructure**:
-- `IConfiguration`: resolvido em tempo de execucao (nao capturado no momento do `AddSteadyInfrastructure()`) para ler a connection string `SteadyDb`.
+Entrada: coleção de serviços. Saída: mesma coleção com DbContext e componentes Scoped registrados. AddDbContext usa fábrica (serviceProvider, options), resolve IConfiguration e GetConnectionString("SteadyDb") quando o contexto é criado, respeitando substituições de teste. Ausência lança InvalidOperationException com orientação ConnectionStrings__SteadyDb; presença chama UseNpgsql(connectionString). Registrar serviços não abre conexão nem aplica migrations.
 
-**Pacotes NuGet relevantes** (`Steady.Infrastructure.csproj`):
-- `Microsoft.EntityFrameworkCore` 9.0.4
-- `Microsoft.EntityFrameworkCore.Design` 9.0.4 (necessario para `dotnet ef migrations`)
-- `Npgsql.EntityFrameworkCore.PostgreSQL` 9.0.4 (provider PostgreSQL)
+Registra nove interfaces/repositórios: ITrainingPlanRepository, ICorredorRepository, IRunningSessionRepository, IStrengthSessionRepository, IPainLogRepository, IPlanRequestRepository, ICoachingLinkRepository, ITrainingSheetRepository e IWorkoutReviewRepository. Registra concretos ReviewOutboxProcessor, ReviewExplanationRetryService e UnavailableExplanationProvider. Não registra IExplanationProvider: a escolha da implementação ocorre em Steady.Api/Program.cs.
 
-**Metodos Publicos**:
-- `IServiceCollection AddSteadyInfrastructure(this IServiceCollection services)` -- unico metodo de extensao exposto.
+<a id="model"></a>
+### CTX. OnModelCreating(ModelBuilder modelBuilder) -> void
 
-## 3. Detalhamento por Componente
-
-### 3.1. AddSteadyInfrastructure - Registro de servicos de infraestrutura
-
-**Entrada**:
-```json
-{
-  "services": "IServiceCollection - o container de DI da aplicacao Steady.Api, recebido via extension method"
-}
-```
-
-**Saida**:
-```json
-{
-  "IServiceCollection": "o mesmo container recebido, com SteadyDbContext e os 4 repositorios registrados (permite encadeamento fluente)"
-}
-```
-
-#### Fluxo de Execucao
+Entrada: construtor do modelo. Saída: metadados de tabelas, propriedades, conversões, índices, relações e seed de política v1. A tabela abaixo reproduz as declarações do modelo; Id é chave primária por HasKey, sem HasColumnName explícito. DbSet usa Set<TEntity>() para cada entidade correspondente. SaveChangesAsync é herdado de DbContext: recebe CancellationToken e retorna Task<int> com entradas gravadas; a unidade não sobrescreve o método.
 
 ```mermaid
 sequenceDiagram
-    participant Startup as Steady.Api.Program (bootstrap)
-    participant Extension as ServiceCollectionExtensions.AddSteadyInfrastructure
-    participant DI as IServiceCollection
-    participant Runtime as Resolucao em tempo de requisicao (DI Scoped)
-    participant Config as IConfiguration
-
-    Startup->>+Extension: AddSteadyInfrastructure()
-    Extension->>+DI: AddDbContext<SteadyDbContext>(configure: (sp, options) => ...)
-    Note over DI: a lambda de configuracao NAO executa agora --so na primeira resolucao do DbContext dentro de um escopo
-    Extension->>+DI: AddScoped<ICorredorRepository, CorredorRepository>()
-    Extension->>+DI: AddScoped<IRunningSessionRepository, RunningSessionRepository>()
-    Extension->>+DI: AddScoped<IStrengthSessionRepository, StrengthSessionRepository>()
-    Extension->>+DI: AddScoped<IPainLogRepository, PainLogRepository>()
-    Extension-->>-Startup: services (fluente)
-
-    Note over Runtime: Momento posterior, dentro de uma requisicao HTTP
-    Runtime->>+Config: GetRequiredService<IConfiguration>().GetConnectionString("SteadyDb")
-    Config-->>-Runtime: connection string (ou excecao se ausente)
-    Runtime->>Runtime: options.UseNpgsql(connectionString)
+    participant DI as ServiceCollectionExtensions
+    participant CFG as IConfiguration
+    participant CTX as SteadyDbContext
+    participant DB as PostgreSQL
+    DI->>DI: AddDbContext e AddScoped
+    DI->>CFG: GetConnectionString("SteadyDb") ao resolver contexto
+    CFG-->>DI: String ou null
+    alt Ausente
+        DI-->>DI: InvalidOperationException
+    else Presente
+        DI->>CTX: UseNpgsql e DbContextOptions
+        CTX->>CTX: OnModelCreating(modelBuilder)
+        Note over CTX,DB: Conexão e SQL ocorrem na consulta/gravação
+        CTX->>DB: Query ou SaveChangesAsync do repositório
+        DB-->>CTX: Resultado ou falha
+    end
 ```
 
-#### Detalhamento do Fluxo
+<a id="ctx"></a>
+## 3. CTX. Mapeamentos completos
 
-**R. Componente (ServiceCollectionExtensions)**
+### CTX. corredores
 
-R.1. AddSteadyInfrastructure()
-- Chama `services.AddDbContext<SteadyDbContext>((serviceProvider, options) => ...)` usando a sobrecarga que recebe o `IServiceProvider` -- **decisao deliberada**: a lambda de configuracao so e executada quando o `SteadyDbContext` e efetivamente resolvido dentro de um escopo de DI, nao no momento do `AddSteadyInfrastructure()`. Isso significa que a connection string e lida de `IConfiguration` **em tempo de DI**, nao no startup sincrono do processo.
-- Dentro da lambda: resolve `IConfiguration` via `serviceProvider.GetRequiredService<IConfiguration>()`, le `GetConnectionString("SteadyDb")` e lanca `InvalidOperationException` com mensagem explicativa ("Defina ConnectionStrings__SteadyDb como variavel de ambiente") se a connection string nao estiver configurada. Chama `options.UseNpgsql(connectionString)` para configurar o provider PostgreSQL.
-- Registra os quatro repositorios como `Scoped` -> [CTX.1](#ctx1-ciclo-de-vida-scoped): `AddScoped<ICorredorRepository, CorredorRepository>()`, `AddScoped<IRunningSessionRepository, RunningSessionRepository>()`, `AddScoped<IStrengthSessionRepository, StrengthSessionRepository>()`, `AddScoped<IPainLogRepository, PainLogRepository>()`.
-- Retorna `services` para permitir encadeamento fluente (`services.AddSteadyInfrastructure().AddOutraCoisa()`).
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-**CTX. Motivacao de design (comentario XML no codigo)**
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `GoogleSub` | `google_sub` | `IsRequired()` |
+| `Email` | `email` | `Tipo por convenção do provider` |
+| `Name` | `name` | `Tipo por convenção do provider` |
+| `Roles` | `roles` | `HasColumnType("text[]"); HasDefaultValue(new[] { "Corredor" })` |
+| `TrainingPlanVersionId` | `training_plan_version_id` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
 
-<a id="ctx1-ciclo-de-vida-scoped"></a>
-CTX.1. Resolucao tardia da connection string + ciclo de vida Scoped
-- O proprio codigo documenta a decisao via comentario XML: "A connection string e resolvida em tempo de DI (nao no startup sincrono) para que overrides de configuracao -- como os aplicados por `WebApplicationFactory` em teste -- sejam respeitados." Isso e confirmado em `specs/STORY-002/spec.bdd.md`, secao "Notas de Especificacao": "Resolvido no `/implement`: a connection string e resolvida via DI no momento da criacao do `DbContext` (nao lida eagerly no `Program.cs`) -- necessario para que `WebApplicationFactory` consiga sobrescreve-la em teste antes do host ser efetivamente construido."
-- Todos os repositorios sao `Scoped` (uma instancia por requisicao HTTP), alinhado ao ciclo de vida padrao do `DbContext` em aplicacoes ASP.NET Core -- evita compartilhar o mesmo `DbContext`/`ChangeTracker` entre requisicoes concorrentes (o que causaria condicoes de corrida e vazamento de estado entre corredores diferentes).
+Índices e relações (expressões reais do modelo):
 
-### 3.2. OnModelCreating - Mapeamento objeto-relacional completo
+```csharp
+HasIndex(c => c.GoogleSub).IsUnique();
+HasOne<TrainingPlanVersionEntity>()
+                .WithMany()
+                .HasForeignKey(c => c.TrainingPlanVersionId)
+                .OnDelete(DeleteBehavior.Restrict);
+```
 
-**Entrada**: `ModelBuilder modelBuilder`, fornecido pelo EF Core na inicializacao do modelo (uma vez por `DbContext` de aplicacao, cacheado internamente pelo EF Core).
+Coleções usam conversão para `text[]` e ValueComparer com SequenceEqual, hash agregado e cópia ToList, detectando mudança em conteúdo.
 
-**Saida**: o modelo do EF Core totalmente configurado, usado para gerar migrations e para traduzir LINQ em SQL.
+### CTX. training_plan_versions
 
-#### Mapeamento completo por tabela
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-| Entidade | Tabela | Coluna (C# -> banco) | Observacao |
-|---|---|---|---|
-| `CorredorEntity` | `corredores` | `Id` (PK) | `Guid`, chave primaria |
-| | | `GoogleSub` -> `google_sub` | `IsRequired()`; indice UNICO `IX_corredores_google_sub` |
-| | | `CreatedAt` -> `created_at` | `timestamp with time zone` |
-| `RunningSessionEntity` | `running_sessions` | `Id` (PK) | `Guid`, chave primaria |
-| | | `CorredorId` -> `corredor_id` | indice `IX_running_sessions_corredor_id` (nao unico) |
-| | | `Date` -> `date` | `date` (sem hora) |
-| | | `DistanceKm` -> `distance_km` | `double precision` |
-| | | `DurationMinutes` -> `duration_minutes` | `integer` |
-| | | `AveragePaceMinPerKm` -> `average_pace_min_per_km` | `double precision` |
-| | | `PerceivedEffort` -> `perceived_effort` | `integer` |
-| | | `IdempotencyKey` -> `idempotency_key` | `uuid`, obrigatoria; indice UNICO composto `IX_running_sessions_corredor_id_idempotency_key` `(corredor_id, idempotency_key)` -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) |
-| `StrengthSessionEntity` | `strength_sessions` | `Id` (PK) | `Guid`, chave primaria |
-| | | `CorredorId` -> `corredor_id` | indice `IX_strength_sessions_corredor_id` (nao unico) |
-| | | `Date` -> `date` | `date` |
-| | | `MuscleGroup` -> `muscle_group` | `.HasConversion<string>()` -> `text` |
-| | | `Intensity` -> `intensity` | `.HasConversion<string>()` -> `text` |
-| | | `DurationMinutes` -> `duration_minutes` | `integer` |
-| | | `IdempotencyKey` -> `idempotency_key` | `uuid`, obrigatoria; indice UNICO composto `IX_strength_sessions_corredor_id_idempotency_key` `(corredor_id, idempotency_key)` -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) |
-| `PainLogEntity` | `pain_logs` | `Id` (PK) | `Guid`, chave primaria |
-| | | `CorredorId` -> `corredor_id` | indice `IX_pain_logs_corredor_id` (nao unico, sem consumidor de leitura hoje) |
-| | | `Date` -> `date` | `date` |
-| | | `Region` -> `region` | `IsRequired()`; `text` livre |
-| | | `IdempotencyKey` -> `idempotency_key` | `uuid`, obrigatoria; indice UNICO composto `IX_pain_logs_corredor_id_idempotency_key` `(corredor_id, idempotency_key)` -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) |
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `Version` | `version` | `Tipo por convenção do provider` |
+| `DefinitionJson` | `definition` | `HasColumnType("jsonb")` |
+| `IsCurrent` | `is_current` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
 
-#### Detalhamento do Fluxo
+Índices e relações (expressões reais do modelo):
 
-**CTX. SteadyDbContext.OnModelCreating**
+```csharp
+HasIndex(v => v.Version).IsUnique();
+HasIndex(v => v.IsCurrent).IsUnique().HasFilter("is_current = TRUE");
 
-CTX.2. Configuracao de CorredorEntity
-- `entity.ToTable("corredores")`, `HasKey(c => c.Id)`, `Property(c => c.GoogleSub).HasColumnName("google_sub").IsRequired()`, `HasIndex(c => c.GoogleSub).IsUnique()`, `Property(c => c.CreatedAt).HasColumnName("created_at")`.
-- O indice unico em `google_sub` e o unico indice UNICO de toda a base -- e a garantia de banco que sustenta `CorredorRepository.GetOrCreateBySubAsync` (ver `CorredorRepository-Persistencia-Autenticacao-DevDocs.md`).
+```
 
-CTX.3. Configuracao de RunningSessionEntity, StrengthSessionEntity e PainLogEntity
-- Padrao identico nas tres: `ToTable(...)`, `HasKey(s => s.Id)`, `Property(s => s.CorredorId).HasColumnName("corredor_id")`, `HasIndex(s => s.CorredorId)` (nao unico -- multiplos registros por corredor sao esperados).
-- `StrengthSessionEntity` e a unica com conversao de tipo explicita (`HasConversion<string>()` para os dois enums) -- ver `StrengthSessionRepository-Persistencia-Treino-DevDocs.md` para o detalhamento do impacto dessa escolha.
-- As tres tambem mapeiam `Property(s => s.IdempotencyKey).HasColumnName("idempotency_key")` e `HasIndex(s => new { s.CorredorId, s.IdempotencyKey }).IsUnique()` -- este e um **segundo** indice por tabela, composto e unico, que convive com o indice simples `corredor_id` ja existente (ele nao foi substituido). Ver [U1](#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003) para o motivo do escopo composto por `(corredor_id, idempotency_key)`.
+### CTX. adherence_policy_versions
 
-### 3.3. IIdempotentRecord e SaveResult - Utilitario de idempotencia (ADR-003)
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-**Proposito**: dois arquivos de apoio, usados pelos tres repositorios de registro (`RunningSessionRepository`, `StrengthSessionRepository`, `PainLogRepository`), que implementam o contrato de idempotencia definido pelo [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md). Nao sao chamados via HTTP nem tem Entrada/Saida no sentido de rota -- documentados aqui, uma unica vez, para evitar repetir a mesma explicacao nos tres DevDocs de repositorio (que apenas referenciam esta secao).
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `Version` | `version` | `Tipo por convenção do provider` |
+| `RunningDistancePercent` | `running_distance_percent` | `Tipo por convenção do provider` |
+| `RunningDurationPercent` | `running_duration_percent` | `Tipo por convenção do provider` |
+| `PerceivedEffortPoints` | `perceived_effort_points` | `Tipo por convenção do provider` |
+| `SetsAbsolute` | `sets_absolute` | `Tipo por convenção do provider` |
+| `RepetitionsPercent` | `repetitions_percent` | `Tipo por convenção do provider` |
+| `LoadPercent` | `load_percent` | `Tipo por convenção do provider` |
+| `IsCurrent` | `is_current` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
 
-**Arquivos**:
-- `Persistence/IIdempotentRecord.cs`: define a interface `IIdempotentRecord` (`Guid CorredorId`, `Guid IdempotencyKey`) e a classe estatica `IdempotentRecordQueries`.
-- `Repositories/SaveResult.cs`: define `public readonly record struct SaveResult<TEntity>(TEntity Entity, bool Created)`.
+Índices e relações (expressões reais do modelo):
 
-#### Detalhamento do Fluxo
+```csharp
+HasIndex(policy => policy.Version).IsUnique();
+HasIndex(policy => policy.IsCurrent).IsUnique().HasFilter("is_current = TRUE");
 
-**U1. Mapeamento Dominio<->Persistencia (Utilitario de Idempotencia)**
+```
 
-<a id="u1-iidempotentrecord-e-saveresult"></a>
-U1.1. `IIdempotentRecord` + `IdempotentRecordQueries.FindByIdempotencyKeyAsync<TEntity>(DbSet<TEntity>, Guid corredorId, Guid idempotencyKey, CancellationToken)`
-- `IIdempotentRecord` e implementada por `RunningSessionEntity`, `StrengthSessionEntity` e `PainLogEntity` (as tres entidades ganharam as propriedades `CorredorId`/`IdempotencyKey` exigidas pela interface).
-- `FindByIdempotencyKeyAsync` e um metodo de extensao generico sobre `DbSet<TEntity>` que executa `FirstOrDefaultAsync(r => r.CorredorId == corredorId && r.IdempotencyKey == idempotencyKey, ct)`.
-- **O filtro por `corredorId` E `idempotencyKey` juntos e deliberado**: alem de localizar o registro certo, impede que a chave de um corredor seja usada para inferir a existencia de um registro de outro corredor -- mesma preocupacao de isolamento (A01) ja registrada no [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), agora estendida ao novo eixo de busca por chave de idempotencia.
-- Chamado no inicio de cada `AddAsync` dos tres repositorios de registro, antes de decidir se cria uma linha nova -- ver `RunningSessionRepository-Persistencia-Treino-DevDocs.md#31-addasync---persiste-uma-nova-sessao-de-corrida`, `StrengthSessionRepository-Persistencia-Treino-DevDocs.md#31-addasync---persiste-uma-nova-sessao-de-musculacao` e `PainLogRepository-Persistencia-Treino-DevDocs.md#31-addasync---persiste-um-novo-registro-de-dor`.
+### CTX. review_outbox
 
-U1.2. `SaveResult<TEntity>`
-- `record struct` imutavel com dois campos: `Entity` (a entidade persistida, nova ou preexistente) e `Created` (`bool`).
-- `Created = true` quando `AddAsync` gravou uma linha nova (nenhum registro com aquela `(corredorId, idempotencyKey)` existia antes) -- o Endpoint de `Steady.Api` usa isso para responder **201 Created**.
-- `Created = false` quando `AddAsync` encontrou um registro ja existente para a mesma `(corredorId, idempotencyKey)` (reenvio da fila offline) e devolveu-o **sem gravar nada novo** -- o Endpoint responde **200 OK** neste caso, tratando o reenvio como sucesso identico ao original.
-- E o tipo de retorno de `AddAsync` nos tres repositorios de registro, substituindo o retorno direto de `TEntity` que existia antes do ADR-003.
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-## 4. Observacoes Tecnicas
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `ExecutionId` | `execution_id` | `Tipo por convenção do provider` |
+| `TrainingSheetId` | `training_sheet_id` | `Tipo por convenção do provider` |
+| `ExecutionKind` | `execution_kind` | `HasConversion<string>()` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
+| `ExecutionDate` | `execution_date` | `Tipo por convenção do provider` |
+| `PainReportedAtCompletion` | `pain_reported_at_completion` | `Tipo por convenção do provider` |
+| `Status` | `status` | `HasConversion<string>()` |
+| `Attempts` | `attempts` | `Tipo por convenção do provider` |
+| `LeaseUntil` | `lease_until` | `Tipo por convenção do provider` |
+| `NextAttemptAt` | `next_attempt_at` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
+| `CompletedAt` | `completed_at` | `Tipo por convenção do provider` |
 
-- **Performance**: nenhum indice composto por data existe hoje (ex.: `(corredor_id, date)`) -- todas as consultas por periodo filtram por `corredor_id` no banco e por data em memoria (ver TechnicalDebtsDocs dos repositorios individuais de treino). O indice composto `(corredor_id, idempotency_key)` introduzido pelo ADR-003 e um indice diferente, com proposito de garantia de unicidade, nao de acelerar consulta por periodo.
-- **Tratamento de Erros**: `AddSteadyInfrastructure()` lanca `InvalidOperationException` de forma proposital e explicita quando a connection string `SteadyDb` nao esta configurada -- falha rapido e com mensagem acionavel, em vez de deixar o EF Core falhar de forma mais obscura na primeira query.
-- **Integracoes Criticas**: este e o unico ponto de verdade para o schema relacional de toda a aplicacao -- qualquer mudanca em uma entidade de dominio que precise refletir no banco passa necessariamente por `OnModelCreating` + uma nova migration em `Migrations/`. Duas migrations existem no momento desta documentacao: `20260809210535_InitialCreate` (schema inicial completo) e `20260816021123_AddIdempotencyKey` ([ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)) -- esta ultima adiciona a coluna `idempotency_key` (uuid, not null) nas tres tabelas de registro via `defaultValueSql: "gen_random_uuid()"` (usado **apenas** para dar um valor distinto a cada linha ja existente no backfill, evitando colisao no indice unico criado em seguida), depois remove esse default com `ALTER TABLE ... DROP DEFAULT` -- a partir dali a chave passa a ser responsabilidade exclusiva do cliente, sem o banco gerar uma silenciosamente em um INSERT sem valor. Em seguida cria os tres indices unicos compostos `(corredor_id, idempotency_key)`.
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(item => new { item.ExecutionKind, item.ExecutionId }).IsUnique();
+HasIndex(item => new { item.CorredorId, item.IdempotencyKey }).IsUnique();
+HasIndex(item => new { item.Status, item.NextAttemptAt });
+HasOne<CorredorEntity>().WithMany().HasForeignKey(item => item.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
+```
+
+### CTX. workout_reviews
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `ExecutionId` | `execution_id` | `Tipo por convenção do provider` |
+| `ExecutionKind` | `execution_kind` | `HasConversion<string>()` |
+| `ExecutionDate` | `execution_date` | `Tipo por convenção do provider` |
+| `Status` | `status` | `HasConversion<string>()` |
+| `Action` | `action` | `HasConversion<string>()` |
+| `PolicyVersion` | `policy_version` | `Tipo por convenção do provider` |
+| `PlanVersion` | `plan_version` | `Tipo por convenção do provider` |
+| `TrainingSheetId` | `training_sheet_id` | `Tipo por convenção do provider` |
+| `ComparisonJson` | `comparison` | `HasColumnType("jsonb")` |
+| `ExplanationStatus` | `explanation_status` | `HasConversion<string>()` |
+| `ExplanationJson` | `explanation` | `HasColumnType("jsonb")` |
+| `UnderstoodAt` | `understood_at` | `Tipo por convenção do provider` |
+| `Contested` | `contested` | `Tipo por convenção do provider` |
+| `CoherenceStatus` | `coherence_status` | `HasConversion<string>()` |
+| `NextExecutionId` | `next_execution_id` | `Tipo por convenção do provider` |
+| `CoherencePolicyVersion` | `coherence_policy_version` | `Tipo por convenção do provider` |
+| `CoherenceEvaluatedAt` | `coherence_evaluated_at` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(review => new { review.ExecutionKind, review.ExecutionId }).IsUnique();
+HasIndex(review => new { review.CorredorId, review.ExecutionDate });
+HasOne<CorredorEntity>().WithMany().HasForeignKey(review => review.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
+```
+
+### CTX. running_sessions
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `Date` | `date` | `Tipo por convenção do provider` |
+| `DistanceKm` | `distance_km` | `Tipo por convenção do provider` |
+| `DurationMinutes` | `duration_minutes` | `Tipo por convenção do provider` |
+| `AveragePaceMinPerKm` | `average_pace_min_per_km` | `Tipo por convenção do provider` |
+| `PerceivedEffort` | `perceived_effort` | `Tipo por convenção do provider` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(s => s.CorredorId);
+HasIndex(s => new { s.CorredorId, s.IdempotencyKey }).IsUnique();
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(s => s.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
+```
+
+### CTX. strength_sessions
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `Date` | `date` | `Tipo por convenção do provider` |
+| `MuscleGroup` | `muscle_group` | `HasConversion<string>()` |
+| `Intensity` | `intensity` | `HasConversion<string>()` |
+| `DurationMinutes` | `duration_minutes` | `Tipo por convenção do provider` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(s => s.CorredorId);
+HasIndex(s => new { s.CorredorId, s.IdempotencyKey }).IsUnique();
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(s => s.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
+```
+
+### CTX. pain_logs
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `Date` | `date` | `Tipo por convenção do provider` |
+| `Region` | `region` | `IsRequired()` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(p => p.CorredorId);
+HasIndex(p => new { p.CorredorId, p.IdempotencyKey }).IsUnique();
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(p => p.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
+```
+
+### CTX. plan_requests
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
+| `RaceDistance` | `race_distance` | `HasConversion<string>(); IsRequired()` |
+| `RaceDate` | `race_date` | `IsRequired()` |
+| `RaceIsFirstTime` | `race_is_first_time` | `Tipo por convenção do provider` |
+| `LongestRecentRunKm` | `longest_recent_run_km` | `Tipo por convenção do provider` |
+| `TrainingDaysPerWeek` | `training_days_per_week` | `Tipo por convenção do provider` |
+| `CurrentWeeklyRunningDays` | `current_weekly_running_days` | `Tipo por convenção do provider` |
+| `ReferenceDistanceKm` | `reference_distance_km` | `Tipo por convenção do provider` |
+| `ReferenceDuration` | `reference_duration` | `Tipo por convenção do provider` |
+| `StrengthSessionMinutes` | `strength_session_minutes` | `Tipo por convenção do provider` |
+| `EquipmentAccess` | `equipment_access` | `HasConversion<string>()` |
+| `RecurringPainAreas` | `recurring_pain_areas` | `HasColumnType("text[]")` |
+| `PriorInjuries` | `prior_injuries` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(p => p.CorredorId);
+HasIndex(p => new { p.CorredorId, p.IdempotencyKey }).IsUnique();
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(p => p.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
+```
+
+Coleções usam conversão para `text[]` e ValueComparer com SequenceEqual, hash agregado e cópia ToList, detectando mudança em conteúdo.
+
+### CTX. coaching_links
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `PersonalId` | `personal_id` | `Tipo por convenção do provider` |
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `Status` | `status` | `HasConversion<string>()` |
+| `RequestedAt` | `requested_at` | `Tipo por convenção do provider` |
+| `AcceptedAt` | `accepted_at` | `Tipo por convenção do provider` |
+| `EndedAt` | `ended_at` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(link => link.PersonalId);
+HasIndex(link => link.CorredorId);
+HasIndex(link => link.CorredorId)
+                .IsUnique()
+                .HasFilter("status = 'Active'");
+HasIndex(link => new { link.PersonalId, link.CorredorId })
+                .IsUnique()
+                .HasFilter("status = 'Pending'");
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(link => link.PersonalId)
+                .OnDelete(DeleteBehavior.Restrict);
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(link => link.CorredorId)
+                .OnDelete(DeleteBehavior.Restrict);
+```
+
+### CTX. training_sheets
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `PersonalId` | `personal_id` | `Tipo por convenção do provider` |
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `DefinitionJson` | `definition` | `HasColumnType("jsonb")` |
+| `IsActive` | `is_active` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(sheet => sheet.CorredorId)
+                .IsUnique()
+                .HasFilter("is_active = TRUE");
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(sheet => sheet.PersonalId)
+                .OnDelete(DeleteBehavior.Restrict);
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(sheet => sheet.CorredorId)
+                .OnDelete(DeleteBehavior.Restrict);
+```
+
+### CTX. strength_workout_executions
+
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
+
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `TrainingSheetId` | `training_sheet_id` | `Tipo por convenção do provider` |
+| `WorkoutType` | `workout_type` | `HasConversion<string>()` |
+| `Date` | `date` | `Tipo por convenção do provider` |
+| `DetailsJson` | `details` | `HasColumnType("jsonb")` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
+| `CreatedAt` | `created_at` | `Tipo por convenção do provider` |
+
+Índices e relações (expressões reais do modelo):
+
+```csharp
+HasIndex(execution => new { execution.CorredorId, execution.IdempotencyKey }).IsUnique();
+HasIndex(execution => new { execution.CorredorId, execution.TrainingSheetId });
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(execution => execution.CorredorId)
+                .OnDelete(DeleteBehavior.Restrict);
+HasOne<TrainingSheetEntity>()
+                .WithMany()
+                .HasForeignKey(execution => execution.TrainingSheetId)
+                .OnDelete(DeleteBehavior.Restrict);
+```
+
+### Seed de política de aderência
+
+AdherencePolicyVersionEntity recebe HasData com Id `14000000-0000-0000-0000-000000000001`, Version=1, RunningDistancePercent=0.10, RunningDurationPercent=0.10, PerceivedEffortPoints=2, SetsAbsolute=1, RepetitionsPercent=0.20, LoadPercent=0.10, IsCurrent=true e CreatedAt=2026-08-30 UTC. O índice parcial assegura no máximo uma política vigente, não garante que exista uma.
+
+### Tipos e rastreamento
+
+DateOnly de corrida/dor/outbox/revisão usa mapeamento de data do provider; PlanRequest.RaceDate e StrengthWorkoutExecution.Date são texto ISO yyyy-MM-dd. DefinitionJson, DetailsJson, ComparisonJson e ExplanationJson usam jsonb nas tabelas indicadas. Enums com HasConversion<string>() persistem nome textual. Roles e RecurringPainAreas usam text[] com conversão e comparador de conteúdo; os demais tipos são por convenção. Não há filtro global por corredor nem concorrência otimista configurada no modelo.
+
+<a id="migrations"></a>
+## 4. Histórico de migrations e verificação
+
+- [src/Steady.Infrastructure/Migrations/20260809210535_InitialCreate.cs](../../../src/Steady.Infrastructure/Migrations/20260809210535_InitialCreate.cs)
+- [src/Steady.Infrastructure/Migrations/20260816021123_AddIdempotencyKey.cs](../../../src/Steady.Infrastructure/Migrations/20260816021123_AddIdempotencyKey.cs)
+- [src/Steady.Infrastructure/Migrations/20260822162744_AddCorredorEmail.cs](../../../src/Steady.Infrastructure/Migrations/20260822162744_AddCorredorEmail.cs)
+- [src/Steady.Infrastructure/Migrations/20260822180302_AddPlanRequests.cs](../../../src/Steady.Infrastructure/Migrations/20260822180302_AddPlanRequests.cs)
+- [src/Steady.Infrastructure/Migrations/20260825004707_AddCoaching.cs](../../../src/Steady.Infrastructure/Migrations/20260825004707_AddCoaching.cs)
+- [src/Steady.Infrastructure/Migrations/20260829014524_AddSteadyTrainingPlan.cs](../../../src/Steady.Infrastructure/Migrations/20260829014524_AddSteadyTrainingPlan.cs)
+- [src/Steady.Infrastructure/Migrations/20260829184343_AddCorredorName.cs](../../../src/Steady.Infrastructure/Migrations/20260829184343_AddCorredorName.cs)
+- [src/Steady.Infrastructure/Migrations/20260830224933_AddWorkoutReviews.cs](../../../src/Steady.Infrastructure/Migrations/20260830224933_AddWorkoutReviews.cs)
+- [src/Steady.Infrastructure/Migrations/SteadyDbContextModelSnapshot.cs](../../../src/Steady.Infrastructure/Migrations/SteadyDbContextModelSnapshot.cs)
+
+O snapshot é apoio ao histórico; OnModelCreating é o modelo atual. Aplicar migrations é operação de implantação, não efeito do registro de dependências. Os Down das migrations devem ser revisados antes de rollback: remoção de tabelas/colunas elimina dados.
+
+Fontes:
+
+[src/Steady.Infrastructure/Persistence/SteadyDbContext.cs](../../../src/Steady.Infrastructure/Persistence/SteadyDbContext.cs)
+
+[src/Steady.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs](../../../src/Steady.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs)
+
+[tests/Steady.Api.Tests/AdherencePersistenceTests.cs](../../../tests/Steady.Api.Tests/AdherencePersistenceTests.cs)
+
+Especificações de comportamento relacionadas:
+
+- [STORY-010](../../../specs/STORY-010/spec.bdd.md)
+- [STORY-013](../../../specs/STORY-013/spec.bdd.md)
+- [STORY-014](../../../specs/STORY-014/spec.bdd.md)
+- [STORY-016](../../../specs/STORY-016/spec.bdd.md)

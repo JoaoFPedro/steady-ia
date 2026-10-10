@@ -2,8 +2,6 @@
 
 > **Story**: [link para story.md]
 > **Status**: Draft | In Review | Approved
-> **Autor**: {nome}
-> **Revisores**: {nomes}
 
 ---
 

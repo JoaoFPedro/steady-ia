@@ -29,7 +29,14 @@ public static class TrainingSheetEndpoints
             if (!current.HasRole(PersonalRole))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-            if (!TryCreateSheet(body, out var sheet, out var error))
+            var previous = await sheets.GetActiveAsync(corredorId, cancellationToken);
+            var allowedExerciseKeys = previous?.Sheet.Workouts
+                .OfType<StrengthWorkout>()
+                .SelectMany(workout => workout.Exercises)
+                .Select(exercise => exercise.ExerciseKey)
+                .ToHashSet() ?? [];
+
+            if (!TryCreateSheet(body, allowedExerciseKeys, out var sheet, out var error))
                 return error!;
 
             try
@@ -87,7 +94,8 @@ public static class TrainingSheetEndpoints
                 return validationError!;
 
             var saved = await sheets.AddExecutionAsync(
-                current.Id, execution!, idempotencyKey.Value, cancellationToken);
+                current.Id, execution!, idempotencyKey.Value,
+                body.PainReported, cancellationToken);
             var response = Respond(saved.Entity);
             return saved.Created
                 ? Results.Created($"/api/coaching/strength-executions/{saved.Entity.Id}", response)
@@ -136,7 +144,8 @@ public static class TrainingSheetEndpoints
                 return runningError!;
 
             var saved = await sheets.AddCombinedExecutionAsync(
-                current.Id, strength!, running!, idempotencyKey.Value, cancellationToken);
+                current.Id, strength!, running!, idempotencyKey.Value,
+                body.Strength.PainReported, cancellationToken);
             var response = new
             {
                 Strength = Respond(saved.Strength),
@@ -153,6 +162,7 @@ public static class TrainingSheetEndpoints
             ICoachingLinkRepository links,
             ITrainingSheetRepository sheets,
             IRunningSessionRepository runs,
+            IWorkoutReviewRepository reviews,
             CurrentCorredor current,
             ILogger<CoachingAuditLog> audit,
             CancellationToken cancellationToken) =>
@@ -165,6 +175,7 @@ public static class TrainingSheetEndpoints
 
             var strength = await sheets.GetHistoryAsync(current.Id, corredorId, cancellationToken);
             var running = await runs.GetByCorredorIdAsync(corredorId, cancellationToken);
+            var workoutReviews = await reviews.GetByCorredorAsync(corredorId, cancellationToken);
             audit.LogInformation(
                 "coaching.history_viewed personal_id={PersonalId} corredor_id={CorredorId}",
                 current.Id, corredorId);
@@ -177,7 +188,8 @@ public static class TrainingSheetEndpoints
                     item.DistanceKm,
                     item.DurationMinutes,
                     item.AveragePaceMinPerKm,
-                    item.PerceivedEffort)).ToArray()));
+                    item.PerceivedEffort)).ToArray(),
+                workoutReviews.Select(WorkoutReviewEndpoints.Respond).ToArray()));
         });
 
         return group;
@@ -185,6 +197,7 @@ public static class TrainingSheetEndpoints
 
     private static bool TryCreateSheet(
         PublishTrainingSheetBody body,
+        IReadOnlySet<Guid> allowedExerciseKeys,
         out TrainingSheet? sheet,
         out IResult? error)
     {
@@ -196,11 +209,24 @@ public static class TrainingSheetEndpoints
             return false;
         }
 
+        var requestedKeys = body.Push.Concat(body.Pull).Concat(body.Lower)
+            .Where(exercise => exercise.ExerciseKey is not null)
+            .Select(exercise => exercise.ExerciseKey!.Value)
+            .ToArray();
+        if (requestedKeys.Distinct().Count() != requestedKeys.Length)
+        {
+            error = Error("A mesma identidade de exercício não pode aparecer duas vezes.");
+            return false;
+        }
+
         if (!DomainFactory.TryCreate(() => TrainingSheet.Create(
                 Guid.NewGuid(),
-                StrengthWorkout.Create(WorkoutType.Push, TrainingSheetMapping.CreateExercises(body.Push)),
-                StrengthWorkout.Create(WorkoutType.Pull, TrainingSheetMapping.CreateExercises(body.Pull)),
-                StrengthWorkout.Create(WorkoutType.Lower, TrainingSheetMapping.CreateExercises(body.Lower)),
+                StrengthWorkout.Create(WorkoutType.Push,
+                    TrainingSheetMapping.CreateExercises(body.Push, allowedExerciseKeys)),
+                StrengthWorkout.Create(WorkoutType.Pull,
+                    TrainingSheetMapping.CreateExercises(body.Pull, allowedExerciseKeys)),
+                StrengthWorkout.Create(WorkoutType.Lower,
+                    TrainingSheetMapping.CreateExercises(body.Lower, allowedExerciseKeys)),
                 RunningWorkout.Create(
                     TrainingSheetMapping.CreateRunPrescription(body.TuesdayRun),
                     TrainingSheetMapping.CreateRunPrescription(body.ThursdayRun),
@@ -238,10 +264,12 @@ public static class TrainingSheetEndpoints
                     var input = bodies.Single(bodyItem => bodyItem.ExerciseId == item.Id);
                     return input.Skipped
                         ? ExerciseExecution.SkippedExercise(
-                            item.Id, item.Name, item.Sets, item.Repetitions, input.Note)
+                            item.Id, item.Name, item.Sets, item.Repetitions, input.Note,
+                            item.ExerciseKey, item.DurationSeconds)
                         : ExerciseExecution.Executed(
                             item.Id, item.Name, item.Sets, item.Repetitions,
-                            input.LoadKg ?? 0, input.Note);
+                            input.LoadKg ?? 0, input.Note,
+                            item.ExerciseKey, item.DurationSeconds);
                 }).ToArray()),
             out execution, out error);
     }
@@ -262,7 +290,9 @@ public static class TrainingSheetEndpoints
                 item.Repetitions,
                 item.LoadKg,
                 item.Note,
-                item.Skipped)).ToArray(),
+                item.Skipped,
+                item.ExerciseKey,
+                item.DurationSeconds)).ToArray(),
         entity.CreatedAt);
 
     private static RunningSessionResponse Respond(RunningSessionEntity entity) => new(

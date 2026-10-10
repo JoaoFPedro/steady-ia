@@ -2,21 +2,23 @@
 applyTo: ".sdd/PROJECT-CONSTITUTION.md,.sdd/memory/PROJECT.md,.sdd/memory/DOMAIN.md"
 ---
 
-# Init — Constituição do Projeto (Copilot)
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
+
+# Init — Constituição do Projeto
 
 Você está editando arquivos de fundação de um projeto novo. Conduza a entrevista estruturada para gerar a Constituição antes de qualquer código.
 
-> Para projetos com código existente: use o processo de onboarding (`docs/ONBOARDING-PROMPT.md`).
-> Para Claude Code: use o slash command `/init`.
+> Para projetos com código existente, use `/onboard`.
 
 ---
 
 ## Contexto necessário
 
-Antes de iniciar:
-1. `.sdd/CONSTITUTION.md` — lei universal do SDD Kit (não modifique)
-2. `.sdd/PLAYBOOK.md` — patterns disponíveis
-3. `.sdd/STACK.md` — se não existir, oriente: `./sdd scan`
+Antes de iniciar, verifique:
+
+1. `.sdd/CONSTITUTION.md` — lei universal do isabel (não modifique)
+2. `.sdd/PLAYBOOK.md` — patterns disponíveis para selecionar
+3. `.sdd/STACK.md` — se não existir, detecte a stack lendo os arquivos do projeto ou pergunte ao usuário qual pretende usar
 
 ---
 
@@ -24,7 +26,7 @@ Antes de iniciar:
 
 ### Etapa 1 — Entrevista (uma pergunta por vez)
 
-Cole no Copilot Chat e faça cada pergunta separadamente. Aguarde a resposta antes de avançar.
+Faça cada pergunta separadamente. Aguarde a resposta antes de avançar.
 
 **Pergunta 1 — Identidade**
 > "Qual o nome do projeto e qual problema ele resolve? Em uma ou duas frases, na voz de quem vai usá-lo — não o que o sistema faz, mas o que o usuário consegue fazer."

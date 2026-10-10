@@ -23,6 +23,8 @@ import {
 import { coachingTimeline } from '../../src/coaching/coachingTimeline';
 import { runnerLabel } from '../../src/coaching/runnerLabel';
 import { goToLogin } from '../../src/auth/goToLogin';
+import { workoutReviewView } from '../../src/coaching/workoutReviewView';
+import type { WorkoutReview } from '../../src/coaching/types';
 
 
 export default function PersonalRunnerScreen() {
@@ -170,6 +172,7 @@ export default function PersonalRunnerScreen() {
                 {exercise.note !== null && <Text style={s.note}>{exercise.note}</Text>}
               </View>
             ))}
+            <PersonalReview review={history?.reviews?.find(review => review.executionId === item.execution.id)} />
           </Card>
         ) : (
           <Card key={item.run.id} style={s.historyCard}>
@@ -177,12 +180,28 @@ export default function PersonalRunnerScreen() {
             <Muted>
               {item.run.distanceKm} km · {item.run.durationMinutes} min · esforço {item.run.perceivedEffort}/10
             </Muted>
+            <PersonalReview review={history?.reviews?.find(review => review.executionId === item.run.id)} />
           </Card>
         ))}
       </View>
 
       <View style={s.block}><SecondaryButton label="Encerrar vínculo" onPress={() => void endLink()} /></View>
     </ScrollView>
+  );
+}
+
+function PersonalReview({ review }: { review: WorkoutReview | undefined }) {
+  if (review === undefined) return null;
+  const view = workoutReviewView(review);
+  return (
+    <View style={s.review}>
+      <Text style={s.historyTitle}>{view.title}</Text>
+      {view.action !== null && <Text style={s.load}>{view.action}</Text>}
+      {view.explanation !== null && <Muted>{view.explanation}</Muted>}
+      {view.explanationUnavailable && <Muted>Explicação indisponível.</Muted>}
+      <Text style={s.note}>{review.understoodAt === null ? 'Leitura não confirmada' : 'Leitura confirmada'}</Text>
+      <Text style={s.note}>{view.coherence}</Text>
+    </View>
   );
 }
 
@@ -361,4 +380,5 @@ const s = StyleSheet.create({
   load: { color: color.accentRamp[300], fontSize: type.meta, marginTop: space[1] },
   skipped: { color: color.accentRamp[400], fontSize: type.meta, marginTop: space[1] },
   note: { color: textAlpha.muted, fontSize: type.meta, marginTop: space[2] },
+  review: { borderTopWidth: 1, borderTopColor: textAlpha.rule, paddingTop: space[4], marginTop: space[4] },
 });

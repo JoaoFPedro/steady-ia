@@ -1,144 +1,145 @@
-# Registro de Corrida - Treino-Corrida - Regras de Negocio
+# Registro de Corrida - Treino-Corrida - Regras de Negócio
 
-## Indice
-- [1. Resumo da Funcionalidade](#1-resumo-da-funcionalidade)
-- [2. Jornada do Usuario](#2-jornada-do-usuario)
-- [3. Regras de Negocio por Funcionalidade](#3-regras-de-negocio-por-funcionalidade)
-- [4. Validacoes e Restricoes](#4-validacoes-e-restricoes)
-- [5. Fluxos de Processo](#5-fluxos-de-processo)
-- [6. Casos de Uso e Cenarios](#6-casos-de-uso-e-cenarios)
+## Índice
 
+- [1. Resumo da Funcionalidade](#resumo)
+- [2. Jornada do Usuário](#jornada)
+- [3. Regras de Negócio por Funcionalidade](#regras)
+- [4. Validações e Restrições](#validacoes)
+- [5. Fluxos de Processo](#fluxos)
+- [6. Casos de Uso e Cenários](#casos)
+
+<a id="resumo"></a>
 ## 1. Resumo da Funcionalidade
 
-**Proposito**: Permitir que o corredor registre uma sessao de treino de corrida (distancia, duracao, ritmo, percepcao de esforco) para que ela fique salva no seu historico e sirva de base para a deteccao de sobrecarga.
+**Propósito**: Registrar a corrida do corredor e sua intenção durável de revisão, sem esperar o provedor de explicação.
 
-**Usuarios**: Corredor amador autenticado (via Google Sign-In) usando o app Steady.
+**Usuários**: corredor autenticado; personal autenticado nas ações de acompanhamento que exigem esse papel.
 
-**Valor de Negocio**: E o dado primario que alimenta a avaliacao de risco de sobrecarga e o historico de treinos - sem esse registro, o Steady nao consegue cumprir sua promessa central de treino seguro para a maratona.
+**Valor de Negócio**: manter registros e decisões acessíveis somente a quem tem autorização, com resultado consistente entre consultas e sincronização.
 
-**Frequencia de Uso**: Alta - a cada sessao de corrida concluida, potencialmente varias vezes por semana.
+**Frequência de Uso**: conforme registros e consultas do usuário, sem frequência obrigatória imposta por estas rotas.
 
-**Impacto Operacional**: Dado incorreto ou rejeitado aqui compromete diretamente a qualidade do alerta de sobrecarga (ver [Avaliacao de Sobrecarga](./Avaliacao-de-Sobrecarga-Sobrecarga-Rules.md)) e do historico consolidado.
+**Impacto Operacional**: o servidor mantém o estado persistido; a disponibilidade de rede e da persistência determina quando o resultado pode ser confirmado.
 
-## 2. Jornada do Usuario
+**Fontes da verdade**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-014](../../../specs/STORY-014/spec.bdd.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md), [ADR-018](../../../docs/adr/ADR-018-outbox-transacional-da-revisao.md). As regras abaixo distinguem comportamento observável atual e limitações identificadas no código; não criam decisão nova de produto.
 
-### Visao Geral da Jornada
+<a id="jornada"></a>
+## 2. Jornada do Usuário
+
+### Visão Geral da Jornada
+
 ```mermaid
 journey
-    title Jornada do Corredor - Registro de Corrida
+    title Jornada da funcionalidade
     section Preparacao
-      Termina a corrida: 5: Corredor
-      Abre o app Steady: 4: Corredor
-    section Execucao Principal
-      Informa distancia, duracao, ritmo e esforco: 4: Corredor
-      Envia o registro: 5: Corredor
-    section Finalizacao
-      Recebe confirmacao da sessao salva: 5: Corredor
-      Sessao aparece no historico: 5: Sistema
+      Entrar na conta: 5: Usuario
+      Escolher operacao: 4: Usuario
+    section Operacao
+      Informar dados ou consultar: 4: Usuario
+      Validar acesso e dados: 4: Sistema
+    section Resultado
+      Ver confirmacao ou ausencia: 5: Usuario
 ```
 
 ### Pontos de Contato
-- **Registro pos-corrida**: o corredor informa os dados da corrida logo apos o treino (ou depois, sem restricao de prazo).
-- **Confirmacao imediata**: o sistema responde com os dados da sessao criada, incluindo o identificador gerado.
-- **Reflexo no historico**: a sessao passa a aparecer junto com as demais sessoes de treino (corrida e musculacao) no historico consolidado.
 
-## 3. Regras de Negocio por Funcionalidade
+- **Conta**: a identidade vem do login Google; nome e e-mail não determinam quem é dono dos registros.
+- **Operação**: o usuário acessa as ações descritas abaixo no aplicativo; este documento descreve o serviço que as sustenta.
+- **Retorno**: confirmação, dados ou erro explícito; indisponibilidade técnica não representa histórico vazio.
 
-### 3.1. Registro de Sessao de Treino de Corrida
+<a id="regras"></a>
+## 3. Regras de Negócio por Funcionalidade
 
-**O que faz**: Recebe os dados de uma corrida realizada e salva permanentemente, associada ao corredor autenticado.
+### 3.1. Registrar corrida
 
-**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #1, `specs/STORY-002/spec.bdd.md`, regras #1-#5, e `specs/STORY-003/spec.bdd.md` para a idempotencia, fundamentada em [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)):
-- **Autenticacao obrigatoria**: so e possivel registrar uma corrida com um login valido do Google. Sem isso, o sistema recusa a requisicao antes de qualquer processamento.
-  - *Exemplo*: um app que nao envie o token de login recebe recusa imediata (nao chega a salvar nada).
-- **Reenvio da fila offline nao cria treino duplicado**: cada corrida enfileirada pelo app leva uma chave unica gerada no momento em que entra na fila local; reenviar o mesmo item (ex.: apos perder a conexao no meio do envio) devolve o registro ja salvo em vez de criar uma segunda sessao.
-  - *Exemplo*: o app perde o sinal logo depois de enviar uma corrida e reenvia assim que a conexao volta - o corredor ve apenas um registro no historico, nao dois.
-  - *Por que importa*: uma corrida duplicada infla artificialmente a carga de treino e pode disparar (ou mascarar) um alerta de sobrecarga que nao reflete a realidade.
-- **Distancia deve ser maior que zero**: nao e possivel registrar uma corrida com distancia zero ou negativa.
-  - *Exemplo*: tentar registrar 0 km e rejeitado com a mensagem "A distância deve ser maior que zero."
-- **Duracao deve ser maior que zero**: nao e possivel registrar uma corrida sem tempo de duracao valido.
-  - *Exemplo*: tentar registrar uma corrida de -10 minutos e rejeitado.
-- **Percepcao de esforco entre 1 e 10**: a escala subjetiva de esforco do corredor deve estar dentro desse intervalo.
-  - *Exemplo*: informar esforco 12 e rejeitado com a mensagem "A percepção de esforço deve estar entre 1 e 10."
-- **Isolamento por corredor**: a sessao criada e sempre associada ao corredor autenticado que fez a requisicao - nunca a outro usuario.
+**O que faz**: Registrar corrida para o usuário autorizado.
 
-**Cenarios de Uso**:
-- **Cenario Principal**: corredor autenticado envia distancia, duracao, ritmo medio e percepcao de esforco validos - sessao e salva e aparece no historico.
-- **Cenario Alternativo**: corredor registra a corrida horas ou dias depois de te-la realizado (nao ha exigencia de registro em tempo real).
-- **Cenario de Excecao**: corredor informa um dado invalido (distancia zero, duracao negativa, esforco fora de 1-10) - sistema rejeita e explica o motivo.
+**Regras Aplicadas**:
 
-**Resultado Esperado**: a sessao de corrida fica salva, associada ao corredor, disponivel no historico de treinos e passa a compor os calculos de carga usados na avaliacao de sobrecarga.
+- **Acesso**: usa a conta autenticada e as restrições específicas da operação. Dados próprios não podem ser solicitados com um dono escolhido no corpo.
+- **Execução atual**: Exige chave; valida distância e duração maiores que zero e esforço entre 1 e 10; pace é recebido sem guard clause própria; cria sessão; persiste sob CurrentCorredor.Id com painReported; projeta resposta sem dados de dor.
+- **Resposta observável**: 201 na criação; 200 no reenvio; 400 sem chave ou factory inválida.
 
-## 4. Validacoes e Restricoes
+**Cenários de Uso**:
+
+- **Principal**: pessoa autorizada envia os dados válidos e recebe confirmação.
+- **Alternativo**: reenvio segue as regras explícitas da operação; ações sem chave não ganham idempotência por suposição.
+- **Exceção**: token inválido impede a operação; papel/vínculo/dono são conferidos quando exigidos.
+
+**Resultado Esperado**: RunningSessionResponse.
+
+<a id="validacoes"></a>
+## 4. Validações e Restrições
 
 ### Controle de Acesso
-- **Permissoes**: qualquer corredor autenticado pode registrar suas proprias sessoes de corrida.
-- **Hierarquia**: nao ha niveis de acesso diferentes no MVP - todo corredor tem o mesmo conjunto de permissoes sobre seus proprios dados.
+
+- Todas as ações requerem sessão válida. Papel Personal é necessário somente nas rotas explicitamente descritas acima.
+- O acesso do personal a histórico/revisão depende de vínculo ativo; encerrá-lo remove esse acesso nas consultas protegidas.
 
 ### Dados e Entrada
-- **Dados Obrigatorios**: data, distancia (km), duracao (minutos), ritmo medio (min/km), percepcao de esforco (1 a 10), alem da chave de idempotencia (gerada pelo app, nao digitada pelo corredor).
-- **Formatos Aceitos**: distancia e ritmo em numeros decimais; duracao e esforco em numeros inteiros; data no formato `AAAA-MM-DD`.
-- **Limitacoes de Volume**: distancia e duracao devem ser maiores que zero; nao ha limite maximo definido nesta versao.
 
-### Restricoes do Sistema
-- **Horarios de Funcionamento**: sem restricao - disponivel a qualquer momento.
-- **Dependencias**: exige que o servico de login do Google esteja disponivel para validar o token a cada requisicao.
-- **Limitacoes Tecnicas**: a mensagem de erro devolvida ao usuario e exatamente a mensagem de validacao escrita no dominio (`Steady.Domain`) - nao ha uma camada de traducao/formatacao adicional para o usuario final.
+RunningSession.Create(Date, DistanceKm, DurationMinutes, AveragePaceMinPerKm, PerceivedEffort); Load = DurationMinutes * PerceivedEffort. A factory não valida a data nem o pace.
 
+- Tipos e campos completos estão na [especificação técnica](../DevDocs/RunningSessionEndpoints-Treino-Corrida-DevDocs.md).
+- Registro que exige chave de sincronização sem essa chave é recusado. Reenvio não significa edição do dado original.
+
+### Restrições do Sistema
+
+A revisão é eventual. A resposta não contém reviewId. O worker pode classificar como aderente e não criar revisão. O Location /api/training-sessions/{id} aponta para a rota de detalhe existente.
+
+Não há janela de horário de funcionamento codificada nestes endpoints. O serviço depende de token válido, configuração do provedor de login e persistência.
+
+<a id="fluxos"></a>
 ## 5. Fluxos de Processo
 
 ### Fluxo Principal
+
 ```mermaid
 flowchart TD
-    A[Corredor envia dados da corrida] --> B{Esta autenticado?}
-    B -->|Nao| C[Recusa - 401]
-    B -->|Sim| D{Dados validos?}
-    D -->|Nao| E[Recusa - 400 com mensagem do motivo]
-    D -->|Sim| F[Salva a sessao associada ao corredor]
-    F --> G[Retorna sessao criada - 201]
-    G --> H[Sessao aparece no historico de treinos]
+    A[Usuario escolhe operacao] --> B{Sessao valida?}
+    B -->|Nao| C[Recusar acesso]
+    B -->|Sim| D{Autorizado para a operacao?}
+    D -->|Nao| E[Recusar ou ocultar recurso]
+    D -->|Sim| F[Validar dados e executar operacao]
+    F --> G[Mostrar resultado conforme a rota]
 ```
 
-### Integracoes com Outros Processos
+### Integrações com Outros Processos
+
 ```mermaid
 graph LR
-    A[Registro de Corrida] --> B[Historico de Treinos]
-    A --> C[Avaliacao de Sobrecarga]
-    D[Login via Google] --> A
+    Conta[Conta autenticada] --> Funcionalidade[Operacao solicitada]
+    Funcionalidade --> Persistencia[Dados do corredor]
+    Persistencia --> Consulta[Consulta posterior autorizada]
 ```
 
-## 6. Casos de Uso e Cenarios
+<a id="casos"></a>
+## 6. Casos de Uso e Cenários
 
-### Caso de Uso 1: Registrar corrida logo apos o treino
-**Ator Principal**: Corredor autenticado
-**Objetivo**: Salvar os dados da corrida recem concluida
-**Pre-condicoes**: Corredor logado no app com sessao valida do Google
+### Caso de Uso 1: Registrar corrida
 
-**Fluxo Principal**:
-1. Corredor abre o app e seleciona "registrar corrida"
-2. Informa distancia, duracao, ritmo medio e percepcao de esforco
-3. Confirma o envio
+**Ator Principal**: usuário autorizado para esta ação.
 
-**Pos-condicoes**: Sessao salva, visivel no historico, disponivel para o calculo de sobrecarga.
+**Objetivo**: Registrar corrida.
 
-### Caso de Uso 2: Tentativa de registro com dado invalido
-**Ator Principal**: Corredor autenticado
-**Objetivo**: Registrar uma corrida, mas informa um dado fora das regras
-**Pre-condicoes**: Corredor logado no app
+**Pré-condições**: sessão válida; papel, vínculo e recurso quando exigidos pela regra acima.
 
 **Fluxo Principal**:
-1. Corredor informa distancia zero (ex.: erro de digitacao)
-2. Sistema recusa o registro e explica o motivo
-3. Corredor corrige o dado e reenvia
 
-**Pos-condicoes**: Nenhuma sessao invalida e salva; corredor recebe a mensagem de erro para corrigir.
+1. Usuário escolhe a ação e informa RunningSessionRequest; Idempotency-Key obrigatório.
+2. Sistema executa as validações de acesso e dados descritas para esta ação.
+3. Sistema devolve RunningSessionResponse.
 
-### Matriz de Cenarios
-| Cenario | Entrada | Acao do Sistema | Resultado Esperado |
-|---------|---------|-----------------|-------------------|
-| Registro valido | Distancia 10km, duracao 55min, esforco 7 | Salva e associa ao corredor | 201 - sessao criada |
-| Sem autenticacao | Requisicao sem token | Recusa antes de processar | 401 |
-| Distancia invalida | Distancia 0 ou negativa | Rejeita com mensagem de dominio | 400 - "A distância deve ser maior que zero." |
-| Duracao invalida | Duracao 0 ou negativa | Rejeita com mensagem de dominio | 400 - "A duração deve ser maior que zero." |
-| Esforco fora da escala | Esforco 0 ou 11 | Rejeita com mensagem de dominio | 400 - "A percepção de esforço deve estar entre 1 e 10." |
-| Reenvio do mesmo item da fila offline | Mesma chave de idempotencia de um envio ja processado | Devolve o registro ja existente, sem criar outro | 200 - sessao ja existente (nao um novo 201) |
+**Pós-condições**: 201 na criação; 200 no reenvio; 400 sem chave ou factory inválida. Uma resposta de erro não deve ser exibida pelo app como confirmação.
+
+### Matriz de Cenários
+
+| Cenário | Entrada | Ação do Sistema | Resultado Esperado |
+|---|---|---|---|
+| Registrar corrida | RunningSessionRequest; Idempotency-Key obrigatório | Validar acesso e executar regras acima | 201 na criação; 200 no reenvio; 400 sem chave ou factory inválida |
+| Sessão inválida | Token ausente/expirado | Recusar antes da lógica do handler | 401 |
+
+**Revisão eventual (STORY-014 / ADR-018)**: registro confirmado não aguarda a explicação. Execução aderente não gera card; explicação indisponível preserva comparação e treino. A tentativa manual reutiliza os fatos originais. Compreender ou contestar não altera prescrição nem execução. Nenhuma sugestão da revisão modifica automaticamente um treino futuro.
+
+**Navegação**: [Técnica](../DevDocs/RunningSessionEndpoints-Treino-Corrida-DevDocs.md), [Débitos](../TechnicalDebtsDocs/RunningSessionEndpoints-Treino-Corrida-Debts.md), [Índice](README.md).

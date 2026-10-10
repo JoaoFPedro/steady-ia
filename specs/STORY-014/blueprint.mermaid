@@ -1,15 +1,20 @@
 flowchart TD
-    START[Corredor finaliza o treino do dia] --> QUEUE[Registro entra na fila local com chave de idempotencia]
+    START[Corredor finaliza o treino do dia] --> PAINANSWER{Respondeu se sentiu dor?}
+    PAINANSWER -- Nao --> REQUIRE[Solicita resposta explicita sim ou nao]
+    REQUIRE --> PAINANSWER
+    PAINANSWER -- Sim --> QUEUE[Execucao e resposta de dor entram juntas na fila local]
     QUEUE --> ACK[Confirmacao imediata ao corredor]
     ACK --> ONLINE{Ha conexao?}
     ONLINE -- Nao --> PEND[PendenteDeSincronizacao: nenhuma revisao no aparelho]
     PEND --> RETRY[Fila sincroniza quando a conexao retorna]
     RETRY --> SYNC
-    ONLINE -- Sim --> SYNC[API persiste a execucao imutavel uma unica vez]
+    ONLINE -- Sim --> SYNC[API persiste execucao, dor opcional e evento WorkoutRecorded na mesma transacao]
 
     SYNC --> DUP{Chave ja processada?}
-    DUP -- Sim --> ONE[Devolve execucao e revisao existentes sem duplicar]
-    DUP -- Nao --> RESOLVE[Resolve prescricao aplicavel a data]
+    DUP -- Sim --> ONE[Devolve execucao e estado da revisao sem duplicar]
+    DUP -- Nao --> OUTBOX[Commit confirma treino e outbox]
+    OUTBOX --> WORKER[Worker adquire evento pendente com lease e idempotencia]
+    WORKER --> RESOLVE[Resolve prescricao aplicavel a data]
 
     RESOLVE --> SRC{Quais fontes prescrevem esse dia?}
     SRC -- Nenhuma --> NOPRESC[Sem prescricao: nenhuma revisao]
@@ -28,7 +33,7 @@ flowchart TD
     CLASS -- Sim --> DIVERG[Divergente]
 
     DIVERG --> POLICY[Politica de seguranca versionada]
-    POLICY --> PAIN{Existe PainLog na data da execucao?}
+    POLICY --> PAIN{Dor foi informada no encerramento?}
     PAIN -- Sim --> REC1[Acao autorizada: PriorizarRecuperacao]
     PAIN -- Nao --> ENOUGH{Ha campo comparavel e regra aplicavel?}
     ENOUGH -- Nao --> INSUF[DadosInsuficientes: nenhuma acao, sem chamada de IA]
@@ -68,9 +73,21 @@ flowchart TD
     NEXT -- Sim --> MATCH{Satisfaz a politica da acao apresentada?}
     MATCH -- Sim --> OK[Coerente com a versao da politica registrada]
     MATCH -- Nao --> NOK[NaoCoerente: registro seguinte segue valido e imutavel]
+    OK --> LATE{Execucao offline anterior sincronizou depois?}
+    NOK --> LATE
+    LATE -- Sim --> NEXT
+    LATE -- Nao --> COHDONE[Preserva avaliacao atual]
 
     READY --> LINK{Personal com vinculo ativo?}
     LINK -- Nao --> DENY[Acesso negado: nenhum fato, texto, acao ou metrica]
     LINK -- Sim --> COACH[Personal ve comparacao, explicacao, acao, Entendi e coerencia]
     COACH --> ENDED{Vinculo encerrado?}
     ENDED -- Sim --> DENY
+
+    SHEET[Personal abre ficha ativa] --> LINEAGE{Linha ja existe?}
+    LINEAGE -- Sim --> KEEPKEY[Preserva ExerciseKey mesmo se renomear]
+    LINEAGE -- Nao --> NEWKEY[Servidor gera ExerciseKey nova]
+    KEEPKEY --> PUBLISH[Nova ficha imutavel]
+    NEWKEY --> PUBLISH
+    LEGACY[Ficha legada sem ExerciseKey] --> BOOTSTRAP[Usa ExerciseId como chave inicial]
+    BOOTSTRAP --> PUBLISH

@@ -31,7 +31,8 @@ public static class RunningSessionEndpoints
                 return error!;
 
             var (entity, created) = await repository.AddAsync(
-                currentCorredor.Id, session!, idempotencyKey.Value, cancellationToken);
+                currentCorredor.Id, session!, idempotencyKey.Value,
+                request.PainReported, cancellationToken);
 
             var response = new RunningSessionResponse(
                 entity.Id,

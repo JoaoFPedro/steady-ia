@@ -22,6 +22,75 @@ namespace Steady.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.AdherencePolicyVersionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_current");
+
+                    b.Property<decimal>("LoadPercent")
+                        .HasColumnType("numeric")
+                        .HasColumnName("load_percent");
+
+                    b.Property<int>("PerceivedEffortPoints")
+                        .HasColumnType("integer")
+                        .HasColumnName("perceived_effort_points");
+
+                    b.Property<decimal>("RepetitionsPercent")
+                        .HasColumnType("numeric")
+                        .HasColumnName("repetitions_percent");
+
+                    b.Property<decimal>("RunningDistancePercent")
+                        .HasColumnType("numeric")
+                        .HasColumnName("running_distance_percent");
+
+                    b.Property<decimal>("RunningDurationPercent")
+                        .HasColumnType("numeric")
+                        .HasColumnName("running_duration_percent");
+
+                    b.Property<int>("SetsAbsolute")
+                        .HasColumnType("integer")
+                        .HasColumnName("sets_absolute");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsCurrent")
+                        .IsUnique()
+                        .HasFilter("is_current = TRUE");
+
+                    b.HasIndex("Version")
+                        .IsUnique();
+
+                    b.ToTable("adherence_policy_versions", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("14000000-0000-0000-0000-000000000001"),
+                            CreatedAt = new DateTime(2026, 8, 30, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsCurrent = true,
+                            LoadPercent = 0.10m,
+                            PerceivedEffortPoints = 2,
+                            RepetitionsPercent = 0.20m,
+                            RunningDistancePercent = 0.10m,
+                            RunningDurationPercent = 0.10m,
+                            SetsAbsolute = 1,
+                            Version = 1
+                        });
+                });
+
             modelBuilder.Entity("Steady.Infrastructure.Persistence.CoachingLinkEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -222,6 +291,79 @@ namespace Steady.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("plan_requests", (string)null);
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.ReviewOutboxEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<Guid>("CorredorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("corredor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly>("ExecutionDate")
+                        .HasColumnType("date")
+                        .HasColumnName("execution_date");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_id");
+
+                    b.Property<string>("ExecutionKind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("execution_kind");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<bool>("PainReportedAtCompletion")
+                        .HasColumnType("boolean")
+                        .HasColumnName("pain_reported_at_completion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("TrainingSheetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("training_sheet_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorredorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("ExecutionKind", "ExecutionId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("review_outbox", (string)null);
                 });
 
             modelBuilder.Entity("Steady.Infrastructure.Persistence.RunningSessionEntity", b =>
@@ -432,6 +574,103 @@ namespace Steady.Infrastructure.Migrations
                     b.ToTable("training_sheets", (string)null);
                 });
 
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.WorkoutReviewEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<DateTime?>("CoherenceEvaluatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("coherence_evaluated_at");
+
+                    b.Property<int?>("CoherencePolicyVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("coherence_policy_version");
+
+                    b.Property<string>("CoherenceStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("coherence_status");
+
+                    b.Property<string>("ComparisonJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("comparison");
+
+                    b.Property<bool>("Contested")
+                        .HasColumnType("boolean")
+                        .HasColumnName("contested");
+
+                    b.Property<Guid>("CorredorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("corredor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly>("ExecutionDate")
+                        .HasColumnType("date")
+                        .HasColumnName("execution_date");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_id");
+
+                    b.Property<string>("ExecutionKind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("execution_kind");
+
+                    b.Property<string>("ExplanationJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("explanation");
+
+                    b.Property<string>("ExplanationStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("explanation_status");
+
+                    b.Property<Guid?>("NextExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("next_execution_id");
+
+                    b.Property<int?>("PlanVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("plan_version");
+
+                    b.Property<int>("PolicyVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("policy_version");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("TrainingSheetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("training_sheet_id");
+
+                    b.Property<DateTime?>("UnderstoodAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("understood_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorredorId", "ExecutionDate");
+
+                    b.HasIndex("ExecutionKind", "ExecutionId")
+                        .IsUnique();
+
+                    b.ToTable("workout_reviews", (string)null);
+                });
+
             modelBuilder.Entity("Steady.Infrastructure.Persistence.CoachingLinkEntity", b =>
                 {
                     b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
@@ -466,6 +705,15 @@ namespace Steady.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Steady.Infrastructure.Persistence.PlanRequestEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.ReviewOutboxEntity", b =>
                 {
                     b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
                         .WithMany()
@@ -519,6 +767,15 @@ namespace Steady.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("PersonalId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Steady.Infrastructure.Persistence.WorkoutReviewEntity", b =>
+                {
+                    b.HasOne("Steady.Infrastructure.Persistence.CorredorEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CorredorId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

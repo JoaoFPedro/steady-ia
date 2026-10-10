@@ -22,6 +22,9 @@
 | ADR-014 | Fronteira determinística entre comparação, política e IA | 2026-08-28 | Accepted | STORY-014 |
 | ADR-015 | Tolerâncias e políticas de aderência versionadas | 2026-08-28 | Accepted | STORY-014 |
 | ADR-016 | Claude API como provedor da explicação da revisão | 2026-08-28 | Accepted | STORY-014 |
+| ADR-017 | Cor de erro no Nocturne | 2026-08-29 | Accepted | STORY-017 |
+| ADR-018 | Outbox transacional para criação durável da revisão | 2026-08-30 | Accepted | STORY-014 |
+| ADR-019 | Identidade histórica estável do exercício | 2026-08-30 | Accepted | STORY-014 |
 
 ## Superadas
 

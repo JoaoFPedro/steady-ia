@@ -1,6 +1,6 @@
-# SDD Kit — GitHub Copilot Instructions
+# isabel — GitHub Copilot Instructions
 
-O SDD Kit opera com **dois papéis distintos**:
+O isabel opera com **dois papéis distintos**:
 
 - **Produto & Design** — define o *o quê*: histórias, critérios de aceite e cenários BDD via sessão Three Amigos. BDD é uma **prática de especificação colaborativa**, não uma responsabilidade do engenheiro.
 - **Engineer & QA** — garante o *como* e a qualidade: recebe a spec BDD aprovada e a traduz em testes e código. A spec é o contrato de entrada.
@@ -13,13 +13,13 @@ Antes de qualquer ação, leia nesta ordem:
 
 1. `.sdd/CONSTITUTION.md` — princípios invioláveis do framework
 2. `.sdd/PROJECT-CONSTITUTION.md` — lei específica do projeto (gerado pelo init)
-3. `.sdd/STACK.md` — stack detectada e convenções (gerado por `./sdd scan`)
+3. `.sdd/STACK.md` — stack detectada e convenções (gerado por `/init` ou `/onboard`)
 4. `.sdd/PLAYBOOK.md` — patterns, anti-patterns, segurança
 5. `.sdd/memory/PROJECT.md` — contexto do projeto
 6. `.sdd/memory/DECISIONS.md` — decisões existentes
 7. Se UI: `.sdd/DESIGN.md` — design system
 
-> Se `.sdd/STACK.md` não existir: peça `./sdd scan`.
+> Se `.sdd/STACK.md` não existir: peça `/onboard`.
 > Se `.sdd/PROJECT-CONSTITUTION.md` não existir:
 >   - Projeto novo sem código → execute o processo de init (ver abaixo)
 >   - Projeto com código existente → use o onboarding (`docs/ONBOARDING-PROMPT.md`)
@@ -36,12 +36,12 @@ Antes de qualquer ação, leia nesta ordem:
 ### Discovery — Produto & Design (antes de especificar)
 
 1. **Onboarding** (primeiro acesso em projeto existente): abra `docs/ONBOARDING-PROMPT.md` e cole no Copilot Chat
-2. **Discovery**: `/discover` — problema → hipótese → decisão explícita em `.discovery/{DISC-ID}/`
+2. **Discovery**: `/triage` — problema → hipótese → decisão explícita em `.discovery/{DISC-ID}/`
 3. Decisão **Construir** libera a especificação; outras encerram o ciclo aqui
 
 ### Especificação — Produto & Design (depois de decidir "Construir")
 
-1. **Sessão BDD**: `/spec` — Three Amigos escreve `specs/{id}/story.md` + `spec.bdd.md` referenciando o discovery
+1. **Sessão BDD**: `/shape` — Three Amigos escreve `specs/{id}/story.md` + `spec.bdd.md` referenciando o discovery
 2. **Blueprint** (fluxos > 2 passos): `specs/{id}/blueprint.mermaid`
 3. **Tasks**: `specs/{id}/tasks.md`
 4. A spec aprovada é entregue ao Engineer & QA como contrato
@@ -52,8 +52,8 @@ A spec BDD aprovada é o ponto de entrada. O Engineer não escreve cenários —
 
 1. **Análise** (features complexas): analise o código relevante antes de implementar
 2. **TDD por cenário**: RED → GREEN → REFACTOR
-3. **Review**: valide código contra a spec após implementar
-4. **Sync**: após refactor ou mudança de requisito, sincronize spec vs código
+3. **Check**: valide código contra a spec após implementar
+4. **Reflect**: após refactor ou mudança de requisito, sincronize spec vs código
 
 ### Modo leve — fix, ajuste, refactor pequeno (Engineer & QA)
 
@@ -63,7 +63,7 @@ Resolva direto. Consulte STACK.md e PLAYBOOK.md. Ao terminar, sincronize spec vs
 
 ## Comandos
 
-Os comandos do SDD Kit são **prompt files** em [.github/prompts/](prompts/) e são invocados como slash commands no Copilot Chat (`/<nome>`).
+Os comandos do isabel são **prompt files** em [.github/prompts/](prompts/) e são invocados como slash commands no Copilot Chat (`/<nome>`).
 
 ### Produto & Design
 
@@ -71,8 +71,8 @@ Os comandos do SDD Kit são **prompt files** em [.github/prompts/](prompts/) e s
 |---------|-------------|-----------|
 | `/init` | [init.prompt.md](prompts/init.prompt.md) | Entrevista projeto novo, gera Constituição + memórias iniciais |
 | `/onboard` | [onboard.prompt.md](prompts/onboard.prompt.md) | Analisa projeto existente: blueprint, domínio, ADR-000 |
-| `/discover` | [discover.prompt.md](prompts/discover.prompt.md) | Discovery: problema → hipótese → decisão (Construir/Validar/Diferir/Descartar) |
-| `/spec` | [spec.prompt.md](prompts/spec.prompt.md) | Sessão Three Amigos — transforma story em cenários BDD |
+| `/triage` | [triage.prompt.md](prompts/triage.prompt.md) | Discovery: problema → hipótese → decisão (Construir/Validar/Diferir/Descartar) |
+| `/shape` | [shape.prompt.md](prompts/shape.prompt.md) | Sessão Three Amigos — transforma story em cenários BDD |
 | `/plan` | [plan.prompt.md](prompts/plan.prompt.md) | Planeja sem implementar: story + spec + blueprint + tasks |
 
 ### Engineer & QA
@@ -80,9 +80,9 @@ Os comandos do SDD Kit são **prompt files** em [.github/prompts/](prompts/) e s
 | Comando | Prompt file | O que faz |
 |---------|-------------|-----------|
 | `/analyze` | [analyze.prompt.md](prompts/analyze.prompt.md) | Análise estratégica do código antes de implementar |
-| `/implement` | [implement.prompt.md](prompts/implement.prompt.md) | TDD a partir da spec BDD (RED → GREEN → REFACTOR) |
-| `/review` | [review.prompt.md](prompts/review.prompt.md) | Valida código contra spec + checklist OWASP Top 10 |
-| `/sync` | [sync.prompt.md](prompts/sync.prompt.md) | Sincroniza spec ↔ código (bidirecional) |
+| `/build` | [build.prompt.md](prompts/build.prompt.md) | TDD a partir da spec BDD (RED → GREEN → REFACTOR) |
+| `/check` | [check.prompt.md](prompts/check.prompt.md) | Valida código contra spec + checklist OWASP Top 10 |
+| `/reflect` | [reflect.prompt.md](prompts/reflect.prompt.md) | Sincroniza spec ↔ código (bidirecional) |
 | `/feature` | [feature.prompt.md](prompts/feature.prompt.md) | Pipeline completo: story → spec → TDD (uso solo) |
 
 ### Auditoria
@@ -91,7 +91,7 @@ Os comandos do SDD Kit são **prompt files** em [.github/prompts/](prompts/) e s
 |---------|-------------|-----------|
 | `/healthcheck` | [healthcheck.prompt.md](prompts/healthcheck.prompt.md) | Auditoria silenciosa: sync pendente, specs órfãs, ADRs em Proposed, segurança, dead code |
 
-Cada prompt já carrega o bloco "Pré-condições" — leitura das memórias relevantes, validação de fundação e (em `/review` e `/feature`) o **process guard** que bloqueia execução se houver `.sdd/.pending-sync` ativo.
+Cada prompt já carrega o bloco "Pré-condições" — leitura das memórias relevantes, validação de fundação e (em `/check` e `/feature`) o **process guard** que bloqueia execução se houver `.sdd/.pending-sync` ativo.
 
 ## Ao implementar
 
@@ -112,15 +112,15 @@ Cada prompt já carrega o bloco "Pré-condições" — leitura das memórias rel
 
 ## Limitações conhecidas vs Claude Code
 
-A versão Claude Code do SDD Kit (em [.claude/](../.claude/)) usa **hooks** atrelados aos eventos `UserPromptSubmit` e `Stop` para automatizar contexto, validação de fluxo e auditoria. O VS Code Copilot **não expõe esses eventos** ao usuário, então parte dessa automação foi traduzida para os próprios prompts e parte simplesmente não existe aqui:
+A versão Claude Code do isabel (em [.claude/](../.claude/)) usa **hooks** atrelados aos eventos `UserPromptSubmit` e `Stop` para automatizar contexto, validação de fluxo e auditoria. O VS Code Copilot **não expõe esses eventos** ao usuário, então parte dessa automação foi traduzida para os próprios prompts e parte simplesmente não existe aqui:
 
 | Hook Claude | Substituto no Copilot |
 |-------------|------------------------|
 | `context-bootstrap.sh` | Bloco "Pré-condições" em cada prompt (leitura explícita de `.sdd/memory/*`, `.sdd/STACK.md`, etc.) |
-| `process-guard.sh` | Bloco "Process guard" em `/review`, `/feature` e `/sync` (verifica `.sdd/.pending-sync`) |
+| `process-guard.sh` | Bloco "Process guard" em `/check`, `/feature` e `/reflect` (verifica `.sdd/.pending-sync`) |
 | `model-advisor.sh` | Frontmatter `model:` em cada prompt (Opus para decisão, Sonnet para execução) |
 | `session-healthcheck.sh` | Comando manual `/healthcheck` — rode ao final da sessão ou antes de commits importantes |
 | `session-tracker.sh` | **Sem equivalente.** Copilot não persiste sessão. |
 | `retro-logger.sh` | **Sem equivalente.** Métricas de sessão não são logadas automaticamente. |
 
-**Implicação prática**: rode `/healthcheck` ao terminar uma sessão. Os bloqueios de fluxo (`/review`/`/feature` após `/implement` sem spec) funcionam, mas exigem que o prompt seja executado — não há interceptação automática.
+**Implicação prática**: rode `/healthcheck` ao terminar uma sessão. Os bloqueios de fluxo (`/check`/`/feature` após `/build` sem spec) funcionam, mas exigem que o prompt seja executado — não há interceptação automática.

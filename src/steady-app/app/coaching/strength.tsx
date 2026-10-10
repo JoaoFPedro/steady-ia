@@ -85,8 +85,24 @@ export default function DetailedStrengthScreen() {
   }
 
   function savePrepared(payload: Parameters<typeof combinedWorkoutDrafts.hold>[0]) {
+    Alert.alert(
+      'Sentiu dor neste treino?',
+      'Escolha uma resposta para concluir o registro.',
+      [
+        { text: 'Não', onPress: () => saveWithPain(payload, false) },
+        { text: 'Sim', onPress: () => saveWithPain(payload, true) },
+      ],
+      { cancelable: true },
+    );
+  }
+
+  function saveWithPain(
+    payload: Parameters<typeof combinedWorkoutDrafts.hold>[0],
+    painReported: boolean,
+  ) {
+    const completedPayload = { ...payload, painReported };
     if (!params.runPrescription) {
-      void log(payload);
+      void log(completedPayload);
       return;
     }
 
@@ -94,11 +110,11 @@ export default function DetailedStrengthScreen() {
       'Registrar corrida?',
       'Este dia também tem uma corrida prescrita. Você deseja registrá-la agora?',
       [
-        { text: 'Não', onPress: () => void log(payload) },
+        { text: 'Não', onPress: () => void log(completedPayload) },
         {
           text: 'Sim',
           onPress: () => {
-            void combinedWorkoutDrafts.hold(payload).then(() => {
+            void combinedWorkoutDrafts.hold(completedPayload).then(() => {
               router.replace({
                 pathname: '/log/run',
                 params: {

@@ -59,6 +59,10 @@ describe('Parâmetros da rota do planejamento', () => {
       expect(sectionFromParam('regras')).toBe('regras');
     });
 
+    it('link legado de mobilidade abre a Semana, onde o conteúdo passou a viver', () => {
+      expect(sectionFromParam('mobilidade')).toBe('semana');
+    });
+
     it('qualquer outra coisa abre em "Seus dados", como sempre abriu (regra 3)', () => {
       expect(sectionFromParam(undefined)).toBe('dados');
       expect(sectionFromParam('')).toBe('dados');

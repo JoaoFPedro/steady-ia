@@ -1,22 +1,18 @@
-# DevDocs - Steady.Infrastructure
+# Steady.Infrastructure - DevDocs
 
-Indice da documentacao tecnica detalhada da camada `src/Steady.Infrastructure` (EF Core 9 + Npgsql/PostgreSQL, Repository pattern, DI).
+12/12 unidades documentadas. Atualização: 2026-09-27.
 
-| Arquivo | Descricao |
+| Documento | Descrição |
 |---|---|
-| [CorredorRepository-Persistencia-Autenticacao-DevDocs.md](./CorredorRepository-Persistencia-Autenticacao-DevDocs.md) | Resolucao e provisionamento automatico do Corredor a partir do `sub` do Google, incluindo tratamento de corrida entre requisicoes concorrentes no primeiro login. |
-| [RunningSessionRepository-Persistencia-Treino-DevDocs.md](./RunningSessionRepository-Persistencia-Treino-DevDocs.md) | Persistencia e consulta de sessoes de corrida (`AddAsync` idempotente via chave `Idempotency-Key`/ADR-003, `GetByCorredorIdAsync`, `GetByIdAsync`), escopadas por corredor. |
-| [StrengthSessionRepository-Persistencia-Treino-DevDocs.md](./StrengthSessionRepository-Persistencia-Treino-DevDocs.md) | Persistencia e consulta de sessoes de musculacao, incluindo a conversao dos enums `MuscleGroup`/`Intensity` para texto no banco e `AddAsync` idempotente (ADR-003). |
-| [PainLogRepository-Persistencia-Treino-DevDocs.md](./PainLogRepository-Persistencia-Treino-DevDocs.md) | Persistencia de registros de dor pos-treino (`AddAsync` idempotente, ADR-003 -- ainda sem metodo de leitura implementado). |
-| [SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md](./SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md) | Mapeamento objeto-relacional completo (`OnModelCreating`), registro de DI (`AddSteadyInfrastructure`), resolucao tardia da connection string e o utilitario de idempotencia `IIdempotentRecord`/`SaveResult<TEntity>` (ADR-003) compartilhado pelos tres repositorios de registro. |
-
-## Cobertura
-
-5/5 unidades documentadas: `CorredorRepository`, `RunningSessionRepository`, `StrengthSessionRepository`, `PainLogRepository`, `SteadyDbContext` + `ServiceCollectionExtensions` (documentados juntos como "Configuracao e Persistencia").
-
-## Referencias cruzadas
-
-- Consumidor desta camada: `Steady.Api.Endpoints.*` e `Steady.Api.Auth.AuthenticationFilter` -- ver `DocumentAIReadme/Steady.Api/DevDocs/README.md`.
-- Regras de dominio persistidas por estes repositorios: `Steady.Domain.Training.*` -- ver `DocumentAIReadme/Steady.Domain/DevDocs/README.md`.
-- Decisao arquitetural que fundamenta o isolamento de dados: [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md).
-- Decisao arquitetural que fundamenta a chave de idempotencia dos registros de treino/dor (`RunningSessionRepository`, `StrengthSessionRepository`, `PainLogRepository`): [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
+| [CoachingLinkRepository - Persistencia-Coaching - Especificação Técnica](CoachingLinkRepository-Persistencia-Coaching-DevDocs.md) | Solicitação, aceite, encerramento e consultas de vínculos autorizados. |
+| [CorredorRepository - Persistencia-Autenticacao - Especificação Técnica](CorredorRepository-Persistencia-Autenticacao-DevDocs.md) | Provisionamento por sub, perfil sincronizado e plano fixo da conta. |
+| [PainLogRepository - Persistencia-Treino - Especificação Técnica](PainLogRepository-Persistencia-Treino-DevDocs.md) | Dor idempotente por corredor e distinção da dor congelada na outbox. |
+| [PlanRequestRepository - Persistencia-Planejamento - Especificação Técnica](PlanRequestRepository-Persistencia-Planejamento-DevDocs.md) | Input completo e imutável do pedido, reenvio e histórico isolado. |
+| [ReviewExplanationRetryService - Persistencia-Revisao - Especificação Técnica](ReviewExplanationRetryService-Persistencia-Revisao-DevDocs.md) | Retry de explicação congelada com validação e fallback indisponível. |
+| [ReviewOutboxProcessor - Persistencia-Revisao - Especificação Técnica](ReviewOutboxProcessor-Persistencia-Revisao-DevDocs.md) | Lease, comparação determinística, explicação validada e coerência. |
+| [RunningSessionRepository - Persistencia-Treino - Especificação Técnica](RunningSessionRepository-Persistencia-Treino-DevDocs.md) | Corrida idempotente com outbox e dor confirmadas juntas. |
+| [SteadyDbContext e ServiceCollectionExtensions - Persistencia-Configuracao - Especificação Técnica](SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md) | Doze tabelas, índices e relações, seed de política e serviços Scoped. |
+| [StrengthSessionRepository - Persistencia-Treino - Especificação Técnica](StrengthSessionRepository-Persistencia-Treino-DevDocs.md) | Musculação resumida e dor; consultas próprias sem revisão por exercício. |
+| [TrainingPlanRepository - Persistencia-Planejamento - Especificação Técnica](TrainingPlanRepository-Persistencia-Planejamento-DevDocs.md) | Plano fixo versionado, documento completo e seed descritivo. |
+| [TrainingSheetRepository - Persistencia-Coaching - Especificação Técnica](TrainingSheetRepository-Persistencia-Coaching-DevDocs.md) | Ficha ativa, compatibilidade de documentos e execução combinada atômica. |
+| [WorkoutReviewRepository - Persistencia-Revisao - Especificação Técnica](WorkoutReviewRepository-Persistencia-Revisao-DevDocs.md) | Consulta própria ou por vínculo e feedback sem mudar ação. |

@@ -13,10 +13,13 @@ namespace Steady.Api.Endpoints;
 /// </summary>
 internal static class TrainingSheetMapping
 {
-    public static ExercisePrescription[] CreateExercises(IReadOnlyList<ExercisePrescriptionBody> bodies) =>
+    public static ExercisePrescription[] CreateExercises(
+        IReadOnlyList<ExercisePrescriptionBody> bodies,
+        IReadOnlySet<Guid> allowedExerciseKeys) =>
         bodies.Select(item => ExercisePrescription.Create(
             Guid.NewGuid(), item.Name, item.Sets, item.Repetitions,
-            item.DurationSeconds, item.Observation)).ToArray();
+            item.DurationSeconds, item.Observation,
+            ResolveExerciseKey(item.ExerciseKey, allowedExerciseKeys))).ToArray();
 
     public static RunPrescription CreateRunPrescription(RunPrescriptionBody body) => RunPrescription.Create(
         body.Description,
@@ -39,7 +42,8 @@ internal static class TrainingSheetMapping
                     item.Repetitions,
                     active.SuggestedLoads.GetValueOrDefault(item.Id),
                     item.DurationSeconds,
-                    item.Observation)).ToArray(),
+                    item.Observation,
+                    item.ExerciseKey)).ToArray(),
                 null),
             RunningWorkout run => new WorkoutPrescriptionResponse(
                 "run",
@@ -74,4 +78,12 @@ internal static class TrainingSheetMapping
 
     private static IntRangeResponse? Respond(NumericRange<int>? range) =>
         range is { } value ? new IntRangeResponse(value.Min, value.Max) : null;
+
+    private static Guid? ResolveExerciseKey(Guid? requested, IReadOnlySet<Guid> allowed)
+    {
+        if (requested is null) return null;
+        if (!allowed.Contains(requested.Value))
+            throw new ArgumentException("A identidade do exercício não pertence à ficha ativa.");
+        return requested;
+    }
 }

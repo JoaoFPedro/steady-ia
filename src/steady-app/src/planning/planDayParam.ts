@@ -29,11 +29,14 @@ export function planDayFromParam(
   return indice === null ? null : weekPlan[indice];
 }
 
-export type SectionId = 'dados' | 'fases' | 'semana' | 'mobilidade' | 'regras';
+export type SectionId = 'dados' | 'fases' | 'semana' | 'regras';
 
-const SECTIONS: SectionId[] = ['dados', 'fases', 'semana', 'mobilidade', 'regras'];
+const SECTIONS: SectionId[] = ['dados', 'fases', 'semana', 'regras'];
 
 /** Aba desconhecida abre em "Seus dados" — o comportamento de sempre (regra 3). */
 export function sectionFromParam(valor: string | undefined): SectionId {
+  // Compatibilidade com links criados antes da STORY-020, quando Mobilidade
+  // ainda era uma aba independente.
+  if (valor === 'mobilidade') return 'semana';
   return SECTIONS.find((secao) => secao === valor) ?? 'dados';
 }

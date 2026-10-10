@@ -80,5 +80,17 @@ public sealed class WorkoutExecutionTests
         Assert.Throws<ArgumentException>(() => StrengthWorkoutExecution.Create(
             SheetId, WorkoutType.Run, Date, [Executed()]));
     }
-}
 
+    [Fact]
+    public void Snapshot_preserva_identidade_historica_e_tempo_prescrito()
+    {
+        var exerciseKey = Guid.NewGuid();
+
+        var exercise = ExerciseExecution.Executed(
+            ExerciseId, "Prancha", 3, 1, 0.01m, null,
+            exerciseKey: exerciseKey, durationSeconds: 40);
+
+        Assert.Equal(exerciseKey, exercise.ExerciseKey);
+        Assert.Equal(40, exercise.DurationSeconds);
+    }
+}

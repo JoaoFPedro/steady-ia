@@ -16,24 +16,24 @@
 
 ### 🔴 Críticos
 
-Nenhum problema crítico identificado. **Importante**: o ponto abaixo (indicador "doeu" ausente) foi classificado como Importante, não Crítico, porque não há nenhum consumidor atual do campo ausente — o gap é de rastreabilidade spec-código, não de funcionalidade quebrada em produção.
+Nenhum problema crítico identificado. **Importante**: o ponto abaixo (indicador "doeu" ausente) foi classificado como Importante, não Crítico, porque não há nenhum consumidor atual do campo ausente - o gap é de rastreabilidade spec-código, não de funcionalidade quebrada em produção.
 
 ### 🟡 Importantes
 
-- **Indicador "doeu" mencionado na spec, ausente no modelo de domínio**: `specs/STORY-001/spec.bdd.md` (regra de negócio #7 e cenário "Corredor registra dor pós-treino dias depois") descreve o registro de dor como "data + região do corpo + doeu/não doeu", e o `Then` do cenário Gherkin afirma textualmente: *"o registro de dor é salvo com a data, a região e o indicador 'doeu'"*. O tipo `PainLog` implementado tem apenas `Date` e `Region` — não existe nenhuma propriedade booleana ou enum representando esse indicador em nenhuma camada (`Steady.Domain`, `Steady.Api.Contracts.PainLogContracts`, `Steady.Infrastructure.Persistence.PainLogEntity`). Na prática, o sistema atual usa a **existência do registro** como proxy implícito de "doeu = true" — não há como registrar "não doeu" hoje.
-  - **Ação Recomendada**: esclarecer com produto se (a) o indicador é implícito por design (todo `PainLog` representa uma ocorrência de dor, e "não doeu" simplesmente não gera registro) e a spec deveria ser ajustada para refletir isso, ou (b) o campo foi de fato esquecido na implementação e precisa ser adicionado. Esta é exatamente o tipo de divergência que o comando `/sync` do SDD Kit existe para resolver — recomenda-se rodar `/sync` para reconciliar spec e código antes de tratar como bug.
+- **Indicador "doeu" mencionado na spec, ausente no modelo de domínio**: `specs/STORY-001/spec.bdd.md` (regra de negócio #7 e cenário "Corredor registra dor pós-treino dias depois") descreve o registro de dor como "data + região do corpo + doeu/não doeu", e o `Then` do cenário Gherkin afirma textualmente: *"o registro de dor é salvo com a data, a região e o indicador 'doeu'"*. O tipo `PainLog` implementado tem apenas `Date` e `Region` - não existe nenhuma propriedade booleana ou enum representando esse indicador em nenhuma camada (`Steady.Domain`, `Steady.Api.Contracts.PainLogContracts`, `Steady.Infrastructure.Persistence.PainLogEntity`). Na prática, o sistema atual usa a **existência do registro** como proxy implícito de "doeu = true" - não há como registrar "não doeu" hoje.
+  - **Ação Recomendada**: esclarecer com produto se (a) o indicador é implícito por design (todo `PainLog` representa uma ocorrência de dor, e "não doeu" simplesmente não gera registro) e a spec deveria ser ajustada para refletir isso, ou (b) o campo foi de fato esquecido na implementação e precisa ser adicionado. Esta é exatamente o tipo de divergência que o comando `/sync` do SDD Kit existe para resolver - recomenda-se rodar `/sync` para reconciliar spec e código antes de tratar como bug.
 
 ### 🟢 Menores
 
-- **`Region` é texto livre, sem vocabulário controlado**: diferente de `StrengthSession.MuscleGroup` (um `enum` fechado com 5 valores), `PainLog.Region` aceita qualquer string não vazia. Isso permite inconsistências de dado (ex: "Canela", "canela", "perna direita - canela", "Perna") que dificultam agregações futuras (ex: "quais regiões doem mais quando há sobrecarga de perna?" — o tipo de análise que o ADR-001 sugere como forma de calibrar a regra).
+- **`Region` é texto livre, sem vocabulário controlado**: diferente de `StrengthSession.MuscleGroup` (um `enum` fechado com 5 valores), `PainLog.Region` aceita qualquer string não vazia. Isso permite inconsistências de dado (ex: "Canela", "canela", "perna direita - canela", "Perna") que dificultam agregações futuras (ex: "quais regiões doem mais quando há sobrecarga de perna?" - o tipo de análise que o ADR-001 sugere como forma de calibrar a regra).
   - **Ação Recomendada**: não é urgente para o MVP (a spec não define um vocabulário fechado de regiões), mas vale registrar como candidato a evolução se/quando a calibração da regra de sobrecarga (mencionada nos Riscos do ADR-001) virar trabalho ativo. Se avançar, considerar um `enum BodyRegion` seguindo o mesmo padrão de `MuscleGroup`.
-- **Sem validação de data futura**: mesma lacuna observada em `RunningSession` e `StrengthSession` — `Create` não rejeita `date` no futuro. Aqui o impacto é ainda mais ambíguo, já que a regra de negócio explicitamente permite registrar dor com atraso (dias depois do treino) — a pergunta é apenas se "no futuro" (data ainda não vivida) faz sentido.
+- **Sem validação de data futura**: mesma lacuna observada em `RunningSession` e `StrengthSession` - `Create` não rejeita `date` no futuro. Aqui o impacto é ainda mais ambíguo, já que a regra de negócio explicitamente permite registrar dor com atraso (dias depois do treino) - a pergunta é apenas se "no futuro" (data ainda não vivida) faz sentido.
   - **Ação Recomendada**: baixa prioridade; revisitar apenas se a decisão de produto sobre datas futuras nas outras entidades (ver `RunningSession-Treino-Corrida-Debts.md`) motivar uma regra unificada de "nenhuma entidade de treino aceita data futura".
 
 ## 3. Plano de Ação
 
 1. **Fase 1 - Críticos**: nenhuma ação necessária.
-2. **Fase 2 - Importantes**: rodar `/sync` (ou sessão equivalente com produto) para decidir o destino do indicador "doeu" — ajustar a spec para refletir o comportamento implícito atual, ou adicionar o campo explícito ao domínio, contratos de API e entidade de persistência.
+2. **Fase 2 - Importantes**: rodar `/sync` (ou sessão equivalente com produto) para decidir o destino do indicador "doeu" - ajustar a spec para refletir o comportamento implícito atual, ou adicionar o campo explícito ao domínio, contratos de API e entidade de persistência.
 3. **Fase 3 - Menores**: avaliar `enum BodyRegion` como evolução futura, condicionado a uso real de análise de dados de dor; alinhar política de data futura com as demais entidades de treino.
 
 ## 4. User Stories para Implementação
@@ -45,11 +45,11 @@ Nenhum problema crítico identificado. **Importante**: o ponto abaixo (indicador
 **Objetivo**: eliminar a divergência entre spec e código, garantindo que a documentação de negócio reflita o comportamento real (ou que o código seja ajustado para expor o campo que a spec descreve).
 
 **Regras de Negócio**:
-- A decidir com produto: opção A — a existência do registro já é o indicador (ajustar `spec.bdd.md` para remover a menção a um campo `doeu` separado); opção B — adicionar campo explícito `HasPain`/`Doeu` (booleano) a `PainLog`, permitindo futuramente registrar "não doeu" como controle negativo.
+- A decidir com produto: opção A - a existência do registro já é o indicador (ajustar `spec.bdd.md` para remover a menção a um campo `doeu` separado); opção B - adicionar campo explícito `HasPain`/`Doeu` (booleano) a `PainLog`, permitindo futuramente registrar "não doeu" como controle negativo.
 
 **Especificação Técnica**:
 - Se opção A: editar `specs/STORY-001/spec.bdd.md`, ajustando o `Then` do cenário "Corredor registra dor pós-treino dias depois" para remover a menção ao indicador separado, documentando a decisão via `/sync`.
-- Se opção B: adicionar `bool HasPain` (ou nome equivalente) a `PainLog.Create`, propagar para `PainLogEntity` (`Steady.Infrastructure`) e para `PainLogRequest`/`PainLogResponse` (`Steady.Api.Contracts`) — mudança que atravessa as três camadas do sistema, não apenas `Steady.Domain`.
+- Se opção B: adicionar `bool HasPain` (ou nome equivalente) a `PainLog.Create`, propagar para `PainLogEntity` (`Steady.Infrastructure`) e para `PainLogRequest`/`PainLogResponse` (`Steady.Api.Contracts`) - mudança que atravessa as três camadas do sistema, não apenas `Steady.Domain`.
 
 **Critérios de Aceite**:
 - [ ] Divergência entre `spec.bdd.md` e `PainLog.cs` documentada e resolvida (uma das duas muda).
@@ -76,7 +76,7 @@ Nenhum problema crítico identificado. **Importante**: o ponto abaixo (indicador
 **Especificação Técnica**:
 - Se aprovado, criar `enum BodyRegion` em `Steady.Domain.Training`, seguindo o padrão de `MuscleGroup.cs`.
 - Alterar `PainLog.Create` para receber `BodyRegion` em vez de `string region`, atualizando guard clause de "obrigatório" (deixa de ser `IsNullOrWhiteSpace`, passa a ser checagem de enum válido, como em `StrengthSession`).
-- Migração de dado: registros já persistidos com texto livre precisam de estratégia de migração (fora do escopo de `Steady.Domain` — envolve `Steady.Infrastructure`).
+- Migração de dado: registros já persistidos com texto livre precisam de estratégia de migração (fora do escopo de `Steady.Domain` - envolve `Steady.Infrastructure`).
 
 **Critérios de Aceite**:
 - [ ] Lista de regiões aprovada por produto.

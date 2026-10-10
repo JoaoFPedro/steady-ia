@@ -1,8 +1,8 @@
-# CLAUDE.md — SDD Kit
+# CLAUDE.md — isabel
 
 ## Quem Você É
 
-O SDD Kit opera com **dois papéis distintos**, cada um com responsabilidades e comandos específicos:
+O isabel opera com **dois papéis distintos**, cada um com responsabilidades e comandos específicos:
 
 - **Produto & Design** — define o *o quê*: histórias, critérios de aceite, cenários BDD. BDD é uma **prática de especificação colaborativa** — os cenários emergem da conversa entre produto, design e QA (Three Amigos), não da cabeça do engenheiro.
 - **Engineer & QA** — garante o *como*, a qualidade e a **segurança**: traduz a spec BDD aprovada em testes, implementa, revisa e sincroniza. A spec é o contrato de entrada. Segurança não é uma fase separada — é uma dimensão de cada cenário implementado.
@@ -30,9 +30,9 @@ O harness combina **Guides** (feedforward: spec, arquitetura, patterns) e **Sens
 | Comando | O que faz | Quando usar |
 |---------|-----------|-------------|
 | `/init` | Entrevista o projeto e gera a Constituição + memórias iniciais | **Início absoluto** — projeto novo, sem código |
-| `/onboard` | Analisa código existente: blueprint, domínio, ADR-000 | Projeto existente adotando SDD Kit |
-| `/discover` | Sessão de discovery: problema → hipótese → decisão (Construir/Diferir/Descartar) | Antes de qualquer spec — quando ainda não se sabe exatamente o que construir |
-| `/spec` | Sessão colaborativa: transforma uma story em cenários BDD (Three Amigos) | Story pronta (vinda de um discovery), falta spec BDD |
+| `/onboard` | Analisa código existente: blueprint, domínio, ADR-000 | Projeto existente adotando isabel |
+| `/triage` | Sessão de discovery: problema → hipótese → decisão (Construir/Diferir/Descartar) | Antes de qualquer spec — quando ainda não se sabe exatamente o que construir |
+| `/shape` | Sessão colaborativa: transforma uma story em cenários BDD (Three Amigos) | Story pronta (vinda de um discovery), falta spec BDD |
 | `/plan` | Planeja sem implementar: story + spec + blueprint + tasks | Quer formalizar o planejamento completo antes de passar para o time |
 
 ### Engineer & QA
@@ -40,9 +40,10 @@ O harness combina **Guides** (feedforward: spec, arquitetura, patterns) e **Sens
 | Comando | O que faz | Quando usar |
 |---------|-----------|-------------|
 | `/analyze` | Análise estratégica do código antes de implementar | Feature complexa ou área desconhecida |
-| `/implement` | TDD a partir da spec aprovada — **dispara `/review` automático** ao final | Spec aprovada pelo produto, falta código |
-| `/review` | Valida código contra a spec + checklist OWASP Top 10 | Auto-rodado pelo `/implement`. Manual só em 3 casos: re-validar pós-refactor/merge, pré-release, ou fluxo Jira/Azure depois do `/sync` |
-| `/sync` | Sincroniza spec ↔ código (bidirecional) | Pós-refactor ou requisito mudou |
+| `/documenta-ai` | Cria e mantém DevDocs, Rules e Debts dos módulos do produto | Linha de base no projeto existente e atualização após cada entrega |
+| `/build` | TDD a partir da spec aprovada — **dispara `/check` automático** ao final | Spec aprovada pelo produto, falta código |
+| `/check` | Valida código contra a spec + checklist OWASP Top 10 | Auto-rodado pelo `/build`. Manual só em 3 casos: re-validar pós-refactor/merge, pré-release, ou fluxo Jira/Azure depois do `/reflect` |
+| `/reflect` | Sincroniza spec ↔ código (bidirecional) | Pós-refactor ou requisito mudou |
 | `/feature` | Pipeline completo: story → spec → TDD → review | Time solo ou quando um único papel faz tudo |
 
 ## Hooks Ativos
@@ -52,10 +53,10 @@ Hooks do Claude Code que regulam o comportamento automaticamente — sem interve
 | Evento | Hook | O que faz |
 |--------|------|-----------|
 | `UserPromptSubmit` | `session-tracker` | Abre/continua sessão (timeout 30 min), registra epoch de início do turno |
-| `UserPromptSubmit` | `context-bootstrap` | Injeta contexto `.sdd/memory/` antes de qualquer comando SDD |
-| `UserPromptSubmit` | `process-guard` | Bloqueia `/review`/`/feature` se `/sync` estiver pendente |
+| `UserPromptSubmit` | `context-bootstrap` | Injeta contexto `.sdd/memory/` antes de qualquer comando isabel |
+| `UserPromptSubmit` | `process-guard` | Bloqueia `/check`/`/feature` se `/reflect` estiver pendente |
 | `UserPromptSubmit` | `model-advisor` | Recomenda modelo ideal: Opus 4.7 para decisão, Sonnet 4.6 para execução |
-| `Stop` | `session-healthcheck` | Auditoria silenciosa pós-resposta: sync, specs, ADRs, fundação, discovery, security, dead code |
+| `Stop` | `session-healthcheck` | Auditoria silenciosa pós-resposta: sync, specs, ADRs, fundação, discovery, security, dead code, doc drift |
 | `Stop` | `retro-logger` | Persiste duração do turno + sessão total, decisões (ADRs, specs, discoveries) e erros em `.sdd/metrics/sessions/` |
 
 ## Ciclo de Trabalho
@@ -64,17 +65,30 @@ Hooks do Claude Code que regulam o comportamento automaticamente — sem interve
 
 **Fase 1 — Discovery** (antes de saber o que construir)
 
-1. Rode `/discover`: conduza a sessão de problema → hipótese → decisão
+1. Rode `/triage`: conduza a sessão de problema → hipótese → decisão
 2. Artefatos em `.discovery/{DISC-ID}/`: `problem.md`, `hypothesis.md`, `decision.md`
 3. Decisão **Construir** libera a fase de especificação; qualquer outra encerra o ciclo aqui
 
 **Fase 2 — Especificação** (depois da decisão "Construir")
 
-1. Rode `/spec`: Three Amigos escreve `specs/{story-id}/spec.bdd.md` referenciando o discovery
+1. Rode `/shape`: Three Amigos escreve `specs/{story-id}/spec.bdd.md` referenciando o discovery
 2. Se fluxo > 2 passos: `specs/{story-id}/blueprint.mermaid`
 3. Quebre em tasks: `specs/{story-id}/tasks.md`
 
 > A spec aprovada é o **contrato de entrega** — o Engineer & QA não inicia sem ela.
+
+### Documentação contínua do produto
+
+No projeto novo, `/init` prepara o contexto; após a primeira implementação, `/documenta-ai` cria a documentação do módulo e, nas entregas seguintes, a atualiza. No projeto existente, `/onboard` cria a linha de base com `/documenta-ai --auto`; depois, `/build`, `/feature` e `/reflect` atualizam os módulos alterados com `--incremental`.
+
+Quando há código existente sem spec, a documentação também fornece a Matriz de Cenários para `/shape`:
+
+```
+código legado → /documenta-ai {Controller} → Matriz de Cenários → /shape → spec.bdd.md → /build
+                                           → seção de débitos    → /triage (🔴) ou story (🟡)
+```
+
+Os três documentos vão para `docs/documenta-ai/` e cada um alimenta um ponto do ciclo: DevDocs entra no `/analyze` e no blueprint do `/onboard`, Rules entra no `/shape`, Debts entra e sai do `/check`.
 
 ### Engineer & QA — Execução e Qualidade
 
@@ -95,17 +109,16 @@ Não avance sem o cenário anterior verde. Se surgir decisão arquitetural: `doc
 ## Regras
 
 - Conventional Commits: `feat:`, `fix:`, `test:`, `docs:`, `refactor:`
-- Nunca implemente sem spec BDD
+- Nunca implemente sem spec BDD — em código legado, `/documenta-ai` → `/shape` produz o contrato
 - Se encontrar ambiguidade, pergunte
 - Se precisar de decisão arquitetural, proponha ADR
-- Artefatos de discovery vão para `.discovery/`; artefatos de spec e implementação vão para `specs/`
-- Sempre explique o que um comando de terminal faz antes ou junto da execução — nunca rode Bash silenciosamente
+- Artefatos de discovery vão para `.discovery/`; artefatos de spec e implementação vão para `specs/`; documentação contínua do produto vai para `docs/documenta-ai/`
 
 ## Ambiente Local — rodar e testar o app no celular
 
 Validado em 2026-08-16. Setup completo (Google Cloud, keystore, client IDs) em `docs/SETUP-LOGIN-GOOGLE.md`.
 
-**O ambiente é WSL2 em modo NAT.** O `hostname -I` devolve um IP interno (`172.17.x.x`) que o celular **não alcança**. O endereço que vale é o do Windows na rede: **192.168.0.28** (Ethernet).
+**O ambiente é WSL2 em modo NAT.** O `hostname -I` devolve um IP interno (`172.17.x.x`) que o celular **não alcança**. O endereço que vale é o do Windows na rede: **192.168.0.18** (Ethernet).
 
 ### Subir tudo — `steady-up`
 
@@ -138,13 +151,13 @@ docker run -d --name steady-db \
 dotnet run --project src/Steady.Api
 
 # 3. Dev server — o hostname é obrigatório, senão o Metro anuncia o IP do WSL
-cd src/steady-app && REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.28 npx expo start --clear
+cd src/steady-app && REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.18 npx expo start --clear
 ```
 
-No celular, na tela "Development build": **Enter URL manually** → `http://192.168.0.28:8081`.
+No celular, na tela "Development build": **Enter URL manually** → `http://192.168.0.18:8081`.
 **Não use o QR code** — ele aponta para o IP interno do WSL.
 
-Sanity check antes de culpar o app: `curl http://192.168.0.28:5050/health` → `{"status":"ok"}`.
+Sanity check antes de culpar o app: `curl http://192.168.0.18:5050/health` → `{"status":"ok"}`.
 
 ### Pré-requisitos que quebram silenciosamente
 

@@ -1,115 +1,102 @@
-# PainLogRepository - Persistencia-Treino - Especificacao Tecnica
+# PainLogRepository - Persistencia-Treino - Especificação Técnica
 
-## Indice
-- [1. Visao Geral Tecnica](#1-visao-geral-tecnica)
-- [2. Configuracao e Dependencias](#2-configuracao-e-dependencias)
-- [3. Detalhamento por Metodo](#3-detalhamento-por-metodo)
-  - [3.1. AddAsync - Persiste um novo registro de dor](#31-addasync---persiste-um-novo-registro-de-dor)
-- [4. Observacoes Tecnicas](#4-observacoes-tecnicas)
+Atualizado em 2026-09-27.
 
-## 1. Visao Geral Tecnica
+## Índice
 
-**Proposito**: `PainLogRepository` persiste registros de dor pos-treino (`PainLogEntity`), sempre associados ao `CorredorId` do corredor autenticado.
+- [Visão geral](#visao)
+- [Métodos e contratos](#metodos)
+- [Mapeamentos](#ctx)
+- [Observações](#observacoes)
+- [Fontes](#fontes)
 
-**Responsabilidades**:
-- Converter um objeto de dominio `Steady.Domain.Training.PainLog` (ja validado por `PainLog.Create`) em `PainLogEntity` e persisti-lo associado a um `CorredorId`.
-- Aplicar a chave de idempotencia recebida do cliente antes de gravar, devolvendo o registro ja existente em vez de duplicar em caso de reenvio -- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md).
+<a id="visao"></a>
+## 1. Visão geral técnica
 
-**Integracoes**: chamado por `Steady.Api.Endpoints.PainLogEndpoints` (POST `/api/pain-logs`) -- ver `DocumentAIReadme/Steady.Api/DevDocs/PainLogEndpoints-Treino-Dor-DevDocs.md`. Regras fundamentadas em `specs/STORY-001/spec.bdd.md` (regra de negocio 7: "o registro de dor e independente de sessao especifica: data + regiao do corpo + doeu/nao doeu"), `specs/STORY-002/spec.bdd.md` (persistencia e isolamento) e `specs/STORY-003/spec.bdd.md` (idempotencia, [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)). O utilitario `IIdempotentRecord`/`SaveResult<TEntity>` usado por `AddAsync` esta documentado em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md#33-iidempotentrecord-e-saveresult---utilitario-de-idempotencia-adr-003`.
+Guardar indicação de dor uma vez por chave e corredor.
 
-**Nota de escopo**: diferente de `RunningSessionRepository` e `StrengthSessionRepository`, este repositorio expoe **apenas escrita** (`AddAsync`) -- nao ha metodo de leitura (`GetByCorredorIdAsync` ou `GetByIdAsync`) nem endpoint de consulta de dor em `Steady.Api`. Isso e coerente com o escopo atual do MVP (a STORY-001 define o registro de dor, sem mencionar uma tela de consulta de historico de dor), mas e uma assimetria real em relacao aos outros dois repositorios de treino -- sinalizada em TechnicalDebtsDocs.
+Chamada pela camada Steady.Api; ver [índice da API](../../Steady.Api/DevDocs/README.md). Sem rotas próprias: entradas são parâmetros C#, saídas são entidades/objetos ou resultados assíncronos. O token e os papéis são validados na API; parâmetros de identidade precisam vir do contexto autenticado. PostgreSQL é acessado pelo SteadyDbContext com EF Core e Npgsql.
 
-## 2. Configuracao e Dependencias
 
-**Dependencias Injetadas**:
-- `SteadyDbContext dbContext`: contexto EF Core injetado via construtor primario, ciclo de vida `Scoped`.
+<a id="metodos"></a>
+## 2. R. Métodos e contratos
 
-**Interface implementada**: `IPainLogRepository` (`Repositories/IPainLogRepository.cs`).
+- [AddAsync](#r-1)
 
-**Metodos Publicos**:
-- `Task<SaveResult<PainLogEntity>> AddAsync(Guid corredorId, PainLog painLog, Guid idempotencyKey, CancellationToken cancellationToken)` -- unico metodo da interface; assinatura alterada pelo [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md), antes retornava `PainLogEntity` direto e nao recebia `idempotencyKey`.
+<a id="r-1"></a>
+### R. AddAsync
 
-## 3. Detalhamento por Metodo
+`public async Task<SaveResult<PainLogEntity>> AddAsync( Guid corredorId, PainLog painLog, Guid idempotencyKey, CancellationToken cancellationToken)`
 
-### 3.1. AddAsync - Persiste um novo registro de dor
+FindByIdempotencyKeyAsync(corredorId,chave); existente retorna SaveResult com Created=false. Novo copia Date e Region do PainLog validado, gera Id e salva. Não possui consulta pública nem atualização. Dor automática de encerramento é gravada por outros repositórios; ReviewOutboxProcessor utiliza o booleano congelado na outbox, não uma busca neste repositório.
 
-**Entrada**:
-```json
-{
-  "corredorId": "Guid - dono do registro, resolvido pelo AuthenticationFilter",
-  "painLog": {
-    "Date": "DateOnly - data em que a dor foi sentida, pode ser dias apos o treino",
-    "Region": "string (obrigatoria, validada em PainLog.Create) - regiao do corpo onde doeu"
-  },
-  "idempotencyKey": "Guid - lido do header 'Idempotency-Key' pelo Endpoint (ADR-003); gerado pelo cliente no momento em que o item entra na fila local, nao a cada tentativa de envio"
-}
-```
+Entrada: os parâmetros da assinatura, incluindo `CancellationToken` nas operações assíncronas. Saída: o tipo retornado na assinatura; `Task` transporta conclusão, resultado ou falha. Objetos de domínio chegam validados por suas fábricas; o repositório não substitui essa validação.
 
-**Saida**:
-```json
-{
-  "SaveResult<PainLogEntity>": {
-    "Entity": {
-      "Id": "Guid - gerado pelo repositorio (Guid.NewGuid()) se novo, ou o Id ja existente se reenvio",
-      "CorredorId": "Guid",
-      "Date": "DateOnly",
-      "Region": "string",
-      "IdempotencyKey": "Guid"
-    },
-    "Created": "bool - true se gravou uma linha nova (Endpoint responde 201); false se devolveu um registro ja existente por reenvio da mesma chave (Endpoint responde 200)"
-  }
-}
-```
-
-#### Fluxo de Execucao
+#### Fluxo de execução
 
 ```mermaid
 sequenceDiagram
-    participant Endpoint as Steady.Api.Endpoints.PainLogEndpoints
-    participant Repository as PainLogRepository
-    participant Context as SteadyDbContext
-    participant Database as PostgreSQL (pain_logs)
-
-    Endpoint->>+Repository: AddAsync(corredorId, painLog, idempotencyKey, ct)
-    Repository->>+Context: PainLogs.FindByIdempotencyKeyAsync(corredorId, idempotencyKey, ct)
-    Context->>+Database: SELECT * FROM pain_logs WHERE corredor_id = @corredorId AND idempotency_key = @idempotencyKey
-    Database-->>-Context: 0 ou 1 linha
-    Context-->>-Repository: PainLogEntity ou null
-    alt Ja existe registro com esta chave (reenvio)
-        Repository-->>Endpoint: SaveResult(entity: existente, Created: false)
+    participant R as PainLogRepository
+    participant CTX as SteadyDbContext
+    participant DB as PostgreSQL
+    R->>CTX: FindByIdempotencyKeyAsync(corredorId, chave)
+    CTX->>DB: SELECT por corredor_id e idempotency_key
+    DB-->>CTX: Linha ou ausência
+    CTX-->>R: Entidade ou null
+    alt Chave já existe
+        R-->>R: SaveResult(existing, Created=false)
     else Registro novo
-        Repository->>Repository: monta PainLogEntity (Id = NewGuid, CorredorId = corredorId, IdempotencyKey = idempotencyKey, Date, Region)
-        Repository->>+Context: PainLogs.Add(entity)
-        Repository->>+Context: SaveChangesAsync(ct)
-        Context->>+Database: INSERT INTO pain_logs (Id, corredor_id, date, region, idempotency_key) VALUES (...)
-        Database-->>-Context: 1 linha afetada
-        Context-->>-Repository: ok
-        Repository-->>-Endpoint: SaveResult(entity: nova, Created: true)
+        R->>CTX: Add(entidade e registros associados descritos acima)
+        R->>CTX: SaveChangesAsync(token)
+        CTX->>DB: INSERT em transação da confirmação
+        DB-->>CTX: Commit ou falha
+        CTX-->>R: Conclusão
     end
 ```
 
-#### Detalhamento do Fluxo
+<a id="ctx"></a>
+## 3. CTX. Mapeamento e integridade
 
-**R. Repository (PainLogRepository)**
+### CTX. pain_logs
 
-R.1. AddAsync()
-- Recebe o objeto de dominio `PainLog` ja validado (regiao do corpo obrigatoria, nao vazia -- ver `PainLog.Create` e `specs/STORY-001/spec.bdd.md`), o `corredorId` do contexto de autenticacao e a `idempotencyKey` do header `Idempotency-Key` ([ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)).
-- **Passo 1 -- busca por chave existente**: chama `dbContext.PainLogs.FindByIdempotencyKeyAsync(corredorId, idempotencyKey, ct)` -- documentado em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md#u1-iidempotentrecord-e-saveresult` (U1.1) -> [CTX.1](#ctx1-painlogs-dbset)
-- **Se ja existe** (`existing is not null`): retorna imediatamente `new SaveResult<PainLogEntity>(existing, Created: false)` -- **nao grava nada novo**. Caminho de reenvio da fila offline.
-- **Se nao existe -- Mapeamento Dominio -> Persistencia (U1)**: monta um novo `PainLogEntity` copiando `Date` e `Region` de `PainLog`, atribuindo `Id = Guid.NewGuid()`, `CorredorId = corredorId` e `IdempotencyKey = idempotencyKey`.
-- Adiciona ao `DbSet<PainLogEntity>` e persiste via `SaveChangesAsync` -> [CTX.1](#ctx1-painlogs-dbset)
-- Retorna `new SaveResult<PainLogEntity>(entity, Created: true)`. O Endpoint usa `Created` para decidir entre HTTP 201 (novo) e HTTP 200 (reenvio).
-- Nota de dominio: o registro de dor **nao referencia** uma `RunningSessionEntity` ou `StrengthSessionEntity` especifica -- e independente de sessao, podendo ser registrado dias depois do treino que (supostamente) o causou, conforme regra de negocio 7 da `specs/STORY-001/spec.bdd.md`.
+Chave primária: `Id` (sem HasColumnName, nome por convenção do modelo).
 
-**CTX. SteadyDbContext**
+| Propriedade | Coluna | Configuração explícita |
+|---|---|---|
+| `CorredorId` | `corredor_id` | `Tipo por convenção do provider` |
+| `Date` | `date` | `Tipo por convenção do provider` |
+| `Region` | `region` | `IsRequired()` |
+| `IdempotencyKey` | `idempotency_key` | `Tipo por convenção do provider` |
 
-<a id="ctx1-painlogs-dbset"></a>
-CTX.1. PainLogs (DbSet&lt;PainLogEntity&gt;)
-- Mapeado para a tabela `pain_logs`: `Id` como chave primaria; `CorredorId` -> `corredor_id` (indexada via `IX_pain_logs_corredor_id`, ainda que hoje nenhuma query de leitura use esse indice, ja que nao ha metodo de consulta); `Date` -> `date`; `Region` -> `region` (obrigatoria, `IsRequired()`); `IdempotencyKey` -> `idempotency_key` (indice UNICO composto `IX_pain_logs_corredor_id_idempotency_key` em `(corredor_id, idempotency_key)`, [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) -- este indice, diferente do indice simples `corredor_id`, e efetivamente usado pela busca em `FindByIdempotencyKeyAsync`).
-- `Region` e persistida como `text` livre (nao um enum fechado como `MuscleGroup`) -- o dominio (`PainLog.Create`) so garante que nao e vazia/nula, sem uma lista fechada de regioes validas.
+Índices e relações (expressões reais do modelo):
 
-## 4. Observacoes Tecnicas
+```csharp
+HasIndex(p => p.CorredorId);
+HasIndex(p => new { p.CorredorId, p.IdempotencyKey }).IsUnique();
+HasOne<CorredorEntity>()
+                .WithMany()
+                .HasForeignKey(p => p.CorredorId)
+                .OnDelete(DeleteBehavior.Cascade);
+```
 
-- **Performance**: `AddAsync` agora faz 1 SELECT (busca por chave de idempotencia, via `IX_pain_logs_corredor_id_idempotency_key`) antes do INSERT no caminho de registro novo -- primeiro uso efetivo de um indice em `pain_logs` alem do indice simples `corredor_id`, que continua sem consumidor de leitura.
-- **Tratamento de Erros**: nenhum tratamento de excecao de infraestrutura explicito, mesmo padrao dos demais repositorios, incluindo o cenario raro de corrida entre dois envios simultaneos com a mesma `idempotencyKey` (mesma observacao feita em `RunningSessionRepository-Persistencia-Treino-DevDocs.md` e `StrengthSessionRepository-Persistencia-Treino-DevDocs.md`).
-- **Integracoes Criticas**: apesar de o indice `IX_pain_logs_corredor_id` existir (criado no `OnModelCreating`/migration, coerente com o padrao de isolamento por `corredor_id` de toda a base), ele continua sem uso por nenhuma query, pois nao ha metodo de leitura implementado -- e um indice "pronto para o futuro", nao um desperdicio, mas vale registrar a assimetria (ver TechnicalDebtsDocs). `AddAsync` depende do utilitario `IIdempotentRecord`/`SaveResult<TEntity>` compartilhado com `RunningSessionRepository` e `StrengthSessionRepository`, documentado uma unica vez em `SteadyDbContext-ServiceCollectionExtensions-Persistencia-Configuracao-DevDocs.md`.
+<a id="observacoes"></a>
+## 4. Observações técnicas
+
+Consultas usam rastreamento padrão salvo AsNoTracking explicitamente indicado. Falhas de persistência e cancelamento propagam quando não houver captura documentada. Cada chave idempotente pertence à conta, não é uma chave global entre corredores. Entidades retornadas incluem os campos persistidos listados em CTX; resultados SaveResult contêm Entity e Created.
+
+<a id="fontes"></a>
+## 5. Fontes e verificação
+
+- [docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)
+- [docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)
+- [docs/adr/ADR-018-outbox-transacional-da-revisao.md](../../../docs/adr/ADR-018-outbox-transacional-da-revisao.md)
+- [tests/Steady.Api.Tests/PainLogEndpointTests.cs](../../../tests/Steady.Api.Tests/PainLogEndpointTests.cs)
+- [src/Steady.Infrastructure/Persistence/SteadyDbContext.cs](../../../src/Steady.Infrastructure/Persistence/SteadyDbContext.cs)
+- [src/Steady.Infrastructure/Repositories/PainLogRepository.cs](../../../src/Steady.Infrastructure/Repositories/PainLogRepository.cs)
+
+Os testes citados foram inspecionados como evidência de comportamento; não foram executados nesta rodada de documentação.
+
+Especificações de comportamento relacionadas:
+
+- [STORY-003](../../../specs/STORY-003/spec.bdd.md)
+- [STORY-014](../../../specs/STORY-014/spec.bdd.md)

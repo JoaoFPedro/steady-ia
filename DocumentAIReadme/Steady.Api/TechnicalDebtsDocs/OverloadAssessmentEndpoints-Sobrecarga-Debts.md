@@ -1,64 +1,93 @@
-# OverloadAssessmentEndpoints - Sobrecarga - Debitos Tecnicos
+# OverloadAssessmentEndpoints - Sobrecarga - Débitos Técnicos
 
-## Indice
-- [1. Resumo Executivo](#1-resumo-executivo)
-- [2. Problemas por Criticidade](#2-problemas-por-criticidade)
-- [3. Plano de Acao](#3-plano-de-acao)
-- [4. User Stories para Implementacao](#4-user-stories-para-implementacao)
+Auditoria: 2026-09-27. Este relatório registra evidência do código atual, não compromisso de implementação.
 
+## Índice
+
+- [1. Resumo Executivo](#resumo)
+- [2. Problemas por Criticidade](#problemas)
+- [3. Plano de Ação](#plano)
+- [4. User Stories para Implementação](#stories)
+
+<a id="resumo"></a>
 ## 1. Resumo Executivo
-- **Estado Atual**: a regra de negocio em si (`OverloadDetectionService`) e solida, rastreavel a fontes reconhecidas (ADR-001) e bem testada (`tests/Steady.Domain.Tests/OverloadDetectionTests.cs`, `tests/Steady.Api.Tests/OverloadAssessmentEndpointTests.cs`). O principal debito esta na camada de integracao API - a forma como o historico e carregado do banco para alimentar o calculo.
-- **Principais Problemas**: a rota carrega **todo** o historico de corrida e musculacao do corredor a cada chamada, sem filtro de data no banco, mesmo que a regra so use os ultimos 14 dias; o registro de dor (`PainLog`) nao e considerado no calculo, apesar de ser citado no ADR-001 como sinal de calibracao; e nao ha cache/rate limiting para uma rota que pode ser chamada com frequencia pelo cliente.
-- **Impacto no Negocio**: baixo hoje (poucos usuarios, poucas sessoes por corredor no MVP), mas cresce diretamente com a base de usuarios e o tempo de uso - um corredor ativo ha 1-2 anos acumula centenas de sessoes que sao carregadas inteiramente a cada consulta de sobrecarga.
 
+- **Estado Atual**: Avaliar a combinação de corrida com musculação avulsa pesada de perna, distinguindo histórico insuficiente de ausência de risco.
+- **Principais Problemas**: Leitura integral para janelas de sete dias.
+- **Impacto no Negócio**: a limitação afeta previsibilidade do retorno ou evolução operacional; o comportamento observado está detalhado abaixo. Não foi executado teste de carga nesta auditoria documental.
+
+**Evidência primária**: [OverloadAssessmentEndpoints.cs](../../../src/Steady.Api/Endpoints/OverloadAssessmentEndpoints.cs); dependências citadas na [documentação técnica](../DevDocs/OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md). **Referências de comportamento**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-003](../../../specs/STORY-003/spec.bdd.md), [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md).
+
+<a id="problemas"></a>
 ## 2. Problemas por Criticidade
 
-### Criticos
-- Nenhum problema critico identificado - a regra de negocio funciona corretamente e os testes cobrem os cenarios da spec.
+### Críticos
+
+Nenhum débito adicional comprovado nesta categoria durante a auditoria da unidade.
 
 ### Importantes
-- **Carga de historico completo sem filtro de data**: `GetByCorredorIdAsync` em `RunningSessionRepository`/`StrengthSessionRepository` nao aceita nenhum parametro de data - traz todas as sessoes do corredor desde o inicio dos tempos, mesmo que `OverloadDetectionService.Evaluate` so precise dos ultimos 14 dias (`MinimumHistoryDays` + a janela `previousWindow`). Isso e leitura, transferencia de dados e alocacao de memoria desnecessarios que crescem sem limite com o tempo de uso do corredor.
-  - **Acao Recomendada**: adicionar uma variante de consulta com filtro de data (ex.: `GetByCorredorIdAsync(corredorId, sinceDate, ct)`) e usar apenas os ultimos 14+ dias na chamada deste endpoint.
-- **`PainLog` nao integrado ao calculo de sobrecarga**: o proprio ADR-001 menciona o registro de dor como mecanismo de calibracao futura da regra ("se dor continuar ocorrendo sem alerta, a regra deve ser revisada"), mas hoje nao ha nenhuma leitura de `PainLog` neste fluxo - nem para ajustar o resultado, nem para relatorio de acompanhamento.
-  - **Acao Recomendada**: nao e um bug de escopo da STORY-002 (backend-only conforme a story), mas deve virar uma story explicita de produto para avaliar como/se o dado de dor deve influenciar a avaliacao ou aparecer como contexto adicional na resposta.
+
+- **Leitura integral para janelas de sete dias**: GetByCorredorIdAsync materializa todo o histórico para Evaluate. O custo aumenta com os anos de uso embora a comparação dependa de duas janelas e da data inicial.
+  - **Ação Recomendada**: Adicionar consultas de janela e da primeira data, preservando exatamente o cálculo de histórico suficiente e os limites inclusivos do ADR-001.
+  - **Criticidade**: Importante; classificação desta auditoria, baseada no alcance da falha descrita.
 
 ### Menores
-- **Sem cache para consulta potencialmente repetida**: se o cliente mobile consultar a avaliacao a cada tela (ex.: toda vez que o usuario abre o app), o mesmo calculo roda do zero a cada chamada, mesmo que o historico nao tenha mudado desde a ultima consulta na mesma sessao de uso.
-  - **Acao Recomendada**: nao antecipar cache agora (MVP com poucos usuarios) - reavaliar se o padrao de uso do app mobile (STORY-003) mostrar chamadas redundantes frequentes.
-- **Mensagem de sugestao fixa (nao personalizada)**: `SuggestionMessage` em `OverloadDetectionService` e uma constante de texto unica, sem interpolar valores especificos do corredor (ex.: percentual exato de aumento de carga, qual perna, qual data).
-  - **Acao Recomendada**: avaliar com produto se vale personalizar a mensagem com dados concretos (ex.: "sua carga aumentou 140% ..."), o que tornaria a sugestao ainda mais concreta conforme a regra de negocio #5 da spec.
 
-## 3. Plano de Acao
-1. **Fase 1 - Criticos**: nao ha itens nesta fase.
-2. **Fase 2 - Importantes**: adicionar filtro de data as queries de historico usadas nesta rota; levar a discussao de integracao com `PainLog` para o backlog de produto.
-3. **Fase 3 - Menores**: monitorar necessidade de cache conforme uso real do app mobile; avaliar personalizacao da mensagem de sugestao.
+Nenhum débito adicional comprovado nesta categoria durante a auditoria da unidade.
 
-## 4. User Stories para Implementacao
+```mermaid
+graph LR
+    Evidencia[Codigo observado] --> Limite[Limitacao identificada]
+    Limite --> Correcao[Alteracao proposta]
+    Correcao --> Validacao[Teste de comportamento e isolamento]
+```
 
-### Story 1: Filtrar o historico por janela de data relevante antes de calcular a sobrecarga
+<a id="plano"></a>
+## 3. Plano de Ação
 
-**Contexto Atual**: `OverloadAssessmentEndpoints` chama `GetByCorredorIdAsync` sem nenhum filtro de data, carregando o historico completo de corrida e musculacao do corredor mesmo que `OverloadDetectionService.Evaluate` so utilize os ultimos 14 dias corridos (mais a comparacao de janelas de 7 dias).
+1. **Fase 1 - Críticos**: sem item crítico comprovado nesta unidade.
+2. **Fase 2 - Importantes**: Adicionar consultas de janela e da primeira data, preservando exatamente o cálculo de histórico suficiente e os limites inclusivos do ADR-001.
+3. **Fase 3 - Menores**: revisar contrato e documentação depois da correção prioritária.
 
-**Objetivo**: reduzir o volume de dados trafegado do banco e mantido em memoria a cada consulta de avaliacao de sobrecarga, sem alterar o resultado do calculo.
+Antes de alterar a semântica pública, formalizar os critérios no fluxo SDD da story correspondente; este relatório não aprova nova regra de treino.
 
-**Regras de Negocio**:
-- O resultado da avaliacao de sobrecarga nao pode mudar em relacao ao comportamento atual - apenas a forma de buscar os dados de entrada muda.
-- A regra continua usando exatamente os ultimos 14 dias corridos (`MinimumHistoryDays`) como base minima de historico.
+<a id="stories"></a>
+## 4. User Stories para Implementação
 
-**Especificacao Tecnica**:
-- Adicionar `GetByCorredorIdSinceAsync(corredorId, sinceDate, ct)` (ou sobrecarga do metodo existente) em `IRunningSessionRepository`/`IStrengthSessionRepository`, com filtro `WHERE corredor_id = @id AND date >= @sinceDate` direto na query EF Core.
-- Em `OverloadAssessmentEndpoints`, calcular `sinceDate = today.AddDays(-13)` e usar o novo metodo no lugar de `GetByCorredorIdAsync`.
-- Atencao: `HasSufficientHistory` em `OverloadDetectionService` depende de saber a data da sessao **mais antiga do historico total** do corredor para decidir se ha 14+ dias de historico - se o filtro cortar sessoes anteriores a 14 dias, esse calculo pode ficar incorreto para corredores com menos de 14 dias de historico total. Avaliar se a comparacao deve continuar existindo no dominio ou se pode ser feita a partir de uma consulta separada e mais barata (ex.: `MIN(date)` por corredor).
+### Story proposta 1: Leitura integral para janelas de sete dias
 
-**Criterios de Aceite**:
-- [ ] `GET /api/overload-assessment` retorna exatamente o mesmo resultado antes e depois da mudanca para os cenarios ja cobertos em `OverloadAssessmentEndpointTests` e `OverloadDetectionTests`.
-- [ ] A quantidade de linhas trazidas do banco para esta rota nao cresce indefinidamente com o tempo de uso do corredor (limitada a uma janela fixa em torno de 14 dias).
-- [ ] Nenhuma regressao no cenario de "corredor com menos de 14 dias de historico total" (deve continuar retornando `hasSufficientHistory: false`, ver ADR-004).
+**Contexto Atual**: GetByCorredorIdAsync materializa todo o histórico para Evaluate. O custo aumenta com os anos de uso embora a comparação dependa de duas janelas e da data inicial.
+
+**Objetivo**: Adicionar consultas de janela e da primeira data, preservando exatamente o cálculo de histórico suficiente e os limites inclusivos do ADR-001.
+
+**Regras de Negócio**:
+
+- Preservar isolamento por corredor e as restrições de papel/vínculo existentes.
+- Não alterar o dado original de uma execução nem produzir número de prescrição ausente.
+- Preservar os caminhos de sucesso documentados nesta unidade.
+
+**Especificação Técnica**:
+
+- Aplicar a alteração no endpoint/dependência indicado pela evidência, com contrato explícito.
+- Adicionar consultas de janela e da primeira data, preservando exatamente o cálculo de histórico suficiente e os limites inclusivos do ADR-001.
+- Manter erro de recurso alheio sem revelar seus dados.
+
+**Critérios de Aceite**:
+
+- [ ] O comportamento identificado deixa de ocorrer sob o cenário de reprodução.
+- [ ] O caminho principal mantém os campos e estados descritos na documentação técnica.
+- [ ] Recurso de outro corredor ou personal sem vínculo permanece inacessível.
 
 **Roteiro de Teste**:
-1. **Teste 1**: corredor com sessoes distribuidas ao longo de mais de 1 ano, com padrao de sobrecarga apenas nos ultimos 14 dias.
-   - **Entrada**: `GET /api/overload-assessment` apos registrar sessoes antigas (fora da janela) e recentes (dentro do padrao de risco).
-   - **Resultado Esperado**: mesmo resultado de `hasRisk: true` com a sugestao, independente do volume de sessoes antigas.
-2. **Teste 2**: corredor com historico total de 10 dias (menos que o minimo de 14).
-   - **Entrada**: `GET /api/overload-assessment` com sessoes cobrindo so os ultimos 10 dias, mesmo que o padrao recente parecesse arriscado.
-   - **Resultado Esperado**: `hasRisk: false, hasSufficientHistory: false` (regressao do cenario de historico insuficiente nao pode acontecer - desde ADR-004, este e um estado distinto de "sem risco", nao mais o mesmo `hasRisk: false` generico).
+
+1. **Reprodução da limitação**: executar a condição descrita em "Contexto Atual".
+   - **Entrada**: cenário e métodos explicitados na evidência acima.
+   - **Resultado Esperado**: resposta compatível com a correção proposta, sem efeito duplicado nem vazamento.
+2. **Regressão de acesso**: repetir com conta sem autorização para o recurso.
+   - **Entrada**: identificador conhecido de outro corredor ou sessão inválida.
+   - **Resultado Esperado**: 401 no filtro ou resposta de recusa/404 prevista pelo contrato, sem dados do recurso.
+3. **Caminho principal**: executar operação válida do dono autorizado.
+   - **Entrada**: contrato documentado para a rota correspondente.
+   - **Resultado Esperado**: resultado de sucesso existente preservado.
+
+**Navegação**: [Técnica](../DevDocs/OverloadAssessmentEndpoints-Sobrecarga-DevDocs.md), [Regras](../BusinessRulesDocs/Avaliacao-de-Sobrecarga-Sobrecarga-Rules.md), [Índice](README.md).

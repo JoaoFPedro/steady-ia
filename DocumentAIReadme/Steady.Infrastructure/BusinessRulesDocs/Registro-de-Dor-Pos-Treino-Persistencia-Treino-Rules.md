@@ -1,121 +1,79 @@
-# Registro de Dor Pos-Treino - Persistencia-Treino - Regras de Negocio
+# Registro de Dor Pos Treino - Persistencia-Treino - Regras de Negócio
 
-## Indice
-- [1. Resumo da Funcionalidade](#1-resumo-da-funcionalidade)
-- [2. Jornada do Usuario](#2-jornada-do-usuario)
-- [3. Regras de Negocio por Funcionalidade](#3-regras-de-negocio-por-funcionalidade)
-- [4. Validacoes e Restricoes](#4-validacoes-e-restricoes)
-- [5. Fluxos de Processo](#5-fluxos-de-processo)
-- [6. Casos de Uso e Cenarios](#6-casos-de-uso-e-cenarios)
+## Índice
 
-## 1. Resumo da Funcionalidade
+- [Resumo](#resumo)
+- [Jornada](#jornada)
+- [Regras e restrições](#regras)
+- [Fluxo](#fluxo)
+- [Cenários](#cenarios)
 
-**Proposito**: permitir que o corredor registre quando sentiu dor apos o treino, associando data e regiao do corpo, sem exigir vinculo com uma sessao de treino especifica.
+<a id="resumo"></a>
+## 1. Resumo da funcionalidade
 
-**Usuarios**: corredores autenticados.
+Guardar indicação de dor uma vez por chave e corredor. Usuários: corredor e, nos recursos de coaching, personal autorizado por vínculo. A operação acontece nos registros/consultas do aplicativo ou no processamento de revisão. O valor é conservar histórico confiável e restringir acesso aos participantes autorizados.
 
-**Valor de Negocio**: dor e um sinal de alerta relevante no contexto de sobrecarga (o produto existe para prevenir lesao por sobrecarga combinada de corrida + musculacao) -- registrar dor cria um historico que, no futuro, pode ser cruzado com os padroes de treino que a precederam.
-
-**Frequencia de Uso**: esporadica -- apenas quando o corredor sente dor, podendo ser dias depois do treino.
-
-**Impacto Operacional**: hoje e um registro de mao unica (so escrita); nao ha consulta de historico de dor implementada no MVP.
-
-## 2. Jornada do Usuario
-
-### Visao Geral da Jornada
+<a id="jornada"></a>
+## 2. Jornada do usuário
 
 ```mermaid
 journey
-    title Jornada do Corredor - Registro de dor
-    section Dias apos o treino
-      Sente dor em alguma regiao: 2: Corredor
-      Abre o app para registrar: 4: Corredor
-    section Registro
-      Informa data e regiao do corpo: 4: Corredor
-      Sistema salva associado ao corredor: 5: Sistema
+    title Registro de Dor Pos Treino
+    section Preparação
+      Acessar conta autenticada: 5: Corredor
+      Informar ou consultar dados próprios: 4: Corredor
+    section Confirmação
+      Receber resultado da operação: 4: Corredor
+      Consultar histórico preservado: 5: Corredor
 ```
 
-### Pontos de Contato
-- **Registro (POST /api/pain-logs)**: unico ponto de contato hoje -- nao ha tela de consulta de historico de dor no MVP.
+Pontos de contato: conta autenticada, funcionalidade de treino/planejamento/coaching e histórico ou revisão. Os repositórios não exibem telas; preservam os dados usados por esses pontos de contato.
 
-## 3. Regras de Negocio por Funcionalidade
+<a id="regras"></a>
+## 3. Regras de negócio e restrições
 
-### 3.1. Registro de Dor
+- **AddAsync**: FindByIdempotencyKeyAsync(corredorId,chave); existente retorna SaveResult com Created=false. Novo copia Date e Region do PainLog validado, gera Id e salva. Não possui consulta pública nem atualização. Dor automática de encerramento é gravada por outros repositórios; ReviewOutboxProcessor utiliza o booleano congelado na outbox, não uma busca neste repositório.
 
-**O que faz**: recebe um registro de dor ja validado pelo dominio (data + regiao do corpo) e o associa ao corredor autenticado.
+A conta recebida vem da autenticação na API. Onde há personal, papel e vínculo têm funções diferentes: ter o papel não concede acesso a todo corredor. A regra específica de autorização está descrita acima e na documentação técnica. Inputs do domínio são validados antes da persistência; não há diagnóstico médico nesta camada.
 
-**Regras Aplicadas**:
-- **Independente de sessao de treino**: o registro de dor nao referencia uma sessao de corrida ou musculacao especifica -- e um evento proprio, com sua propria data (ver `specs/STORY-001/spec.bdd.md`, regra de negocio 7).
-  - *Exemplo*: corredor treinou na segunda-feira, sente dor na quarta-feira, e registra a dor na quarta com a data de quarta -- sem precisar apontar qual sessao "causou" a dor.
-- **Regiao do corpo obrigatoria**: `PainLog.Create` rejeita um registro sem regiao informada (texto vazio ou apenas espacos) antes de chegar ao repositorio.
-  - *Exemplo*: tentar registrar dor sem informar a regiao resulta em rejeicao pelo dominio, nada e persistido.
-- **Binario, sem escala de intensidade**: o registro representa "doeu" (a existencia do registro) -- o MVP nao inclui uma escala de intensidade de dor (decisao de escopo documentada em `specs/STORY-001/spec.bdd.md`, "Fora do escopo desta story").
-- **Dono sempre do contexto de autenticacao**: mesmo padrao dos demais repositorios -- `CorredorId` vem do corredor autenticado.
-- **Reenvio nao duplica**: a chave de idempotencia enviada no header `Idempotency-Key` (ver [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)) e gravada junto com o registro, escopada por `(corredor_id, idempotency_key)`. Existe para a fila offline do app: se a resposta se perder depois que o servidor ja persistiu o registro de dor, o app reenvia o mesmo item da fila. Ao reconhecer a chave, o repositorio devolve o registro ja existente em vez de criar outro.
-  - *Exemplo*: app perde conexao logo apos enviar o registro de dor; ao reenviar com a mesma `Idempotency-Key`, o repositorio devolve o registro ja salvo, sem gravar uma segunda linha.
-
-**Cenarios de Uso**:
-- **Registro no mesmo dia do treino**: corredor sente dor logo apos treinar.
-- **Registro dias depois**: corredor sente dor alguns dias apos o treino, ainda assim consegue registrar.
-
-**Resultado Esperado**: registro de dor persistido, associado ao corredor e a data em que a dor foi sentida (nao necessariamente a data do treino).
-
-## 4. Validacoes e Restricoes
-
-### Controle de Acesso
-- **Permissoes**: apenas o proprio corredor cria seus registros de dor.
-
-### Dados e Entrada
-- **Dados Obrigatorios**: data e regiao do corpo.
-- **Formatos Aceitos**: regiao do corpo e texto livre (nao uma lista fechada de opcoes) -- validado apenas quanto a nao estar vazio.
-
-### Restricoes do Sistema
-- **Limitacoes Tecnicas**: nao ha, hoje, nenhuma forma de consultar os registros de dor ja feitos (nem pela API, nem pelo repositorio) -- e uma limitacao atual do escopo implementado, nao necessariamente do escopo de produto (ver TechnicalDebtsDocs para detalhamento tecnico).
-
-## 5. Fluxos de Processo
-
-### Fluxo Principal
+<a id="fluxo"></a>
+## 4. Fluxos de processo
 
 ```mermaid
 flowchart TD
-    A[Corredor sente dor] --> B[Abre o app para registrar]
-    B --> C{Regiao do corpo informada?}
-    C -->|Nao| D[400 - regiao obrigatoria]
-    C -->|Sim| E[Repositorio grava associando ao CorredorId]
-    E --> F[Registro de dor persistido]
+    A[Conta autenticada inicia operação] --> B{Identidade e condições do contrato atendidas?}
+    B -->|Não| C[Ausência ou falha conforme cenário]
+    B -->|Sim| D[Consulta ou gravação do recurso descrito]
+    D --> E{Recurso ou chave já existe?}
+    E -->|Sim| F[Usa estado persistido conforme contrato]
+    E -->|Não| G[Cria recurso ou retorna ausência]
+    F --> H[Resultado para funcionalidade]
+    G --> H
 ```
 
-### Integracoes com Outros Processos
+Integrações: autenticação fornece identidade; domínio valida prescrições/registros; persistência conserva estado; API traduz resultado para resposta.
 
-```mermaid
-graph LR
-    A[Registro de Dor] --> B[(pain_logs)]
-    C[Registro de Corrida] --> D[(running_sessions)]
-    E[Registro de Musculacao] --> F[(strength_sessions)]
-    B -.- G[Sem cruzamento automatico com treino no MVP]
-    D -.- G
-    F -.- G
-```
+<a id="cenarios"></a>
+## 5. Casos de uso e cenários
 
-## 6. Casos de Uso e Cenarios
+| Entrada | Pré-condição/ação | Resultado esperado |
+|---|---|---|
+| A, K, 2026-08-30, Region="Joelho" | Nova indicação | PainLogEntity e Created=true |
+| A, K, Region="Tornozelo" | Chave já processada | Registro original Joelho, Created=false |
+| B, mesma K, Region="Joelho" | Outra conta | Nova linha própria de B |
 
-### Caso de Uso 1: Corredor registra dor sentida dias apos o treino
-**Ator Principal**: Corredor autenticado.
-**Objetivo**: deixar registrado que sentiu dor em determinada regiao do corpo.
-**Pre-condicoes**: token valido; sabe a regiao onde sentiu a dor.
+A e B representam contas diferentes; K uma chave de idempotência; P um personal; R/L/F identificadores de revisão, vínculo ou ficha. Cada cenário parte do estado indicado, executa o método citado e verifica tanto o retorno quanto a ausência de mudança em dados alheios.
 
-**Fluxo Principal**:
-1. Corredor envia `POST /api/pain-logs` com a data e a regiao da dor.
-2. Dominio valida que a regiao nao esta vazia.
-3. Repositorio persiste o registro associado ao `CorredorId`.
-4. API responde 201 com os dados do registro criado na primeira tentativa; se for um reenvio da fila offline com a mesma `Idempotency-Key`, a API responde 200 com o registro ja existente, sem criar duplicata (ver ADR-003).
+Referências normativas e técnicas:
 
-**Pos-condicoes**: registro de dor salvo, disponivel no banco de dados (ainda que sem consulta implementada no MVP).
+- [docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md)
+- [docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)
+- [docs/adr/ADR-018-outbox-transacional-da-revisao.md](../../../docs/adr/ADR-018-outbox-transacional-da-revisao.md)
+- [tests/Steady.Api.Tests/PainLogEndpointTests.cs](../../../tests/Steady.Api.Tests/PainLogEndpointTests.cs)
+- [src/Steady.Infrastructure/Persistence/SteadyDbContext.cs](../../../src/Steady.Infrastructure/Persistence/SteadyDbContext.cs)
+- [Detalhamento técnico](../DevDocs/PainLogRepository-Persistencia-Treino-DevDocs.md)
 
-### Matriz de Cenarios
-| Cenario | Entrada | Acao do Sistema | Resultado Esperado |
-|---------|---------|-----------------|-------------------|
-| Registro valido | Data de hoje, regiao "joelho direito" | Persiste associado ao corredor | Registro criado, 201 |
-| Reenvio com mesma Idempotency-Key | Mesmo payload e mesma chave de uma tentativa anterior ja persistida | Repositorio localiza `(corredor_id, idempotency_key)` existente e nao persiste de novo | Registro existente devolvido, 200, sem duplicata |
-| Registro sem regiao | Regiao vazia | Dominio rejeita antes da persistencia | 400, nada gravado |
-| Registro dias depois do treino | Data anterior a hoje | Persiste normalmente | Registro criado, 201 |
+Especificações de comportamento relacionadas:
+
+- [STORY-003](../../../specs/STORY-003/spec.bdd.md)
+- [STORY-014](../../../specs/STORY-014/spec.bdd.md)

@@ -1,9 +1,15 @@
+---
+description: Onboarding em projeto com código existente — idempotente, role-aware; gera stack, blueprint, ADR-000 e domínio.
+---
+
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
+
 ## /onboard
 
-Analise um projeto existente e gere ou complete os artefatos do SDD Kit, **respeitando o que já existe** e **focando no papel de quem está rodando**.
+Analise um projeto existente e gere ou complete os artefatos do isabel, **respeitando o que já existe** e **focando no papel de quem está rodando**.
 
 > Use este comando na **primeira sessão sua** com um projeto que já tem código. Ele é **idempotente** — rodar várias vezes não sobrescreve trabalho feito por outras pessoas; só preenche lacunas.
-> Pré-requisito: pasta do `sdd-kit` (`.sdd/`, `.claude/`, `CLAUDE.md`) já copiada para a raiz do projeto.
+> Pré-requisito: pasta do `isabel` (`.sdd/`, `.claude/`, `CLAUDE.md`) já copiada para a raiz do projeto.
 
 ### Contexto
 
@@ -29,13 +35,14 @@ Antes de qualquer geração, **inventarie o estado atual** dos artefatos. Aprese
 | `.sdd/memory/DOMAIN.md` | Entidades/fluxos/fronteiras preenchidos? |
 | `docs/adr/ADR-000-*.md` | ✅ existe / ✗ ausente |
 | `docs/blueprints/current-architecture.mermaid` | ✅ existe / ✗ ausente |
+| `docs/documenta-ai/INDEX.md` | Quantos alvos documentados? |
 | `.discovery/` | Quantos discoveries? |
 | `specs/` | Quantas stories? |
 
 **PARE e apresente o mapa**:
 
 ```
-Estado atual do SDD Kit neste projeto:
+Estado atual do isabel neste projeto:
 
 ✅ Já feito:
   • .sdd/STACK.md            — TypeScript / Next.js / Vitest
@@ -51,7 +58,7 @@ Estado atual do SDD Kit neste projeto:
 Discoveries ativos: X  |  Stories abertas: Y
 ```
 
-**Se tudo já existe e está preenchido**, encerre aqui: "Onboarding já foi feito. Você está pronto para trabalhar — sugiro `/discover` ou ler uma story em `specs/`."
+**Se tudo já existe e está preenchido**, verifique também a cobertura do `docs/documenta-ai/INDEX.md`. Se houver módulos do produto sem documentação, crie a linha de base com `/documenta-ai --auto` antes de encerrar. Se estiver coberta, informe que o onboarding está completo.
 
 ---
 
@@ -76,6 +83,7 @@ Use esta matriz:
 | `ADR-000` | ✅ gera | — | — | ✅ gera |
 | `DOMAIN.md` entidades | ✅ gera | ⚠ contexto | ⚠ contexto | ✅ gera |
 | `DOMAIN.md` fluxos | ✅ gera | ✅ valida | ✅ valida | ✅ gera |
+| `docs/documenta-ai/` | ✅ gera linha de base | ✅ gera linha de base | ✅ gera linha de base | ✅ gera linha de base |
 
 ---
 
@@ -120,7 +128,7 @@ Escreva o resultado em `.sdd/STACK.md` no formato:
 
 Procure por:
 
-| O que procurar | Como detectar | Equivalência SDD |
+| O que procurar | Como detectar | Equivalência isabel |
 |---|---|---|
 | AI rules | `.cursorrules`, `.cursor/rules/`, `copilot-instructions.md`, `CLAUDE.md` | `.cursor/rules/*.mdc`, `.github/instructions/` |
 | BDD/Spec | `*.feature`, `features/`, Cucumber, Behave | `specs/{id}/spec.bdd.md` |
@@ -154,6 +162,10 @@ Se vazio, preencha:
 Se **já existe**, apresente e pergunte se está atualizado. Se não, crie `docs/blueprints/current-architecture.mermaid`:
 - C4 nível 2: módulos, conexões, dependências externas
 
+### Use o `/documenta-ai` como fonte do blueprint
+
+Ao documentar os módulos na Fase 5.5, use os sequence diagrams dos DevDocs como fonte para o blueprint: cada `participant` é um módulo, cada seta é uma conexão, cada `ExternalAPI`/`Database` é dependência externa. Se ainda não houver DevDocs, desenhe um primeiro blueprint a partir do código e confira após a linha de base.
+
 **PARE**: "Blueprint reflete a arquitetura real?"
 
 ---
@@ -183,7 +195,21 @@ Se **preenchido**, mostre e pergunte. Se vazio:
 - **Fluxos**: 3-5 principais
 - **Fronteiras**: APIs, webhooks, filas
 
+Se a Fase 3 gerou DevDocs, o domínio sai deles quase de graça: os participantes `Repository` e `Database` dão as **entidades**, os `sequenceDiagram` dão os **fluxos**, e os `ExternalAPI` dão as **fronteiras**. Use os documentos como fonte antes de voltar ao código.
+
+Anexe também ao glossário de `PROJECT.md` as siglas que o `/documenta-ai` deixou como `❓ pendente` — o onboarding é o melhor momento para o time resolvê-las de uma vez.
+
 **PARE**: "Domínio está correto?"
+
+---
+
+## Fase 5.5 — Linha de base da documentação do produto
+
+*(Todos os papéis.)*
+
+Inventarie os módulos com comportamento de produto e compare com `docs/documenta-ai/INDEX.md`. Rode `/documenta-ai --auto` para criar DevDocs, BusinessRules e TechnicalDebts dos módulos ainda não documentados. Se um módulo já estiver documentado, use `--incremental` para atualizar somente o que mudou. Registre a cobertura e eventuais lacunas no resumo do onboarding. Não invente comportamento para scaffolds vazios.
+
+Essa é a documentação inicial do projeto existente. Depois, `/build`, `/feature` e `/reflect` a mantêm atualizada.
 
 ---
 
@@ -205,7 +231,8 @@ Mostre:
 ## Fase 7 — Próximos passos
 
 - **Dev**: "Pegue uma story em `specs/` ou rode `/analyze`."
-- **PD**: "Use `/discover` ou `/spec`."
+- **Dev/Solo em legado sem spec**: "Use a Matriz de Cenários já documentada como entrada de `/shape` antes de alterar a área."
+- **PD**: "Use `/triage` ou `/shape`."
 - **Design**: "Cole fluxos em discoveries ou refine `DOMAIN.md`."
 - **Solo**: "Rode `/feature` para abrir uma story nova com pipeline completo."
 

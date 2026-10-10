@@ -9,27 +9,27 @@
 
 ## 1. Visão Geral Técnica
 
-**Propósito**: serviço de domínio estático e stateless que implementa o algoritmo de detecção de sobrecarga combinada (corrida + musculação), fundamentado em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md). Retorna um `OverloadAssessment` — value object que representa o resultado da avaliação em três estados possíveis (histórico insuficiente, sem risco, com risco e sugestão) — o terceiro estado (histórico insuficiente) foi tornado explícito pelo [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md).
+**Propósito**: serviço de domínio estático e stateless que implementa o algoritmo de detecção de sobrecarga combinada (corrida + musculação), fundamentado em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md). Retorna um `OverloadAssessment` - value object que representa o resultado da avaliação em três estados possíveis (histórico insuficiente, sem risco, com risco e sugestão) - o terceiro estado (histórico insuficiente) foi tornado explícito pelo [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md).
 
 **Responsabilidades**:
-- Determinar se o corredor tem histórico suficiente (mínimo 14 dias) para que a regra seja avaliada com segurança — se não tiver, retorna explicitamente `OverloadAssessment.InsufficientHistory()` em vez de tentar avaliar (ver [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md)).
+- Determinar se o corredor tem histórico suficiente (mínimo 14 dias) para que a regra seja avaliada com segurança - se não tiver, retorna explicitamente `OverloadAssessment.InsufficientHistory()` em vez de tentar avaliar (ver [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md)).
 - Identificar se houve sessão de musculação de perna com intensidade pesada nos últimos 7 dias.
 - Calcular e comparar a carga de treino de corrida entre a janela recente (últimos 7 dias) e a janela anterior (7 dias antes dela).
 - Combinar os dois sinais acima em um veredito único: `OverloadAssessment.Risk(sugestão)` ou `OverloadAssessment.NoRisk()` (ambos só alcançáveis quando o histórico já é suficiente).
 
 **Integrações**:
-- Consome `RunningSession` (`Training/RunningSession.cs`) e `StrengthSession` (`Training/StrengthSession.cs`) — ver [RunningSession-Treino-Corrida-DevDocs.md](./RunningSession-Treino-Corrida-DevDocs.md) e [StrengthSession-Treino-Forca-DevDocs.md](./StrengthSession-Treino-Forca-DevDocs.md).
+- Consome `RunningSession` (`Training/RunningSession.cs`) e `StrengthSession` (`Training/StrengthSession.cs`) - ver [RunningSession-Treino-Corrida-DevDocs.md](./RunningSession-Treino-Corrida-DevDocs.md) e [StrengthSession-Treino-Forca-DevDocs.md](./StrengthSession-Treino-Forca-DevDocs.md).
 - Retorna `OverloadAssessment` (`Overload/OverloadAssessment.cs`), documentado como U1 abaixo, pois seu único propósito é ser o tipo de retorno deste serviço.
 - Chamado por `Steady.Api.Endpoints.OverloadAssessmentEndpoints` (`GET /api/overload-assessment`), que busca as sessões persistidas do corredor autenticado, reconstrói `RunningSession`/`StrengthSession` via as próprias factories de domínio, e chama `Evaluate` passando `DateOnly.FromDateTime(DateTime.UtcNow)` como `today`. Detalhe da camada HTTP foge do escopo deste documento.
 
 ## 2. Configuração e Dependências
 
-**Dependências Injetadas**: nenhuma — `OverloadDetectionService` é uma classe `static`, sem estado, sem construtor, sem injeção de dependência. Depende apenas de `System`, `System.Collections.Generic`, `System.Linq` e dos tipos do próprio `Steady.Domain.Training`.
+**Dependências Injetadas**: nenhuma - `OverloadDetectionService` é uma classe `static`, sem estado, sem construtor, sem injeção de dependência. Depende apenas de `System`, `System.Collections.Generic`, `System.Linq` e dos tipos do próprio `Steady.Domain.Training`.
 
 **Constantes de negócio** (fundamentadas em ADR-001):
-- `OverloadThreshold = 1.10` — limiar de 110% (regra dos 10% aplicada à carga combinada).
-- `MinimumHistoryDays = 14` — histórico mínimo para a regra ser avaliada.
-- `SuggestionMessage` — texto único e fixo da sugestão exibida quando há risco (ver seção 4).
+- `OverloadThreshold = 1.10` - limiar de 110% (regra dos 10% aplicada à carga combinada).
+- `MinimumHistoryDays = 14` - histórico mínimo para a regra ser avaliada.
+- `SuggestionMessage` - texto único e fixo da sugestão exibida quando há risco (ver seção 4).
 
 **Membros públicos**:
 - `static OverloadAssessment Evaluate(IReadOnlyCollection<RunningSession> runningSessions, IReadOnlyCollection<StrengthSession> strengthSessions, DateOnly today)` - único ponto de entrada do serviço.
@@ -56,7 +56,7 @@
 }
 ```
 
-Este método **nunca lança exceção de negócio** — não há guard clauses. Coleções vazias ou nulas de sessões resultam em `OverloadAssessment.InsufficientHistory()` (via `HasSufficientHistory` retornando `false` quando não há nenhuma data) — antes do [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md) esse caso retornava `NoRisk()`, indistinguível de "avaliei e não há risco".
+Este metodo nao possui guard clauses de negocio; colecoes nulas nao sao aceitas e falham nas operacoes LINQ. Colecoes vazias de sessoes resultam em `OverloadAssessment.InsufficientHistory()` (via `HasSufficientHistory` retornando `false` quando não há nenhuma data) - antes do [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md) esse caso retornava `NoRisk()`, indistinguível de "avaliei e não há risco".
 
 #### Fluxo de Execução
 
@@ -89,7 +89,7 @@ sequenceDiagram
     end
 ```
 
-**Nota sobre o participante Endpoint**: em produção, `Evaluate` é chamado por `Steady.Api.Endpoints.OverloadAssessmentEndpoints`, que busca todo o histórico do corredor no banco antes de invocar o serviço — o carregamento e a persistência estão fora do escopo de `Steady.Domain` por decisão arquitetural (domínio isolado de infraestrutura).
+**Nota sobre o participante Endpoint**: em produção, `Evaluate` é chamado por `Steady.Api.Endpoints.OverloadAssessmentEndpoints`, que busca todo o histórico do corredor no banco antes de invocar o serviço - o carregamento e a persistência estão fora do escopo de `Steady.Domain` por decisão arquitetural (domínio isolado de infraestrutura).
 
 #### Detalhamento do Fluxo
 
@@ -97,12 +97,12 @@ sequenceDiagram
 
 <a id="d1-evaluate"></a>
 D1. `Evaluate()`
-- Passo 1 — **checagem de histórico mínimo**: chama `HasSufficientHistory` (ver D1.1). Se insuficiente, retorna imediatamente `OverloadAssessment.InsufficientHistory()`, sem calcular nada — implementa a regra de negócio #6 da spec ("Sem um período anterior completo de 7 dias para comparação... nenhum alerta é gerado — falta de dados não gera falso positivo") e o estado explícito de "ainda reunindo dados" definido em [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md) (antes desse ADR, esse caminho retornava `NoRisk()`, indistinguível de "avaliei e não há risco" — problema real para o app da STORY-003, que precisa exibir "ainda reunindo dados" e não pode derivar essa distinção sozinho, por FF-004).
-- Passo 2 — **define as duas janelas móveis**: `recentWindow = (today - 6 dias, today)` — 7 dias corridos incluindo hoje; `previousWindow = (today - 13 dias, today - 7 dias)` — os 7 dias imediatamente anteriores, sem sobreposição com a janela recente. Note que é janela de dias corridos, não semana de calendário (regra de negócio #3 da spec).
-- Passo 3 — **verifica gatilho de musculação**: `hasHeavyLegSession` é `true` se existir ao menos uma `StrengthSession` dentro de `recentWindow` cujo `MuscleGroup` seja de perna (`IsLeg`, ver D1.3) **e** cuja `Intensity` seja exatamente `Pesado`.
-- Passo 4 — **soma a carga de corrida em cada janela**: `recentRunningLoad = SumLoad(runningSessions, recentWindow)`; `previousRunningLoad = SumLoad(runningSessions, previousWindow)` (ver D1.4).
-- Passo 5 — **combina os sinais**: `isOverloaded = hasHeavyLegSession && previousRunningLoad > 0 && recentRunningLoad >= previousRunningLoad * OverloadThreshold (1.10)`. A checagem `previousRunningLoad > 0` evita divisão conceitual por zero/comparação degenerada — sem carga de corrida na janela anterior, qualquer carga recente "pareceria" um aumento infinito; a regra trata esse caso como não avaliável, não como sobrecarga automática.
-- Passo 6 — **retorna o veredito**: `OverloadAssessment.Risk(SuggestionMessage)` se `isOverloaded`, senão `OverloadAssessment.NoRisk()`.
+- Passo 1 - **checagem de histórico mínimo**: chama `HasSufficientHistory` (ver D1.1). Se insuficiente, retorna imediatamente `OverloadAssessment.InsufficientHistory()`, sem calcular nada - implementa a regra de negócio #6 da spec ("Sem um período anterior completo de 7 dias para comparação... nenhum alerta é gerado - falta de dados não gera falso positivo") e o estado explícito de "ainda reunindo dados" definido em [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md) (antes desse ADR, esse caminho retornava `NoRisk()`, indistinguível de "avaliei e não há risco" - problema real para o app da STORY-003, que precisa exibir "ainda reunindo dados" e não pode derivar essa distinção sozinho, por FF-004).
+- Passo 2 - **define as duas janelas móveis**: `recentWindow = (today - 6 dias, today)` - 7 dias corridos incluindo hoje; `previousWindow = (today - 13 dias, today - 7 dias)` - os 7 dias imediatamente anteriores, sem sobreposição com a janela recente. Note que é janela de dias corridos, não semana de calendário (regra de negócio #3 da spec).
+- Passo 3 - **verifica gatilho de musculação**: `hasHeavyLegSession` é `true` se existir ao menos uma `StrengthSession` dentro de `recentWindow` cujo `MuscleGroup` seja de perna (`IsLeg`, ver D1.3) **e** cuja `Intensity` seja exatamente `Pesado`.
+- Passo 4 - **soma a carga de corrida em cada janela**: `recentRunningLoad = SumLoad(runningSessions, recentWindow)`; `previousRunningLoad = SumLoad(runningSessions, previousWindow)` (ver D1.4).
+- Passo 5 - **combina os sinais**: `isOverloaded = hasHeavyLegSession && previousRunningLoad > 0 && recentRunningLoad >= previousRunningLoad * OverloadThreshold (1.10)`. A checagem `previousRunningLoad > 0` evita divisão conceitual por zero/comparação degenerada - sem carga de corrida na janela anterior, qualquer carga recente "pareceria" um aumento infinito; a regra trata esse caso como não avaliável, não como sobrecarga automática.
+- Passo 6 - **retorna o veredito**: `OverloadAssessment.Risk(SuggestionMessage)` se `isOverloaded`, senão `OverloadAssessment.NoRisk()`.
 
 <a id="d1-hassufficienthistory"></a>
 D1.1. `HasSufficientHistory()` (privado)
@@ -113,37 +113,37 @@ D1.1. `HasSufficientHistory()` (privado)
 
 <a id="d1-isleg"></a>
 D1.3. `IsLeg()` (privado)
-- `muscleGroup is MuscleGroup.PernaFrontal or MuscleGroup.PernaPosterior` — os dois únicos grupos de perna do `enum` (ver [U1.1 MuscleGroup](./StrengthSession-Treino-Forca-DevDocs.md#u1-muscleGroup)).
+- `muscleGroup is MuscleGroup.PernaFrontal or MuscleGroup.PernaPosterior` - os dois únicos grupos de perna do `enum` (ver [U1.1 MuscleGroup](./StrengthSession-Treino-Forca-DevDocs.md#u1-muscleGroup)).
 
 <a id="d1-iswithin"></a>
 D1.4. `IsWithin()` (privado)
-- `date >= window.Start && date <= window.End` — checagem de intervalo fechado dos dois lados, reutilizada tanto para filtrar `StrengthSession` quanto `RunningSession` por janela.
+- `date >= window.Start && date <= window.End` - checagem de intervalo fechado dos dois lados, reutilizada tanto para filtrar `StrengthSession` quanto `RunningSession` por janela.
 
 <a id="d1-sumload"></a>
 D1.5. `SumLoad()` (privado)
-- `sessions.Where(s => IsWithin(s.Date, window)).Sum(s => s.Load)` — filtra as sessões de corrida dentro da janela e soma a propriedade `Load` de cada uma (ver [D1.2 Load de RunningSession](./RunningSession-Treino-Corrida-DevDocs.md#d1-load)).
+- `sessions.Where(s => IsWithin(s.Date, window)).Sum(s => s.Load)` - filtra as sessões de corrida dentro da janela e soma a propriedade `Load` de cada uma (ver [D1.2 Load de RunningSession](./RunningSession-Treino-Corrida-DevDocs.md#d1-load)).
 
 **U1. Value Object/Enum de apoio**
 
 <a id="u1-overloadassessment"></a>
 U1.1. `OverloadAssessment` (`Overload/OverloadAssessment.cs`)
-- Value object imutável com **três** construtores nomeados (factory methods), sem construtor público direto — o construtor de instância é `private`:
-  - `InsufficientHistory()` → `new(hasRisk: false, suggestion: null, hasSufficientHistory: false)`. Usado por `Evaluate` quando o histórico não cobre os 14 dias exigidos pelo ADR-001 (ver [D1. Evaluate](#d1-evaluate)).
-  - `NoRisk()` → `new(hasRisk: false, suggestion: null, hasSufficientHistory: true)`. Histórico suficiente, regra avaliada, sem risco detectado.
-  - `Risk(string suggestion)` → `new(hasRisk: true, suggestion: suggestion, hasSufficientHistory: true)`. Histórico suficiente, sobrecarga detectada.
+- Value object imutável com **três** construtores nomeados (factory methods), sem construtor público direto - o construtor de instância é `private`:
+  - `InsufficientHistory()` --> `new(hasRisk: false, suggestion: null, hasSufficientHistory: false)`. Usado por `Evaluate` quando o histórico não cobre os 14 dias exigidos pelo ADR-001 (ver [D1. Evaluate](#d1-evaluate)).
+  - `NoRisk()` --> `new(hasRisk: false, suggestion: null, hasSufficientHistory: true)`. Histórico suficiente, regra avaliada, sem risco detectado.
+  - `Risk(string suggestion)` --> `new(hasRisk: true, suggestion: suggestion, hasSufficientHistory: true)`. Histórico suficiente, sobrecarga detectada.
 - Propriedades:
-  - `bool HasRisk` — `true` apenas no estado retornado por `Risk(...)`.
-  - `string? Suggestion` — nulo em `InsufficientHistory()` e `NoRisk()`, sempre preenchido em `Risk(...)`.
-  - `bool HasSufficientHistory` — `false` apenas no estado retornado por `InsufficientHistory()`; `true` nos outros dois. Introduzida pelo [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md) para distinguir "ainda reunindo dados" (histórico menor que 14 dias) de "avaliei e não há risco" — antes do ADR-004, os dois casos chegavam a quem lê como `HasRisk = false`, indistinguíveis.
-- **Três estados possíveis, dois booleanos**: a combinação `HasRisk = true` e `HasSufficientHistory = false` é **inválida por construção** e nunca ocorre em tempo de execução — nenhuma das três fábricas privadas a produz, e o construtor de instância é `private`, então não há como montar essa combinação de fora da classe (ver "Consequências / Negativas" do ADR-004, que registra essa limitação de representação como aceita conscientemente em troca de uma mudança aditiva no contrato).
-- É o único tipo de retorno de `Evaluate` — não é reutilizado por nenhuma outra entidade do domínio, por isso é documentado junto com o serviço em vez de como uma unidade separada (a fragmentação separaria a explicação do algoritmo descrito em ADR-001).
+  - `bool HasRisk` - `true` apenas no estado retornado por `Risk(...)`.
+  - `string? Suggestion` - nulo em `InsufficientHistory()` e `NoRisk()`, recebe o argumento de `Risk(...)`, sem guard clause; Evaluate sempre fornece a mensagem fixa.
+  - `bool HasSufficientHistory` - `false` apenas no estado retornado por `InsufficientHistory()`; `true` nos outros dois. Introduzida pelo [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md) para distinguir "ainda reunindo dados" (histórico menor que 14 dias) de "avaliei e não há risco" - antes do ADR-004, os dois casos chegavam a quem lê como `HasRisk = false`, indistinguíveis.
+- **Três estados possíveis, dois booleanos**: a combinação `HasRisk = true` e `HasSufficientHistory = false` é **inválida por construção** e nunca ocorre em tempo de execução - nenhuma das três fábricas privadas a produz, e o construtor de instância é `private`, então não há como montar essa combinação de fora da classe (ver "Consequências / Negativas" do ADR-004, que registra essa limitação de representação como aceita conscientemente em troca de uma mudança aditiva no contrato).
+- É o único tipo de retorno de `Evaluate` - não é reutilizado por nenhuma outra entidade do domínio, por isso é documentado junto com o serviço em vez de como uma unidade separada (a fragmentação separaria a explicação do algoritmo descrito em ADR-001).
 
 ## 4. Observações Técnicas
 
-- **Fundamentação obrigatória**: toda a regra implementada aqui é uma tradução direta de [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md), que por sua vez cita Gabbett (2016) para o modelo Acute:Chronic Workload Ratio (ACWR — sigla expandida na própria ADR-001), Foster (2001) para session-RPE (RPE em si não é expandida em nenhum artefato do repositório — [Sigla não definida no contexto - verificar com a equipe]), e a "regra dos 10%" da Lei do Domínio do projeto (`.sdd/PROJECT-CONSTITUTION.md`). O comentário XML no topo da classe (`OverloadDetectionService.cs`, linhas 8-11) já referencia essa ADR diretamente no código-fonte.
-- **Estado de histórico insuficiente é decisão de contrato, não de regra ([ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md))**: o limiar de 14 dias e o critério de "histórico suficiente" continuam definidos exclusivamente pelo ADR-001 — nada nisso mudou. O ADR-004 (2026-08-16, STORY-003) decidiu apenas *onde* esse estado é calculado (no domínio, único dono da regra) e *como* ele atravessa a fronteira até o app: em vez do app inferir "histórico curto" a partir do histórico bruto (o que replicaria o §5 do ADR-001 no cliente, violando FF-004 de `.sdd/PROJECT-CONSTITUTION.md`), `OverloadDetectionService.Evaluate` agora expõe esse estado explicitamente via `OverloadAssessment.InsufficientHistory()` (ver [U1.1](#u1-overloadassessment)). Antes do ADR-004, esse caminho retornava `NoRisk()` — o app não tinha como distinguir "sem risco" de "ainda não dá para avaliar", risco de o corredor ler uma falsa garantia de segurança na primeira semana de uso.
-- **`today` como parâmetro, não como leitura de relógio**: `Evaluate` recebe `today` explicitamente em vez de chamar `DateTime.UtcNow` internamente. Essa é a razão pela qual o serviço é 100% testável de forma determinística (ver `tests/Steady.Domain.Tests/OverloadDetectionTests.cs`, que usa `DateOnly Today = new(2026, 8, 10)` fixo). É também o que mantém `Steady.Domain` isolado de qualquer noção de "tempo real do sistema" — quem decide "o que é hoje" é a camada de chamada (`Steady.Api`).
-- **O algoritmo nunca bloqueia**: `Evaluate` é uma função pura de leitura — não tem efeito colateral, não impede a criação de nenhuma `RunningSession`/`StrengthSession`. Implementa diretamente a regra de negócio #5 da spec ("o registro do treino nunca é bloqueado, mesmo que o corredor ignore a sugestão") simplesmente por não ter nenhum mecanismo de bloqueio — a garantia é estrutural, não uma checagem explícita.
-- **Suggestion é uma mensagem fixa, não personalizada**: o texto de `SuggestionMessage` é uma constante única, igual para qualquer corredor e qualquer combinação de dados que dispare `isOverloaded = true` — não referencia os valores reais de carga, datas ou o grupo muscular específico envolvido. Ver análise em [TechnicalDebtsDocs](../TechnicalDebtsDocs/OverloadDetectionService-Sobrecarga-Debts.md).
+- **Fundamentação obrigatória**: toda a regra implementada aqui é uma tradução direta de [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md), que por sua vez cita Gabbett (2016) para o modelo Acute:Chronic Workload Ratio (ACWR - sigla expandida na própria ADR-001), Foster (2001) para session-RPE (RPE em si não é expandida em nenhum artefato do repositório - [Sigla não definida no contexto - verificar com a equipe]), e a "regra dos 10%" da Lei do Domínio do projeto (`.sdd/PROJECT-CONSTITUTION.md`). O comentário XML no topo da classe (`OverloadDetectionService.cs`, linhas 8-11) já referencia essa ADR diretamente no código-fonte.
+- **Estado de histórico insuficiente é decisão de contrato, não de regra ([ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md))**: o limiar de 14 dias e o critério de "histórico suficiente" continuam definidos exclusivamente pelo ADR-001 - nada nisso mudou. O ADR-004 (2026-08-16, STORY-003) decidiu apenas *onde* esse estado é calculado (no domínio, único dono da regra) e *como* ele atravessa a fronteira até o app: em vez do app inferir "histórico curto" a partir do histórico bruto (o que replicaria o §5 do ADR-001 no cliente, violando FF-004 de `.sdd/PROJECT-CONSTITUTION.md`), `OverloadDetectionService.Evaluate` agora expõe esse estado explicitamente via `OverloadAssessment.InsufficientHistory()` (ver [U1.1](#u1-overloadassessment)). Antes do ADR-004, esse caminho retornava `NoRisk()` - o app não tinha como distinguir "sem risco" de "ainda não dá para avaliar", risco de o corredor ler uma falsa garantia de segurança na primeira semana de uso.
+- **`today` como parâmetro, não como leitura de relógio**: `Evaluate` recebe `today` explicitamente em vez de chamar `DateTime.UtcNow` internamente. Essa é a razão pela qual o serviço é 100% testável de forma determinística (ver `tests/Steady.Domain.Tests/OverloadDetectionTests.cs`, que usa `DateOnly Today = new(2026, 8, 10)` fixo). É também o que mantém `Steady.Domain` isolado de qualquer noção de "tempo real do sistema" - quem decide "o que é hoje" é a camada de chamada (`Steady.Api`).
+- **O algoritmo nunca bloqueia**: `Evaluate` é uma função pura de leitura - não tem efeito colateral, não impede a criação de nenhuma `RunningSession`/`StrengthSession`. Implementa diretamente a regra de negócio #5 da spec ("o registro do treino nunca é bloqueado, mesmo que o corredor ignore a sugestão") simplesmente por não ter nenhum mecanismo de bloqueio - a garantia é estrutural, não uma checagem explícita.
+- **Suggestion é uma mensagem fixa, não personalizada**: o texto de `SuggestionMessage` é uma constante única, igual para qualquer corredor e qualquer combinação de dados que dispare `isOverloaded = true` - não referencia os valores reais de carga, datas ou o grupo muscular específico envolvido. Ver análise em [TechnicalDebtsDocs](../TechnicalDebtsDocs/OverloadDetectionService-Sobrecarga-Debts.md).
 - **Performance**: para o volume esperado de dados de um corredor individual (dezenas a poucas centenas de sessões), o custo de `Concat`/`Min`/`Where`/`Sum` (todos O(n) sobre coleções pequenas) é irrelevante. Não há otimização prematura no código, o que é apropriado neste contexto.
-- **Isolamento de framework**: `OverloadDetectionService` é `static` e sem estado — não precisa ser registrado em nenhum container de injeção de dependência; é chamado diretamente como `OverloadDetectionService.Evaluate(...)` pela camada de API.
+- **Isolamento de framework**: `OverloadDetectionService` é `static` e sem estado - não precisa ser registrado em nenhum container de injeção de dependência; é chamado diretamente como `OverloadDetectionService.Evaluate(...)` pela camada de API.

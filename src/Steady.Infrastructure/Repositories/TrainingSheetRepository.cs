@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Steady.Domain.Adherence;
 using Steady.Domain.Coaching;
 using Steady.Domain.Training;
 using Steady.Infrastructure.Persistence;
@@ -78,6 +79,7 @@ public sealed class TrainingSheetRepository(
         Guid corredorId,
         StrengthWorkoutExecution execution,
         Guid idempotencyKey,
+        bool painReportedAtCompletion,
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.StrengthWorkoutExecutions.FirstOrDefaultAsync(
@@ -100,6 +102,10 @@ public sealed class TrainingSheetRepository(
         };
 
         dbContext.StrengthWorkoutExecutions.Add(entity);
+        AddReviewOutbox(
+            corredorId, entity.Id, WorkoutExecutionKind.Strength, idempotencyKey,
+            execution.Date, painReportedAtCompletion, execution.TrainingSheetId);
+        AddCompletionPain(corredorId, execution.Date, idempotencyKey, painReportedAtCompletion);
         await dbContext.SaveChangesAsync(cancellationToken);
         return new SaveResult<StrengthWorkoutExecutionEntity>(entity, Created: true);
     }
@@ -109,6 +115,7 @@ public sealed class TrainingSheetRepository(
         StrengthWorkoutExecution strength,
         RunningSession running,
         Guid idempotencyKey,
+        bool painReportedAtCompletion,
         CancellationToken cancellationToken)
     {
         var existingStrength = await dbContext.StrengthWorkoutExecutions.FirstOrDefaultAsync(
@@ -150,6 +157,10 @@ public sealed class TrainingSheetRepository(
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         dbContext.StrengthWorkoutExecutions.Add(strengthEntity);
         dbContext.RunningSessions.Add(runningEntity);
+        AddReviewOutbox(
+            corredorId, strengthEntity.Id, WorkoutExecutionKind.Combined, idempotencyKey,
+            strength.Date, painReportedAtCompletion, strength.TrainingSheetId);
+        AddCompletionPain(corredorId, strength.Date, idempotencyKey, painReportedAtCompletion);
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -177,4 +188,40 @@ public sealed class TrainingSheetRepository(
             .OrderByDescending(item => item.Date)
             .ThenByDescending(item => item.CreatedAt)
             .ToListAsync(cancellationToken);
+
+    private void AddReviewOutbox(
+        Guid corredorId,
+        Guid executionId,
+        WorkoutExecutionKind kind,
+        Guid idempotencyKey,
+        DateOnly executionDate,
+        bool painReportedAtCompletion,
+        Guid trainingSheetId) =>
+        dbContext.ReviewOutbox.Add(new ReviewOutboxEntity
+        {
+            Id = Guid.NewGuid(),
+            CorredorId = corredorId,
+            ExecutionId = executionId,
+            TrainingSheetId = trainingSheetId,
+            ExecutionKind = kind,
+            IdempotencyKey = idempotencyKey,
+            ExecutionDate = executionDate,
+            PainReportedAtCompletion = painReportedAtCompletion,
+            Status = ReviewOutboxStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        });
+
+    private void AddCompletionPain(
+        Guid corredorId, DateOnly date, Guid idempotencyKey, bool painReportedAtCompletion)
+    {
+        if (!painReportedAtCompletion) return;
+        dbContext.PainLogs.Add(new PainLogEntity
+        {
+            Id = Guid.NewGuid(),
+            CorredorId = corredorId,
+            Date = date,
+            Region = "Informada no encerramento",
+            IdempotencyKey = idempotencyKey
+        });
+    }
 }

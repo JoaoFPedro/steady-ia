@@ -2,7 +2,7 @@
 
 > **Story**: [story.md](./story.md)
 > **Discovery**: [../../.discovery/DISC-005-revisao-de-aderencia-pos-treino/](../../.discovery/DISC-005-revisao-de-aderencia-pos-treino/)
-> **Status**: In Review
+> **Status**: Approved — aprovado por Produto em 2026-08-30 via `/implement`
 > **Autor**: Jefferson com Codex
 > **Data**: 2026-08-28
 
@@ -34,9 +34,8 @@ segurança a `Manter`, `ReduzirCarga` ou `PriorizarRecuperacao`.
 7. Plano do Steady e ficha do personal têm a mesma autoridade. Se prescreverem
    corridas incompatíveis para o mesmo dia, o sistema mostra conflito e não
    escolhe uma fonte nem recomenda uma ação.
-8. Qualquer `PainLog` do corredor na mesma data da execução tem precedência e
-   força `PriorizarRecuperacao`, pois o domínio ainda não possui intensidade da
-   dor.
+8. Dor informada no encerramento da execução tem precedência e força
+   `PriorizarRecuperacao`, pois o domínio ainda não possui intensidade da dor.
 9. Diferenças, classificação, política de segurança e ação permitida são
    determinísticas. A IA redige uma explicação a partir desses fatos e nunca
    pode elevar ou substituir a ação autorizada.
@@ -53,6 +52,23 @@ segurança a `Manter`, `ReduzirCarga` ou `PriorizarRecuperacao`.
     processada depois que a execução sincroniza.
 16. Falha da IA não afeta o treino. A nova tentativa só ocorre quando o corredor
     toca em `Tentar novamente` e reutiliza os mesmos fatos determinísticos.
+17. O encerramento pergunta se houve dor. A resposta viaja na mesma unidade
+    lógica do treino e participa da revisão inicial; `PainLog` permanece uma
+    entidade independente.
+18. Dor registrada avulsamente depois da publicação não reabre nem reclassifica
+    a revisão. O produto não apresenta uma revisão como se ainda estivesse em
+    consolidação.
+19. A execução e um evento durável de revisão são gravados na mesma transação.
+    O processamento pode ser eventual, mas não pode ser perdido nem duplicado.
+20. Cada exercício tem uma identidade estável entre versões da ficha. Editar ou
+    renomear preserva essa identidade; remover e criar outro exercício gera uma
+    identidade nova. Nome não é usado como chave histórica.
+21. Uma sincronização tardia pode recalcular a coerência. Comparação, ação e
+    explicação permanecem imutáveis; somente a coerência derivada, sua data de
+    avaliação, a política e a execução considerada podem mudar.
+22. Ficha legada usa o `ExerciseId` existente como primeira identidade estável.
+    Execuções antigas sem identidade compatível ficam `NãoComparável` para
+    carga; o sistema não tenta uni-las por nome.
 
 ### Vocabulário observável
 
@@ -62,6 +78,7 @@ segurança a `Manter`, `ReduzirCarga` ou `PriorizarRecuperacao`.
 | `Divergente` | Pelo menos uma diferença excede a tolerância aplicável |
 | `ConflitoDePrescricao` | Plano do Steady e ficha do personal prescrevem corridas incompatíveis no mesmo dia |
 | `PendenteDeSincronizacao` | Execução existe apenas na fila local; ainda não pode ser revisada no servidor |
+| `PendenteDeProcessamento` | Execução e solicitação durável existem no servidor, mas a revisão ainda não foi processada |
 | `PendenteDeIA` | Comparação divergente foi calculada, mas a explicação ainda não foi concluída |
 | `Entendida` | Corredor tocou em `Entendi` na revisão |
 | `Coerente` | Próximo treino observável corresponde à recomendação segundo a política versionada |
@@ -110,12 +127,30 @@ Scenario: Dia combinado produz uma única revisão com duas modalidades
 
 ```gherkin
 Scenario: Dor no mesmo dia força priorizar recuperação
-  Given que existe uma execução divergente em uma data
-  And o corredor possui um PainLog em qualquer região nessa mesma data
-  When a revisão é produzida
+  Given que o corredor está encerrando uma execução divergente
+  When informa que sentiu dor no encerramento
+  And a execução e a dor sincronizam na mesma unidade lógica
+  And a revisão é produzida
   Then a recomendação é PriorizarRecuperacao
   And a revisão informa que houve registro de dor sem diagnosticar causa ou lesão
   And nenhuma saída da IA pode substituir essa recomendação por Manter ou ReduzirCarga
+```
+
+```gherkin
+Scenario: Encerramento sem dor permite aplicar a política normal
+  Given que o corredor está encerrando uma execução divergente
+  When informa que não sentiu dor
+  And a execução sincroniza
+  Then a política avalia a divergência sem inventar um PainLog
+  And a recomendação é determinada pelas demais regras aplicáveis
+```
+
+```gherkin
+Scenario: Resposta sobre dor é obrigatória no encerramento
+  Given que o corredor concluiu o preenchimento de um treino
+  When tenta finalizar sem responder se sentiu dor
+  Then o treino ainda não é colocado na fila
+  And o app solicita uma resposta explícita entre sim e não
 ```
 
 ```gherkin
@@ -257,6 +292,42 @@ Scenario: Próximo treino não coerente atualiza a métrica sem punir o corredor
 ```
 
 ```gherkin
+Scenario: Sincronização tardia corrige a coerência pela data real do treino
+  Given que uma revisão considerou uma execução como o próximo treino elegível
+  And sua coerência já foi apresentada ao corredor
+  When sincroniza depois uma execução offline com data anterior à execução considerada
+  Then o Steady recalcula qual é o próximo treino elegível pela data real de execução
+  And atualiza a coerência, a data da avaliação e a execução considerada
+  And preserva a comparação, a recomendação e a explicação originais da revisão
+```
+
+```gherkin
+Scenario: Mesmo exercício renomeado preserva referência histórica de carga
+  Given que o personal publicou o exercício "Agachamento livre"
+  And existem execuções anteriores vinculadas à identidade desse exercício
+  When publica uma nova ficha renomeando a mesma linha para "Agachamento"
+  Then a identidade histórica do exercício é preservada
+  And a mediana de carga pode considerar as execuções anteriores
+```
+
+```gherkin
+Scenario: Exercício removido e recriado não herda carga pelo nome
+  Given que um exercício foi removido de uma ficha
+  When o personal adiciona outro exercício com o mesmo nome em uma publicação posterior
+  Then o novo exercício recebe outra identidade histórica
+  And não herda automaticamente a mediana de carga do exercício removido
+```
+
+```gherkin
+Scenario: Ficha legada ganha identidade sem cruzamento inseguro por nome
+  Given que uma ficha publicada antes desta story possui ExerciseId mas não ExerciseKey
+  When essa ficha é carregada após a atualização
+  Then cada exercício usa seu ExerciseId existente como ExerciseKey inicial
+  And execuções antigas sem uma chave compatível permanecem NãoComparável para carga
+  And nenhum histórico é associado somente porque o nome é igual
+```
+
+```gherkin
 Scenario: Registro offline aguarda sincronização antes da revisão
   Given que o corredor está sem conexão
   When finaliza um treino divergente
@@ -318,6 +389,25 @@ Scenario: Reenvio idempotente não duplica a revisão
 ```
 
 ```gherkin
+Scenario: Queda depois do commit não perde a revisão
+  Given que a execução e sua solicitação durável de revisão foram confirmadas na mesma transação
+  When o processo encerra antes de produzir a revisão
+  And o processamento é retomado
+  Then a solicitação pendente é processada
+  And existe somente uma revisão vinculada à execução
+  And o treino não é gravado novamente
+```
+
+```gherkin
+Scenario: Dor avulsa posterior não reabre revisão publicada
+  Given que uma revisão já foi publicada para um treino encerrado sem dor
+  When o corredor registra avulsamente um PainLog posterior com a mesma data
+  Then o PainLog é preservado no histórico
+  And a revisão publicada não é reaberta nem reclassificada
+  And nenhuma nova chamada à IA é iniciada por essa revisão
+```
+
+```gherkin
 Scenario: Personal sem vínculo ativo não acessa revisão
   Given que um personal não possui vínculo ativo com o corredor
   When tenta consultar a revisão por qualquer identificador conhecido
@@ -362,9 +452,11 @@ Scenario: Dados insuficientes impedem recomendação inventada
 | Dia combinado | Domínio e API: consolidação sem ocultar modalidade parcial |
 | Regras versionadas | Domínio e persistência: reprodução da classificação original |
 | Dor e segurança | Domínio/API: precedência de recuperação e bloqueio de saída incompatível |
+| Identidade do exercício | Domínio/API/persistência: continuidade por chave estável, renome e recriação |
 | Conflito de prescrição | Domínio, API e app: sem precedência, sem recomendação, pop-up e histórico |
 | Orquestração de IA | API: saída estruturada, validação, timeout e retry manual |
 | Offline e idempotência | App/API: pendência, sincronização eventual e revisão única |
+| Entrega durável | API/persistência: execução + outbox atômicas, retomada e processamento único |
 | Dashboard e histórico | App: revisão mais recente versus coleção completa por treino |
 | Compreensão e coerência | API/app: `Entendi`, próximo treino e estado desconhecido |
 | Visibilidade do personal | Repository/endpoints: vínculo ativo, isolamento e revogação imediata |
@@ -386,6 +478,10 @@ O mapping final deve listar os arquivos reais e seus estados RED/GREEN.
 - Preservar snapshot ou referência imutável da prescrição aplicável à execução.
 - Modelar revisão e confirmação como fatos próprios; nunca alterar a execução
   imutável já existente.
+- Registrar em ADR a outbox transacional, o processamento idempotente e sua
+  política de retomada.
+- Registrar em ADR a separação entre id da prescrição e identidade histórica
+  estável do exercício, incluindo compatibilidade com fichas legadas.
 
 ## Fora de escopo
 

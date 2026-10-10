@@ -3,7 +3,6 @@
 > **Data**: {YYYY-MM-DD}
 > **Status**: Proposed | Accepted | Deprecated | Superseded by [ADR-XXX]
 > **Story**: {STORY-ID} (quando aplicável)
-> **Decisores**: {nomes}
 
 ## Contexto
 

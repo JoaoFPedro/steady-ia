@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Text, View, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Drawer } from 'react-native-drawer-layout';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Card,
@@ -13,12 +13,11 @@ import {
   SecondaryButton,
   Tag,
 } from '../../src/ui/Nocturne';
-import { Avatar } from '../../src/ui/Avatar';
 import { color, space, textAlpha, type } from '../../src/theme/nocturne';
-import { queryApi, recordQueue, steadyTrainingPlanCache } from '../../src/services';
+import { coachingApi, queryApi, recordQueue, steadyTrainingPlanCache, workoutReviewCache } from '../../src/services';
 import { goToLogin } from '../../src/auth/goToLogin';
-import { AccountMenu } from '../../src/account/AccountMenu';
 import { useAccountMenu } from '../../src/account/useAccountMenu';
+import { AccountMenuButton, AccountMenuDrawer } from '../../src/account/AccountMenuDrawer';
 import { loadHomeState, type HomeState } from '../../src/home/homeState';
 import { todaysTraining } from '../../src/planning/todaysTraining';
 import type { WeekPlanDay } from '../../src/planning/trainingPlanDocument';
@@ -30,8 +29,8 @@ import { homeHeader } from '../../src/home/homeHeader';
 import { planProgressView } from '../../src/home/planProgressView';
 import type { LoggedSession } from '../../src/planning/dayCompletion';
 import type { PlanRequestSummary } from '../../src/planning/planRequest';
-
-const HEADER_AVATAR_SIZE = 32;
+import type { WorkoutReview } from '../../src/coaching/types';
+import { workoutReviewView } from '../../src/coaching/workoutReviewView';
 
 /**
  * Home — a tela que carrega a única linha que o app nunca esconde.
@@ -62,6 +61,7 @@ export default function HomeScreen() {
    */
   const [weekPlan, setWeekPlan] = useState<readonly WeekPlanDay[] | null>(null);
   const [weekPlanFailed, setWeekPlanFailed] = useState(false);
+  const [latestReview, setLatestReview] = useState<WorkoutReview | null>(null);
   const menu = useAccountMenu();
   // Sem a barra do Stack, o topo da tela é a barra de status: o recuo é nosso.
   const insets = useSafeAreaInsets();
@@ -105,6 +105,23 @@ export default function HomeScreen() {
         }
       });
 
+      workoutReviewCache.load().then(async (loaded) => {
+        if (!active) return;
+        if (loaded.status === 'unauthenticated') return goToLogin(router);
+        if (loaded.status !== 'ok') return setLatestReview(null);
+        setLatestReview(loaded.data);
+        if (workoutReviewView(loaded.data).isConflict) {
+          const key = `steady.review-conflict-seen.${loaded.data.id}`;
+          if (await AsyncStorage.getItem(key) === null && active) {
+            Alert.alert(
+              'Prescrições em conflito',
+              'O plano do Steady e a ficha do personal indicam corridas incompatíveis. Nenhuma recomendação foi escolhida.',
+              [{ text: 'Fechar', onPress: () => void AsyncStorage.setItem(key, '1') }],
+            );
+          }
+        }
+      });
+
       return () => {
         active = false;
       };
@@ -126,28 +143,11 @@ export default function HomeScreen() {
       `&section=semana&day=${weekPlanIndexFor(now.getDay())}`
     : '/planning/new';
 
-  // O drawer mora aqui, não em `_layout.tsx` nem em `(tabs)/_layout.tsx`: no
-  // Stack raiz cobriria também o login; no layout das abas vazaria para a
-  // Planejamento (STORY-006), que não tem menu de conta nesta versão. Também
-  // ficaria fora do `GestureHandlerRootView` que o StackView do expo-router já
-  // monta, se subisse para fora de qualquer um dos dois.
+  // O drawer continua restrito às telas que oferecem conta. A casca compartilhada
+  // evita duplicar configuração entre Dashboard e Planejamento sem fazê-lo
+  // vazar para login, Personal ou rotas empilhadas.
   return (
-    <Drawer
-      open={menu.open}
-      onOpen={() => menu.setOpen(true)}
-      onClose={() => menu.setOpen(false)}
-      drawerPosition="left"
-      drawerType="front"
-      drawerStyle={s.drawer}
-      renderDrawerContent={() => (
-        <AccountMenu
-          account={menu.account}
-          saindo={menu.saindo}
-          falhouAoSair={menu.falhouAoSair}
-          onSignOut={menu.sair}
-        />
-      )}
-    >
+    <AccountMenuDrawer menu={menu}>
       <ScrollView
         style={s.screen}
         contentContainerStyle={s.content}
@@ -158,18 +158,7 @@ export default function HomeScreen() {
             {/* O avatar é o único gatilho do menu: dizer quem está autenticado e
                 abrir a conta é a mesma intenção — um hambúrguer ao lado dele só
                 repetiria o toque. O gesto de arrastar da borda continua valendo. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Abrir menu da conta"
-              onPress={() => menu.setOpen(true)}
-              hitSlop={space[3]}
-            >
-              <Avatar
-                initial={menu.account.initial}
-                photoUrl={menu.account.photoUrl}
-                size={HEADER_AVATAR_SIZE}
-              />
-            </Pressable>
+            <AccountMenuButton menu={menu} />
           </View>
 
           {/* Saudação, contagem e fase: onde estou no plano, não que dia é hoje
@@ -183,7 +172,12 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* <OverloadHero state={state} /> */}
+        {latestReview !== null && (
+          <WorkoutReviewCard
+            review={latestReview}
+            onChange={setLatestReview}
+          />
+        )}
 
         {state !== null && state.pendingCount > 0 && (
           <NoticeStrip>
@@ -246,7 +240,55 @@ export default function HomeScreen() {
           <SecondaryButton label="Ver histórico" onPress={() => router.push('/history')} />
         </View>
       </ScrollView>
-    </Drawer>
+    </AccountMenuDrawer>
+  );
+}
+
+function WorkoutReviewCard({
+  review,
+  onChange,
+}: {
+  review: WorkoutReview;
+  onChange(review: WorkoutReview): void;
+}) {
+  const view = workoutReviewView(review);
+  const [working, setWorking] = useState(false);
+  async function command(kind: 'understood' | 'retry' | 'contest') {
+    setWorking(true);
+    const result = kind === 'understood'
+      ? await coachingApi.acknowledgeWorkoutReview(review.id)
+      : kind === 'retry'
+        ? await coachingApi.retryWorkoutReview(review.id)
+        : await coachingApi.contestWorkoutReview(review.id);
+    if (result.status === 'ok') {
+      const refreshed = await coachingApi.latestWorkoutReview();
+      if (refreshed.status === 'ok') onChange(refreshed.data);
+    }
+    setWorking(false);
+  }
+  return (
+    <Card>
+      <Kicker accent>Revisão do treino</Kicker>
+      <Text style={s.trainingTitle}>{view.title}</Text>
+      {view.action !== null && <Text style={s.reviewAction}>{view.action}</Text>}
+      {view.comparison.map((line) => <Muted key={line}>{line}</Muted>)}
+      {view.explanation !== null && <Muted>{view.explanation}</Muted>}
+      {view.explanationUnavailable && (
+        <>
+          <Muted>A explicação não está disponível. A comparação e a recomendação continuam válidas.</Muted>
+          <View style={s.reviewButton}><SecondaryButton label="Tentar novamente" disabled={working} onPress={() => void command('retry')} /></View>
+        </>
+      )}
+      <Text style={s.reviewMeta}>{view.coherence}</Text>
+      <View style={s.reviewButton}>
+        {review.understoodAt === null
+          ? <PrimaryButton label="Entendi" disabled={working} onPress={() => void command('understood')} />
+          : <Muted>Leitura confirmada</Muted>}
+      </View>
+      {!review.contested && (
+        <View style={s.reviewButton}><SecondaryButton label="Isso não faz sentido" disabled={working} onPress={() => void command('contest')} /></View>
+      )}
+    </Card>
   );
 }
 
@@ -327,7 +369,6 @@ const s = StyleSheet.create({
     justifyContent: 'flex-end',
     marginBottom: space[6],
   },
-  drawer: { backgroundColor: color.surface, width: '78%' },
   headline: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   headlineText: { flex: 1, paddingRight: space[4] },
   greeting: { color: color.text, fontSize: type.cardTitle },
@@ -360,6 +401,9 @@ const s = StyleSheet.create({
   progressPercent: { color: color.text, fontSize: type.cardTitle, fontWeight: '600' },
   progressDetail: { color: textAlpha.muted, fontSize: type.meta, flex: 1 },
   progressNote: { color: color.accentRamp[400], fontSize: type.meta, lineHeight: 17 },
+  reviewAction: { color: color.accentRamp[300], fontSize: type.cardTitle, marginBottom: space[3] },
+  reviewMeta: { color: textAlpha.faint, fontSize: type.meta, marginTop: space[3] },
+  reviewButton: { marginTop: space[4] },
   track: { height: 4, borderRadius: 2, backgroundColor: textAlpha.rule, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2, backgroundColor: color.accent },
   actions: { gap: space[3], marginTop: space[4] },

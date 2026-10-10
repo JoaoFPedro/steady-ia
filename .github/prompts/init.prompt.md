@@ -1,16 +1,20 @@
 ---
 description: Construa a fundação do projeto via entrevista estruturada — gera Constituição, memórias e ADR-000.
 agent: agent
-model: Claude Opus 4
+model: Claude Opus 4.7
 ---
+
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
 
 # /init — Fundação do projeto (Produto & Design)
 
 Construa a fundação do projeto através de uma entrevista estruturada. Gera a Constituição do projeto e inicializa as memórias antes do primeiro código.
 
 > Use este comando **antes de qualquer feature**, no início absoluto do projeto.
-> Pré-requisito: `./sdd init <nome>` executado (estrutura de diretórios criada).
+> Pré-requisito: pasta do `isabel` (`.sdd/`, `.claude/`, `CLAUDE.md`) já copiada para a raiz do projeto.
 > Para projetos com código existente, use `/onboard` em vez de `/init`.
+
+O `/init` prepara o contexto do produto. Quando a primeira funcionalidade for implementada, `/build` cria sua documentação em `docs/documenta-ai/`; as entregas seguintes a atualizam.
 
 ## Pré-condições
 
@@ -20,13 +24,13 @@ Antes de qualquer ação, leia (silenciosamente, só comente se ausente):
 - [.sdd/PLAYBOOK.md](../../.sdd/PLAYBOOK.md) — patterns e técnicas disponíveis
 - [.sdd/STACK.md](../../.sdd/STACK.md) — stack detectada (se existir)
 
-Aplique também as regras do arquivo [init.instructions.md](../instructions/init.instructions.md), que dispara automaticamente quando você edita `PROJECT-CONSTITUTION.md`, `PROJECT.md` ou `DOMAIN.md`.
 
+Aplique também as regras de [init.instructions.md](../instructions/init.instructions.md).
 ---
 
 ## O que é a Constituição do Projeto
 
-A `CONSTITUTION.md` do framework define as leis universais do SDD Kit — essas não mudam.
+A CONSTITUTION.md do framework define as leis universais do isabel — essas não mudam.
 
 A **Constituição do projeto** (`.sdd/PROJECT-CONSTITUTION.md`) é diferente: é o contrato específico *deste* software. Ela responde:
 - Qual problema resolve e para quem
@@ -77,16 +81,26 @@ Conduza a entrevista de forma conversacional. **Uma pergunta por vez.** Aguarde 
 
 ## Fase 2 — Confirmação de Stack
 
-Leia `.sdd/STACK.md`. Se não existir, instrua:
+Leia `.sdd/STACK.md`. Se não existir (projeto novo, sem código ainda), pergunte ao usuário a stack pretendida:
 
+> "Antes de gerar a Constituição: **qual stack você pretende usar?** Linguagem, framework, banco, test runner. Se ainda não decidiu, posso sugerir com base no perfil do projeto."
+
+Escreva o resultado em `.sdd/STACK.md` no formato:
+
+```markdown
+# Stack
+
+- **Linguagem**: …
+- **Framework**: …
+- **Test runner**: …
+- **Banco / ORM**: …
+- **Package manager**: …
 ```
-Execute: ./sdd scan
-```
 
-Apresente a stack detectada e pergunte:
-> "Detectei a seguinte stack: [lista]. Está correto? Tem algo não detectado ou que precisa de ajuste?"
+Se o projeto **já tem código** (situação rara em `/init`, mas possível em scaffold pré-existente), detecte a stack lendo `package.json`/lock files/`pyproject.toml`/`go.mod`/etc — mesmo procedimento da Fase 0.7 do `/onboard`.
 
-Atualize `.sdd/config.json` com confirmações.
+Apresente a stack e pergunte:
+> "Stack confirmada: [lista]. Está correto?"
 
 ---
 
@@ -117,7 +131,7 @@ Preencha com as informações coletadas:
 ### `.sdd/memory/PROJECT.md`
 - Identificação: nome e cliente (se aplicável)
 - Contexto: o que faz, para quem, por quê — em 3-5 frases
-- Convenções: branches, commits, testes (padrão SDD Kit, ajuste se o time informou diferente)
+- Convenções: branches, commits, testes (padrão isabel, ajuste se o time informou diferente)
 - Glossário: termos de domínio mencionados na entrevista (entidades, jargões do negócio)
 - Links: deixe em branco se não informado
 
@@ -167,8 +181,8 @@ Revise a Constituição — ela guiará todas as decisões de arquitetura e dom�
 Se algo estiver errado, corrija agora: é mais barato do que corrigir depois de 10 stories.
 
 Próximos passos:
-  1. ./sdd new STORY-001
-  2. /feature  → pipeline completo: story → spec → blueprint → TDD
+  1. /triage    → explore o primeiro problema antes de virar story
+  2. /feature   → pipeline completo: story → spec → blueprint → TDD
 ```
 
 ---
@@ -180,5 +194,5 @@ Próximos passos:
 - Princípios de domínio devem ser **falsificáveis**: um dev deve conseguir decidir se violou ou não o princípio.
 - Não invente entidades, integrações ou restrições que não foram mencionadas.
 - A Constituição deve caber em **uma tela** — princípios, não manual.
-- Se conflito com a `CONSTITUTION.md` do framework: a lei universal prevalece.
+- Se conflito com a CONSTITUTION.md do framework: a lei universal prevalece.
 - Registre na Constituição apenas o que **diferencia este projeto** do genérico.

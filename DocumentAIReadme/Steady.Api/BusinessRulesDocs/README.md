@@ -1,21 +1,18 @@
-# BusinessRulesDocs - Steady.Api - Indice
+# Steady.Api - BusinessRulesDocs
 
-Regras de negocio das funcionalidades expostas pelo `src/Steady.Api`, em linguagem acessivel para stakeholders de produto/negocio.
+Auditoria: 2026-09-27. Cobertura: 10/10 unidades de endpoints; arquivos de mapping são apoio, não unidades adicionais.
 
-| Arquivo | Descricao |
-|---------|-----------|
-| [Registro-de-Corrida-Treino-Corrida-Rules.md](./Registro-de-Corrida-Treino-Corrida-Rules.md) | Regras para registrar uma sessao de treino de corrida |
-| [Registro-de-Musculacao-Treino-Forca-Rules.md](./Registro-de-Musculacao-Treino-Forca-Rules.md) | Regras para registrar uma sessao de treino de musculacao |
-| [Registro-de-Dor-Treino-Dor-Rules.md](./Registro-de-Dor-Treino-Dor-Rules.md) | Regras para registrar dor/desconforto pos-treino |
-| [Avaliacao-de-Sobrecarga-Sobrecarga-Rules.md](./Avaliacao-de-Sobrecarga-Sobrecarga-Rules.md) | Regras da avaliacao de risco de sobrecarga combinada (corrida + musculacao) |
-| [Historico-de-Treinos-Historico-Rules.md](./Historico-de-Treinos-Historico-Rules.md) | Regras de consulta do historico consolidado de treinos |
+| Unidade | Descrição | Rotas |
+|---|---|---|
+| [RunningSessionEndpoints](Registro-de-Corrida-Treino-Corrida-Rules.md) | Registrar a corrida do corredor e sua intenção durável de revisão, sem esperar o provedor de explicação. | 1 |
+| [StrengthSessionEndpoints](Registro-de-Musculacao-Treino-Forca-Rules.md) | Registrar musculação avulsa com grupo, intensidade e duração, e opcionalmente dor no encerramento. | 1 |
+| [PainLogEndpoints](Registro-de-Dor-Treino-Dor-Rules.md) | Registrar região e data de dor de forma idempotente, sem diagnóstico ou reabertura de revisão publicada. | 1 |
+| [OverloadAssessmentEndpoints](Avaliacao-de-Sobrecarga-Sobrecarga-Rules.md) | Avaliar a combinação de corrida com musculação avulsa pesada de perna, distinguindo histórico insuficiente de ausência de risco. | 1 |
+| [TrainingHistoryEndpoints](Historico-de-Treinos-Historico-Rules.md) | Unificar corridas, musculação avulsa e execuções da ficha no histórico do corredor. | 2 |
+| [PlanRequestEndpoints](Pedidos-de-Planejamento-Planejamento-Rules.md) | Persistir o contexto do planejamento do corredor com identidade estável criada antes da sincronização. | 3 |
+| [TrainingPlanEndpoints](Plano-do-Steady-Planejamento-Rules.md) | Ler o documento versionado associado ao corredor, mantendo prescrições e mobilidade sem calcular progressão. | 1 |
+| [CoachingLinkEndpoints](Vinculos-com-Personal-Acompanhamento-Rules.md) | Solicitar, aceitar e encerrar vínculos de acompanhamento, com descoberta por e-mail e acesso restrito por papel. | 8 |
+| [TrainingSheetEndpoints](Ficha-e-Execucao-Ficha-Rules.md) | Publicar ficha versionada, registrar musculação ou treino combinado e disponibilizar histórico ao personal vinculado. | 5 |
+| [WorkoutReviewEndpoints](Revisao-do-Treino-Revisao-Rules.md) | Consultar revisão determinística, registrar compreensão/contestação e solicitar nova explicação sem alterar o treino. | 6 |
 
-## Fontes de verdade referenciadas
-
-- `specs/STORY-001/spec.bdd.md` - registro de treino de corrida/musculacao, deteccao de sobrecarga, registro de dor.
-- `specs/STORY-002/spec.bdd.md` - exposicao via API, persistencia, autenticacao e isolamento por corredor.
-- `specs/STORY-003/spec.bdd.md` - sincronizacao offline, chave de idempotencia, estado de historico insuficiente.
-- [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md) - fundamentacao cientifica da regra de sobrecarga.
-- [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md) - autenticacao via Google Sign-In e isolamento de dados.
-- [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md) - chave de idempotencia nos tres registros de escrita, para reenvio seguro da fila offline.
-- [ADR-004](../../../docs/adr/ADR-004-estado-de-historico-insuficiente-no-contrato-de-avaliacao.md) - estado explicito de "reunindo dados" na avaliacao de sobrecarga.
+[Índice mestre](../../README.md).

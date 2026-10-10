@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Field } from '../../src/ui/Field';
 import { Choice } from '../../src/ui/Choice';
@@ -36,6 +36,28 @@ export default function LogStrengthScreen() {
   }, [planDay]);
 
   const complete = muscleGroup !== null && intensity !== null && durationMinutes !== '';
+
+  function submit() {
+    Alert.alert(
+      'Sentiu dor neste treino?',
+      'Escolha uma resposta para concluir o registro.',
+      [
+        { text: 'Não', onPress: () => void save(false) },
+        { text: 'Sim', onPress: () => void save(true) },
+      ],
+      { cancelable: true },
+    );
+  }
+
+  function save(painReported: boolean) {
+    return log({
+      date: todayIso(),
+      muscleGroup,
+      intensity,
+      durationMinutes: Number(durationMinutes),
+      painReported,
+    });
+  }
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
@@ -82,14 +104,7 @@ export default function LogStrengthScreen() {
       <PrimaryButton
         label={saving ? 'Registrando…' : 'Registrar musculação'}
         disabled={!complete || saving}
-        onPress={() =>
-          log({
-            date: todayIso(),
-            muscleGroup,
-            intensity,
-            durationMinutes: Number(durationMinutes),
-          })
-        }
+        onPress={submit}
       />
     </ScrollView>
   );

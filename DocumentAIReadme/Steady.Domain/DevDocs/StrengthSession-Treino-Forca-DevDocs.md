@@ -18,9 +18,9 @@
 - Permanecer imutável após a criação.
 
 **Integrações**:
-- Consumida por `Steady.Domain.Overload.OverloadDetectionService` para identificar sessões de musculação de perna com intensidade pesada — ver [OverloadDetectionService-Sobrecarga-DevDocs.md](./OverloadDetectionService-Sobrecarga-DevDocs.md).
-- Persistida via `Steady.Infrastructure.Repositories.StrengthSessionRepository` (mapeada para `StrengthSessionEntity`). Fora do escopo deste documento — ver `DocumentAIReadme/Steady.Infrastructure/DevDocs/`, se existir.
-- Exposta via `Steady.Api.Endpoints.StrengthSessionEndpoints` (`POST /api/strength-sessions`). Fora do escopo deste documento — ver `DocumentAIReadme/Steady.Api/DevDocs/`, se existir.
+- Consumida por `Steady.Domain.Overload.OverloadDetectionService` para identificar sessões de musculação de perna com intensidade pesada - ver [OverloadDetectionService-Sobrecarga-DevDocs.md](./OverloadDetectionService-Sobrecarga-DevDocs.md).
+- Persistida via `Steady.Infrastructure.Repositories.StrengthSessionRepository` (mapeada para `StrengthSessionEntity`). Fora do escopo deste documento - ver `DocumentAIReadme/Steady.Infrastructure/DevDocs/`, se existir.
+- Exposta via `Steady.Api.Endpoints.StrengthSessionEndpoints` (`POST /api/strength-sessions`). Fora do escopo deste documento - ver `DocumentAIReadme/Steady.Api/DevDocs/`, se existir.
 
 ## 2. Configuração e Dependências
 
@@ -54,7 +54,7 @@
 }
 ```
 
-Em caso de dado inválido, o método lança `ArgumentException` (campos ausentes) ou `ArgumentOutOfRangeException` (duração inválida) — não retorna objeto.
+Em caso de dado inválido, o método lança `ArgumentException` (campos ausentes) ou `ArgumentOutOfRangeException` (duração inválida) - não retorna objeto.
 
 #### Fluxo de Execução
 
@@ -83,10 +83,10 @@ sequenceDiagram
 
 <a id="d1-create"></a>
 D1. `Create()`
-- Recebe grupo muscular e intensidade como tipos anuláveis (`MuscleGroup?`, `Intensity?`) — a nulidade é o mecanismo usado para representar "campo obrigatório ausente" nesta assinatura, já que `enum` não tem valor nulo nativo.
-- Guard clause 1: `muscleGroup is null` → lança `ArgumentException("O grupo muscular é obrigatório para registrar uma sessão de musculação.", nameof(muscleGroup))`.
-- Guard clause 2: `intensity is null` → lança `ArgumentException("A intensidade é obrigatória para registrar uma sessão de musculação.", nameof(intensity))`.
-- Guard clause 3: `durationMinutes <= 0` → lança `ArgumentOutOfRangeException(nameof(durationMinutes), durationMinutes, "A duração deve ser maior que zero.")`.
+- Recebe grupo muscular e intensidade como tipos anuláveis (`MuscleGroup?`, `Intensity?`) - a nulidade é o mecanismo usado para representar "campo obrigatório ausente" nesta assinatura, já que `enum` não tem valor nulo nativo.
+- Guard clause 1: `muscleGroup is null` --> lança `ArgumentException("O grupo muscular é obrigatório para registrar uma sessão de musculação.", nameof(muscleGroup))`.
+- Guard clause 2: `intensity is null` --> lança `ArgumentException("A intensidade é obrigatória para registrar uma sessão de musculação.", nameof(intensity))`.
+- Guard clause 3: `durationMinutes <= 0` --> lança `ArgumentOutOfRangeException(nameof(durationMinutes), durationMinutes, "A duração deve ser maior que zero.")`.
 - Se todas as validações passam, desembrulha os `Nullable<T>` (`.Value`) e invoca o construtor privado.
 
 ### 3.2. Load - Cálculo de Carga de Treino
@@ -94,16 +94,16 @@ D1. `Create()`
 <a id="d1-load"></a>
 D1.2. `Load` (propriedade)
 - Calculada sob demanda: `DurationMinutes * IntensityWeight(Intensity)`.
-- `IntensityWeight` é um método privado estático que mapeia a escala qualitativa para peso numérico: `Leve = 3`, `Moderado = 6`, `Pesado = 9`. Esse mapeamento é o método session-RPE (Foster, 2001) aplicado à musculação — fundamentado em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md), que define exatamente esses três valores.
-- Se `Intensity` receber um valor fora do `enum` conhecido (ex: cast inválido de um inteiro arbitrário), `IntensityWeight` lança `ArgumentOutOfRangeException(nameof(intensity), intensity, "Intensidade desconhecida.")` — guard defensivo contra estado impossível pelo `enum`, mas alcançável via cast explícito em C#.
-- Ao contrário de `RunningSession.Load`, esta carga não é diretamente somada pelo `OverloadDetectionService` — o serviço usa `StrengthSession` apenas para checar a *existência* de uma sessão pesada de perna na janela recente, não para somar sua carga numérica (ver [D1. Evaluate](./OverloadDetectionService-Sobrecarga-DevDocs.md#d1-evaluate)).
+- `IntensityWeight` é um método privado estático que mapeia a escala qualitativa para peso numérico: `Leve = 3`, `Moderado = 6`, `Pesado = 9`. Esse mapeamento é o método session-RPE (Foster, 2001) aplicado à musculação - fundamentado em [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md), que define exatamente esses três valores.
+- Se `Intensity` receber um valor fora do `enum` conhecido (ex: cast inválido de um inteiro arbitrário), `IntensityWeight` lança `ArgumentOutOfRangeException(nameof(intensity), intensity, "Intensidade desconhecida.")` - guard defensivo contra estado impossível pelo `enum`, mas alcançável via cast explícito em C#.
+- Ao contrário de `RunningSession.Load`, esta carga não é diretamente somada pelo `OverloadDetectionService` - o serviço usa `StrengthSession` apenas para checar a *existência* de uma sessão pesada de perna na janela recente, não para somar sua carga numérica (ver [D1. Evaluate](./OverloadDetectionService-Sobrecarga-DevDocs.md#d1-evaluate)).
 
 **U1. Value Object/Enum de apoio**
 
 <a id="u1-muscleGroup"></a>
 U1.1. `MuscleGroup` (enum, `Training/MuscleGroup.cs`)
 - Valores: `PeitoTriceps`, `Ombro`, `PernaFrontal`, `PernaPosterior`, `BicepsCostas`.
-- Usado por `StrengthSession` para descrever o grupo muscular trabalhado, e por `OverloadDetectionService` para identificar sessões de perna (`PernaFrontal` ou `PernaPosterior`) — ver método privado `IsLeg` no serviço de sobrecarga.
+- Usado por `StrengthSession` para descrever o grupo muscular trabalhado, e por `OverloadDetectionService` para identificar sessões de perna (`PernaFrontal` ou `PernaPosterior`) - ver método privado `IsLeg` no serviço de sobrecarga.
 
 <a id="u1-intensity"></a>
 U1.2. `Intensity` (enum, `Training/Intensity.cs`)
@@ -112,8 +112,8 @@ U1.2. `Intensity` (enum, `Training/Intensity.cs`)
 
 ## 4. Observações Técnicas
 
-- **Performance**: sem preocupação — classe simples, sem I/O, custo O(1) por instância.
+- **Performance**: sem preocupação - classe simples, sem I/O, custo O(1) por instância.
 - **Tratamento de Erros**: guard clauses de campo ausente lançam `ArgumentException` (não `ArgumentOutOfRangeException`, diferente de `RunningSession`), pois representam ausência de valor, não valor fora de faixa. Ambas as exceções derivam de `ArgumentException`, então `Steady.Api.Common.DomainFactory` as trata de forma uniforme.
-- **Nullable como sinalizador de obrigatoriedade**: o uso de `MuscleGroup?`/`Intensity?` na assinatura de `Create` é uma escolha deliberada para forçar quem chama (tipicamente a desserialização de um request HTTP) a lidar explicitamente com o caso de campo ausente, em vez de depender de um valor padrão de `enum` (que seria `PeitoTriceps`/`Leve` — o `0` de cada enum — mascarando um campo não informado como um valor válido).
-- **Isolamento de framework**: mesma decisão arquitetural de `RunningSession` — sem dependências de infraestrutura (ver `tests/Steady.Domain.Tests/StrengthSessionTests.cs`).
+- **Nullable como sinalizador de obrigatoriedade**: o uso de `MuscleGroup?`/`Intensity?` na assinatura de `Create` é uma escolha deliberada para forçar quem chama (tipicamente a desserialização de um request HTTP) a lidar explicitamente com o caso de campo ausente, em vez de depender de um valor padrão de `enum` (que seria `PeitoTriceps`/`Leve` - o `0` de cada enum - mascarando um campo não informado como um valor válido).
+- **Isolamento de framework**: mesma decisão arquitetural de `RunningSession` - sem dependências de infraestrutura (ver `tests/Steady.Domain.Tests/StrengthSessionTests.cs`).
 - **Integrações Críticas**: os valores de `IntensityWeight` (3/6/9) e o `enum` `MuscleGroup` são diretamente referenciados por [ADR-001](../../../docs/adr/ADR-001-regra-sobrecarga-combinada.md). Qualquer alteração nesses valores ou na lista de grupos musculares de perna precisa revisitar essa ADR.

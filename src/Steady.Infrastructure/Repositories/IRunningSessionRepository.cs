@@ -9,6 +9,7 @@ public interface IRunningSessionRepository
         Guid corredorId,
         RunningSession session,
         Guid idempotencyKey,
+        bool painReportedAtCompletion,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RunningSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken);

@@ -10,15 +10,15 @@
 
 ## 1. Resumo da Funcionalidade
 
-**Propósito**: permitir que o corredor registre que sentiu dor em alguma região do corpo, a qualquer momento — mesmo dias após o treino que possivelmente a causou.
+**Propósito**: permitir que o corredor registre que sentiu dor em alguma região do corpo, a qualquer momento - mesmo dias após o treino que possivelmente a causou.
 
 **Usuários**: corredores autenticados no Steady.
 
-**Valor de Negócio**: o registro de dor é o principal sinal de que a regra de detecção de sobrecarga está (ou não está) funcionando na prática. Segundo a fundamentação da regra de sobrecarga (ADR-001), se o corredor continuar sentindo dor sem que o sistema tenha emitido alerta, isso é um indício de que a regra precisa ser recalibrada — o registro de dor é o "termômetro" de acompanhamento do produto.
+**Valor de Negócio**: o registro de dor é o principal sinal de que a regra de detecção de sobrecarga está (ou não está) funcionando na prática. Segundo a fundamentação da regra de sobrecarga (ADR-001), se o corredor continuar sentindo dor sem que o sistema tenha emitido alerta, isso é um indício de que a regra precisa ser recalibrada - o registro de dor é o "termômetro" de acompanhamento do produto.
 
-**Frequência de Uso**: esporádica — apenas quando o corredor de fato sente dor.
+**Frequência de Uso**: esporádica - apenas quando o corredor de fato sente dor.
 
-**Impacto Operacional**: hoje, o registro de dor não bloqueia nem altera o comportamento do sistema em tempo real (não gera alerta, não impede novo treino) — serve como dado histórico para análise posterior.
+**Impacto operacional**: registro avulso preserva o historico e nao reabre revisao publicada. No encerramento do treino, informar dor faz a politica deterministica priorizar recuperacao; isso nao bloqueia registro nem diagnostica causa (STORY-014, ADR-014).
 
 ## 2. Jornada do Usuário
 
@@ -44,12 +44,12 @@ journey
 
 ### 3.1. Registro de Dor Pós-Treino
 
-**O que faz**: recebe a data em que a dor foi sentida e a região do corpo afetada, salvando o registro associado ao corredor — sem exigir vínculo com uma sessão de treino específica.
+**O que faz**: recebe a data em que a dor foi sentida e a região do corpo afetada, salvando o registro associado ao corredor - sem exigir vínculo com uma sessão de treino específica.
 
 **Regras Aplicadas**:
 - **Região do corpo é obrigatória**: não é possível registrar dor sem informar onde ela foi sentida.
   - *Exemplo*: tentar registrar dor sem informar a região (campo vazio ou só espaços em branco) é rejeitado com a mensagem "A região do corpo é obrigatória para registrar dor."
-- **Registro independente de sessão de treino**: o corredor não precisa (nem consegue) vincular o registro a uma corrida ou sessão de musculação específica — apenas informa data + região.
+- **Registro independente de sessão de treino**: o corredor não precisa (nem consegue) vincular o registro a uma corrida ou sessão de musculação específica - apenas informa data + região.
   - *Exemplo*: corredor treinou na segunda-feira, sentiu dor na canela na quarta-feira e registra o incômodo na quarta, sem precisar apontar qual treino causou.
 - **Pode ser registrado a qualquer momento após o treino**: inclusive dias depois, sem prazo limite.
   - *Exemplo*: um corredor que treinou há 3 dias ainda pode registrar a dor sentida hoje normalmente.
@@ -57,9 +57,9 @@ journey
 **Cenários de Uso**:
 - **Cenário Principal**: corredor sente dor em algum momento (durante ou após o treino) e registra a região afetada.
 - **Cenário Alternativo**: corredor registra a dor dias depois do treino que possivelmente a causou.
-- **Cenário de Exceção**: corredor tenta registrar dor sem informar a região do corpo — sistema rejeita e pede a informação.
+- **Cenário de Exceção**: corredor tenta registrar dor sem informar a região do corpo - sistema rejeita e pede a informação.
 
-**Resultado Esperado**: o registro fica salvo com data e região, disponível para consulta posterior — sem qualquer bloqueio ou alteração de comportamento do restante do sistema.
+**Resultado Esperado**: o registro fica salvo com data e região, disponível para consulta posterior - sem qualquer bloqueio ou alteração de comportamento do restante do sistema.
 
 ## 4. Validações e Restrições
 
@@ -73,7 +73,7 @@ journey
 - **Limitações de Volume**: nenhuma limitação de tamanho de texto documentada para a região.
 
 ### Restrições do Sistema
-- **Horários de Funcionamento**: nenhuma restrição — pode ser registrado a qualquer momento, inclusive dias após o treino.
+- **Horários de Funcionamento**: nenhuma restrição - pode ser registrado a qualquer momento, inclusive dias após o treino.
 - **Dependências**: nenhuma dependência externa nesta camada de regra de negócio.
 - **Limitações Técnicas**: nenhuma limitação de performance conhecida neste nível.
 

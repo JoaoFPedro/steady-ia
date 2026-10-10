@@ -1,145 +1,143 @@
-# Registro de Musculacao - Treino-Forca - Regras de Negocio
+# Registro de Musculacao - Treino-Forca - Regras de Negócio
 
-## Indice
-- [1. Resumo da Funcionalidade](#1-resumo-da-funcionalidade)
-- [2. Jornada do Usuario](#2-jornada-do-usuario)
-- [3. Regras de Negocio por Funcionalidade](#3-regras-de-negocio-por-funcionalidade)
-- [4. Validacoes e Restricoes](#4-validacoes-e-restricoes)
-- [5. Fluxos de Processo](#5-fluxos-de-processo)
-- [6. Casos de Uso e Cenarios](#6-casos-de-uso-e-cenarios)
+## Índice
 
+- [1. Resumo da Funcionalidade](#resumo)
+- [2. Jornada do Usuário](#jornada)
+- [3. Regras de Negócio por Funcionalidade](#regras)
+- [4. Validações e Restrições](#validacoes)
+- [5. Fluxos de Processo](#fluxos)
+- [6. Casos de Uso e Cenários](#casos)
+
+<a id="resumo"></a>
 ## 1. Resumo da Funcionalidade
 
-**Proposito**: Permitir que o corredor registre uma sessao de treino de musculacao (grupo muscular, intensidade, duracao), especialmente relevante porque musculacao pesada de perna e um dos dois sinais usados na deteccao de sobrecarga.
+**Propósito**: Registrar musculação avulsa com grupo, intensidade e duração, e opcionalmente dor no encerramento.
 
-**Usuarios**: Corredor amador autenticado que combina musculacao com o treino de corrida.
+**Usuários**: corredor autenticado; personal autenticado nas ações de acompanhamento que exigem esse papel.
 
-**Valor de Negocio**: Sem o registro de musculacao, o sistema nao consegue identificar o padrao "musculacao pesada de perna + aumento de carga de corrida" que motivou a criacao do Steady (dor recorrente pos-treino relatada pelo usuario original).
+**Valor de Negócio**: manter registros e decisões acessíveis somente a quem tem autorização, com resultado consistente entre consultas e sincronização.
 
-**Frequencia de Uso**: Media a alta - conforme a rotina de musculacao do corredor, tipicamente algumas vezes por semana.
+**Frequência de Uso**: conforme registros e consultas do usuário, sem frequência obrigatória imposta por estas rotas.
 
-**Impacto Operacional**: Um registro de musculacao ausente ou incorreto (ex.: grupo muscular errado) pode causar um falso negativo na deteccao de sobrecarga - o alerta nao dispara quando deveria.
+**Impacto Operacional**: o servidor mantém o estado persistido; a disponibilidade de rede e da persistência determina quando o resultado pode ser confirmado.
 
-## 2. Jornada do Usuario
+**Fontes da verdade**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-014](../../../specs/STORY-014/spec.bdd.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md). As regras abaixo distinguem comportamento observável atual e limitações identificadas no código; não criam decisão nova de produto.
 
-### Visao Geral da Jornada
+<a id="jornada"></a>
+## 2. Jornada do Usuário
+
+### Visão Geral da Jornada
+
 ```mermaid
 journey
-    title Jornada do Corredor - Registro de Musculacao
+    title Jornada da funcionalidade
     section Preparacao
-      Termina o treino de musculacao: 5: Corredor
-      Abre o app Steady: 4: Corredor
-    section Execucao Principal
-      Seleciona o grupo muscular trabalhado: 4: Corredor
-      Informa intensidade e duracao: 4: Corredor
-      Envia o registro: 5: Corredor
-    section Finalizacao
-      Recebe confirmacao da sessao salva: 5: Corredor
-      Sessao aparece no historico: 5: Sistema
+      Entrar na conta: 5: Usuario
+      Escolher operacao: 4: Usuario
+    section Operacao
+      Informar dados ou consultar: 4: Usuario
+      Validar acesso e dados: 4: Sistema
+    section Resultado
+      Ver confirmacao ou ausencia: 5: Usuario
 ```
 
 ### Pontos de Contato
-- **Registro pos-treino**: o corredor informa os dados da sessao de musculacao apos o treino.
-- **Selecao de grupo muscular**: interface apresenta as opcoes fixas de grupo muscular (Peito+Triceps, Ombro, Perna Frontal, Perna Posterior, Biceps+Costas).
-- **Reflexo no historico e na avaliacao de sobrecarga**: a sessao passa a compor tanto o historico consolidado quanto o calculo de risco de sobrecarga.
 
-## 3. Regras de Negocio por Funcionalidade
+- **Conta**: a identidade vem do login Google; nome e e-mail não determinam quem é dono dos registros.
+- **Operação**: o usuário acessa as ações descritas abaixo no aplicativo; este documento descreve o serviço que as sustenta.
+- **Retorno**: confirmação, dados ou erro explícito; indisponibilidade técnica não representa histórico vazio.
 
-### 3.1. Registro de Sessao de Treino de Musculacao
+<a id="regras"></a>
+## 3. Regras de Negócio por Funcionalidade
 
-**O que faz**: Recebe os dados de uma sessao de musculacao e salva permanentemente, associada ao corredor autenticado.
+### 3.1. Registrar musculação avulsa
 
-**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #2, `specs/STORY-002/spec.bdd.md`, regras #1-#5, e `specs/STORY-003/spec.bdd.md` para a idempotencia, fundamentada em [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)):
-- **Autenticacao obrigatoria**: mesmo requisito de qualquer outro registro - login valido do Google.
-- **Reenvio da fila offline nao cria treino duplicado**: mesma protecao aplicada ao registro de corrida - a chave gerada quando o item entra na fila local garante que reenviar apos falha de rede devolve o registro ja salvo, sem duplicar. Especialmente relevante aqui, porque uma sessao de "Perna Pesada" duplicada poderia disparar um alerta de sobrecarga falso.
-- **Grupo muscular obrigatorio**: deve ser um dos cinco valores fixos suportados (Peito+Triceps, Ombro, Perna Frontal, Perna Posterior, Biceps+Costas).
-  - *Exemplo*: enviar o registro sem grupo muscular e rejeitado com "O grupo muscular é obrigatório para registrar uma sessão de musculação."
-- **Intensidade obrigatoria**: deve ser Leve, Moderado ou Pesado.
-  - *Exemplo*: enviar o registro sem intensidade e rejeitado com "A intensidade é obrigatória para registrar uma sessão de musculação."
-- **Duracao deve ser maior que zero**: mesma regra aplicada a sessoes de corrida.
-  - *Exemplo*: duracao zero ou negativa e rejeitada.
-- **Perna + Pesado e o gatilho critico de sobrecarga**: sessoes de Perna Frontal ou Perna Posterior com intensidade Pesado nos ultimos 7 dias sao o sinal de musculacao usado pela regra de deteccao de sobrecarga (ver [Avaliacao de Sobrecarga](./Avaliacao-de-Sobrecarga-Sobrecarga-Rules.md)).
+**O que faz**: Registrar musculação avulsa para o usuário autorizado.
 
-**Cenarios de Uso**:
-- **Cenario Principal**: corredor informa grupo muscular, intensidade e duracao validos - sessao salva e aparece no historico.
-- **Cenario Alternativo**: corredor registra musculacao de perna pesada, o que pode disparar um alerta de sobrecarga em conjunto com o volume de corrida recente.
-- **Cenario de Excecao**: corredor nao informa grupo muscular ou intensidade - sistema rejeita e explica quais campos faltam.
+**Regras Aplicadas**:
 
-**Resultado Esperado**: a sessao de musculacao fica salva, associada ao corredor, disponivel no historico e considerada no calculo de risco de sobrecarga quando aplicavel.
+- **Acesso**: usa a conta autenticada e as restrições específicas da operação. Dados próprios não podem ser solicitados com um dono escolhido no corpo.
+- **Execução atual**: Exige chave; cria StrengthSession com grupo e intensidade obrigatórios e duração positiva; persiste painReported; responde com enums numéricos, pois Program não instala conversor textual de enums.
+- **Resposta observável**: 201 novo; 200 reenvio; 400 entrada inválida.
 
-## 4. Validacoes e Restricoes
+**Cenários de Uso**:
+
+- **Principal**: pessoa autorizada envia os dados válidos e recebe confirmação.
+- **Alternativo**: reenvio segue as regras explícitas da operação; ações sem chave não ganham idempotência por suposição.
+- **Exceção**: token inválido impede a operação; papel/vínculo/dono são conferidos quando exigidos.
+
+**Resultado Esperado**: StrengthSessionResponse.
+
+<a id="validacoes"></a>
+## 4. Validações e Restrições
 
 ### Controle de Acesso
-- **Permissoes**: qualquer corredor autenticado pode registrar suas proprias sessoes de musculacao.
-- **Hierarquia**: nao ha niveis de acesso diferentes no MVP.
+
+- Todas as ações requerem sessão válida. Papel Personal é necessário somente nas rotas explicitamente descritas acima.
+- O acesso do personal a histórico/revisão depende de vínculo ativo; encerrá-lo remove esse acesso nas consultas protegidas.
 
 ### Dados e Entrada
-- **Dados Obrigatorios**: data, grupo muscular (um dos cinco valores fixos), intensidade (Leve/Moderado/Pesado), duracao (minutos), alem da chave de idempotencia (gerada pelo app, nao digitada pelo corredor).
-- **Formatos Aceitos**: grupo muscular e intensidade sao valores de lista fechada (nao texto livre); duracao em numero inteiro; data no formato `AAAA-MM-DD`.
-- **Limitacoes de Volume**: duracao deve ser maior que zero; nao ha limite maximo definido nesta versao.
 
-### Restricoes do Sistema
-- **Horarios de Funcionamento**: sem restricao.
-- **Dependencias**: exige o servico de login do Google disponivel para validar o token.
-- **Limitacoes Tecnicas**: as opcoes de grupo muscular e intensidade sao fixas no codigo (enums) - adicionar um novo grupo muscular exige mudanca de codigo, nao e configuravel.
+StrengthSession.Create valida grupo/intensidade não nulos e duração positiva. Create não verifica Enum.IsDefined. Load usa Leve=3, Moderado=6, Pesado=9, mas não é retornado nem calculado no handler.
 
+- Tipos e campos completos estão na [especificação técnica](../DevDocs/StrengthSessionEndpoints-Treino-Forca-DevDocs.md).
+- Registro que exige chave de sincronização sem essa chave é recusado. Reenvio não significa edição do dado original.
+
+### Restrições do Sistema
+
+Não confundir sessão avulsa com StrengthWorkoutExecution: são contratos e tabelas diferentes. Musculação avulsa não produz intenção de revisão no código atual.
+
+Não há janela de horário de funcionamento codificada nestes endpoints. O serviço depende de token válido, configuração do provedor de login e persistência.
+
+<a id="fluxos"></a>
 ## 5. Fluxos de Processo
 
 ### Fluxo Principal
+
 ```mermaid
 flowchart TD
-    A[Corredor envia dados da musculacao] --> B{Esta autenticado?}
-    B -->|Nao| C[Recusa - 401]
-    B -->|Sim| D{Grupo muscular e intensidade informados?}
-    D -->|Nao| E[Recusa - 400 com campo faltante]
-    D -->|Sim| F{Duracao valida?}
-    F -->|Nao| G[Recusa - 400 duracao invalida]
-    F -->|Sim| H[Salva a sessao associada ao corredor]
-    H --> I[Retorna sessao criada - 201]
-    I --> J[Sessao aparece no historico e entra no calculo de sobrecarga]
+    A[Usuario escolhe operacao] --> B{Sessao valida?}
+    B -->|Nao| C[Recusar acesso]
+    B -->|Sim| D{Autorizado para a operacao?}
+    D -->|Nao| E[Recusar ou ocultar recurso]
+    D -->|Sim| F[Validar dados e executar operacao]
+    F --> G[Mostrar resultado conforme a rota]
 ```
 
-### Integracoes com Outros Processos
+### Integrações com Outros Processos
+
 ```mermaid
 graph LR
-    A[Registro de Musculacao] --> B[Historico de Treinos]
-    A --> C[Avaliacao de Sobrecarga]
-    D[Login via Google] --> A
-    E[Registro de Corrida] --> C
+    Conta[Conta autenticada] --> Funcionalidade[Operacao solicitada]
+    Funcionalidade --> Persistencia[Dados do corredor]
+    Persistencia --> Consulta[Consulta posterior autorizada]
 ```
 
-## 6. Casos de Uso e Cenarios
+<a id="casos"></a>
+## 6. Casos de Uso e Cenários
 
-### Caso de Uso 1: Registrar sessao de musculacao de perna pesada
-**Ator Principal**: Corredor autenticado
-**Objetivo**: Salvar um treino de perna intenso
-**Pre-condicoes**: Corredor logado no app
+### Caso de Uso 1: Registrar musculação avulsa
 
-**Fluxo Principal**:
-1. Corredor seleciona "Perna Frontal" (ou "Perna Posterior") como grupo muscular
-2. Seleciona intensidade "Pesado"
-3. Informa a duracao e confirma
+**Ator Principal**: usuário autorizado para esta ação.
 
-**Pos-condicoes**: Sessao salva; se combinada com aumento recente de carga de corrida, pode disparar sugestao de ajuste na proxima consulta de sobrecarga.
+**Objetivo**: Registrar musculação avulsa.
 
-### Caso de Uso 2: Tentativa de registro sem grupo muscular
-**Ator Principal**: Corredor autenticado
-**Objetivo**: Registrar musculacao, mas esquece de selecionar o grupo muscular
-**Pre-condicoes**: Corredor logado no app
+**Pré-condições**: sessão válida; papel, vínculo e recurso quando exigidos pela regra acima.
 
 **Fluxo Principal**:
-1. Corredor envia o registro sem grupo muscular
-2. Sistema recusa e informa que o campo e obrigatorio
-3. Corredor corrige e reenvia
 
-**Pos-condicoes**: Nenhuma sessao invalida e salva.
+1. Usuário escolhe a ação e informa StrengthSessionRequest; Idempotency-Key obrigatório.
+2. Sistema executa as validações de acesso e dados descritas para esta ação.
+3. Sistema devolve StrengthSessionResponse.
 
-### Matriz de Cenarios
-| Cenario | Entrada | Acao do Sistema | Resultado Esperado |
-|---------|---------|-----------------|-------------------|
-| Registro valido | PernaFrontal, Pesado, 45min | Salva e associa ao corredor | 201 - sessao criada |
-| Sem autenticacao | Requisicao sem token | Recusa antes de processar | 401 |
-| Grupo muscular ausente | `muscleGroup: null` | Rejeita com mensagem de dominio | 400 - "O grupo muscular é obrigatório..." |
-| Intensidade ausente | `intensity: null` | Rejeita com mensagem de dominio | 400 - "A intensidade é obrigatória..." |
-| Duracao invalida | Duracao 0 ou negativa | Rejeita com mensagem de dominio | 400 - "A duração deve ser maior que zero." |
-| Reenvio do mesmo item da fila offline | Mesma chave de idempotencia de um envio ja processado | Devolve o registro ja existente, sem criar outro | 200 - sessao ja existente (nao um novo 201) |
+**Pós-condições**: 201 novo; 200 reenvio; 400 entrada inválida. Uma resposta de erro não deve ser exibida pelo app como confirmação.
+
+### Matriz de Cenários
+
+| Cenário | Entrada | Ação do Sistema | Resultado Esperado |
+|---|---|---|---|
+| Registrar musculação avulsa | StrengthSessionRequest; Idempotency-Key obrigatório | Validar acesso e executar regras acima | 201 novo; 200 reenvio; 400 entrada inválida |
+| Sessão inválida | Token ausente/expirado | Recusar antes da lógica do handler | 401 |
+
+**Navegação**: [Técnica](../DevDocs/StrengthSessionEndpoints-Treino-Forca-DevDocs.md), [Débitos](../TechnicalDebtsDocs/StrengthSessionEndpoints-Treino-Forca-Debts.md), [Índice](README.md).

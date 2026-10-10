@@ -2,6 +2,8 @@
 applyTo: "docs/adr/**"
 ---
 
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
+
 # ADRs — Architecture Decision Records
 
 Você está em `docs/adr/`. Cada arquivo documenta uma decisão arquitetural.

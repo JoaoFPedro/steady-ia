@@ -1,20 +1,22 @@
 ---
 description: Pipeline completo — captura → instrumentação → spec BDD → TDD. Para uso solo ou time pequeno.
 agent: agent
-model: Claude Opus 4
+model: Claude Opus 4.7
 argument-hint: story-id ou descrição da feature
 ---
+
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
 
 # /feature — Pipeline completo (Produto & Design + Engineer & QA)
 
 Pipeline completo: análise → captura → spec → blueprint → ADR → TDD → sync.
 
 > Se a feature é complexa ou toca áreas desconhecidas, rode `/analyze` primeiro.
-> Ao final, rode `/sync` para garantir que spec e código estão alinhados.
+> Ao final, rode `/reflect` para garantir que spec e código estão alinhados.
 
 ## Pré-condições
 
-### Process guard: bloqueio se `/sync` pendente
+### Process guard: bloqueio se `/reflect` pendente
 
 **Primeiro**, verifique se o arquivo `.sdd/.pending-sync` existe.
 
@@ -22,12 +24,12 @@ Pipeline completo: análise → captura → spec → blueprint → ADR → TDD �
 
   > ⛔ **BLOQUEIO**: `/feature` não pode ser executado agora.
   >
-  > Motivo: `/implement` foi executado sem spec BDD para a story `{conteúdo de .sdd/.pending-sync}`. O `/sync` ainda não foi executado.
+  > Motivo: `/build` foi executado sem spec BDD para a story `{conteúdo de .sdd/.pending-sync}`. O `/reflect` ainda não foi executado.
   >
   > Execute agora:
-  > - `/sync` → gera a spec BDD a partir do código implementado
+  > - `/reflect` → gera a spec BDD a partir do código implementado
   >
-  > Somente após o `/sync` o fluxo pode continuar.
+  > Somente após o `/reflect` o fluxo pode continuar.
 
 - Se não existir: prossiga.
 
@@ -44,6 +46,8 @@ Antes de qualquer ação, leia (silenciosamente, só comente se ausente):
 
 Se a feature vem de uma discovery, leia também `.discovery/{DISC-ID}/`.
 
+
+Aplique também as regras de [spec-files.instructions.md](../instructions/spec-files.instructions.md), [adr-files.instructions.md](../instructions/adr-files.instructions.md).
 ---
 
 ## Fase 1 — Captura
@@ -79,4 +83,4 @@ Não avance sem o cenário anterior verde.
 
 ## Pós-execução
 
-Ao concluir, sugira `/review` (valida contra spec + OWASP) e `/sync` se algo divergiu durante a implementação.
+Ao concluir a implementação, execute `/documenta-ai --incremental` nos módulos criados ou alterados e atualize `docs/documenta-ai/INDEX.md`. Depois, execute `/check` e `/reflect` se algo divergiu durante a implementação.

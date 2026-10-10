@@ -5,6 +5,8 @@ export type WorkoutType = 'push' | 'pull' | 'lower' | 'run';
 
 export type ExercisePrescription = {
   id: string;
+  /** Identidade histórica estável; caches legados podem ainda não trazê-la. */
+  exerciseKey?: string;
   name: string;
   sets: number;
   repetitions: number;
@@ -104,6 +106,23 @@ export type CoachingHistory = {
     averagePaceMinPerKm: number;
     perceivedEffort: number;
   }>;
+  reviews?: WorkoutReview[];
+};
+
+export type WorkoutReview = {
+  id: string;
+  executionId: string;
+  executionKind: string;
+  executionDate: string;
+  status: 'Divergent' | 'PrescriptionConflict' | string;
+  action: 'Maintain' | 'ReduceLoad' | 'PrioritizeRecovery' | null;
+  policyVersion: number;
+  comparisonJson: string;
+  explanationStatus: 'Available' | 'Unavailable' | 'Pending' | string;
+  explanationJson: string | null;
+  understoodAt: string | null;
+  contested: boolean;
+  coherenceStatus: 'Unknown' | 'Coherent' | 'NotCoherent' | string;
 };
 
 export type CommandResult<T = undefined> =
@@ -121,6 +140,11 @@ export interface CoachingApi {
   activeLink(): Promise<QueryResult<CoachingLink>>;
   linkedRunners(): Promise<QueryResult<LinkedRunner[]>>;
   history(corredorId: string): Promise<QueryResult<CoachingHistory>>;
+  latestWorkoutReview(): Promise<QueryResult<WorkoutReview>>;
+  workoutReviewByExecution(executionId: string): Promise<QueryResult<WorkoutReview>>;
+  acknowledgeWorkoutReview(reviewId: string): Promise<CommandResult>;
+  retryWorkoutReview(reviewId: string): Promise<CommandResult>;
+  contestWorkoutReview(reviewId: string): Promise<CommandResult>;
   searchRunner(email: string): Promise<CommandResult<RunnerSearch>>;
   requestLink(corredorId: string): Promise<CommandResult<CoachingLink>>;
   acceptLink(linkId: string): Promise<CommandResult>;

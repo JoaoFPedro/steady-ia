@@ -1,7 +1,7 @@
 # Constituição: {NOME-DO-PROJETO}
 
 > Gerada em: {DATA} | Versão: 1.0
-> Gerada por: `/init` — SDD Kit
+> Gerada por: `/init` — isabel
 
 ---
 
@@ -82,7 +82,7 @@
 - **Nível de abstração**: {ex: mínimo necessário — time pequeno prefere clareza a elegância}
 - **Revisão de código**: {ex: todo PR revisado por pelo menos 1 pessoa}
 - **Decisões arquiteturais**: {ex: qualquer mudança que afete 2+ módulos → ADR obrigatório}
-- **Frequência de /sync**: {ex: após cada refactor significativo}
+- **Frequência de /reflect**: {ex: após cada refactor significativo}
 
 ---
 
@@ -108,7 +108,7 @@
 | FF-002 | Complexidade ciclomática | ≤ {N} por função | linter | pre-commit |
 | FF-003 | Tamanho de módulo | ≤ {N} linhas | linter | pre-commit |
 | FF-004 | Dependências proibidas entre camadas | 0 violações | constraint test | CI |
-| FF-005 | Drift spec ↔ código | 0 cenários desincronizados | /sync | pós-merge |
+| FF-005 | Drift spec ↔ código | 0 cenários desincronizados | /reflect | pós-merge |
 
 > Adicione FFs específicas ao domínio:
 > - ex: "Tempo de resposta P95 ≤ 200ms" para APIs de alta performance

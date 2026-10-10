@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Field } from '../../src/ui/Field';
 import { Muted, NoticeStrip, PrimaryButton } from '../../src/ui/Nocturne';
@@ -37,21 +37,34 @@ export default function LogRunScreen() {
   const complete =
     distanceKm !== '' && durationMinutes !== '' && averagePace !== '' && perceivedEffort !== '';
 
-  const payload = () => ({
+  const payload = (painReported: boolean) => ({
     date: todayIso(),
     distanceKm: Number(distanceKm.replace(',', '.')),
     durationMinutes: Number(durationMinutes),
     averagePaceMinPerKm: Number(averagePace.replace(',', '.')),
     perceivedEffort: Number(perceivedEffort),
+    painReported,
   });
 
-  async function submit() {
-    if (!combined) return log(payload());
+  function submit() {
+    Alert.alert(
+      'Sentiu dor neste treino?',
+      'Escolha uma resposta para concluir o registro.',
+      [
+        { text: 'Não', onPress: () => void save(false) },
+        { text: 'Sim', onPress: () => void save(true) },
+      ],
+      { cancelable: true },
+    );
+  }
+
+  async function save(painReported: boolean) {
+    if (!combined) return log(payload(painReported));
 
     setCombinedSaving(true);
     setCombinedProblem(null);
     try {
-      await combinedWorkoutDrafts.completeWithRun(payload());
+      await combinedWorkoutDrafts.completeWithRun(payload(painReported));
       completed.current = true;
       const outcome = outcomeOf(await syncEngine.sync(), 'combinedWorkout');
       if (outcome.status === 'rejected') {
@@ -137,7 +150,7 @@ export default function LogRunScreen() {
       <PrimaryButton
         label={(saving || combinedSaving) ? 'Registrando…' : 'Registrar corrida'}
         disabled={!complete || saving || combinedSaving}
-        onPress={() => void submit()}
+        onPress={submit}
       />
     </ScrollView>
   );

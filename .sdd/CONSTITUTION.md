@@ -1,4 +1,4 @@
-# Constituição SDD Kit
+# Constituição isabel
 
 > Lei fundamental do projeto. Nenhuma implementação pode violar estes princípios.
 
@@ -8,9 +8,9 @@
 
 Nenhuma spec antes de entender o problema. Discovery precede especificação.
 
-O `/discover` conduz a sessão de exploração do espaço do problema: persona, situação atual, impacto, hipótese e suposições críticas. O output é uma **decisão explícita** — Construir, Validar, Diferir ou Descartar — registrada em `.discovery/{DISC-ID}/`.
+O `/triage` conduz a sessão de exploração do espaço do problema: persona, situação atual, impacto, hipótese e suposições críticas. O output é uma **decisão explícita** — Construir, Validar, Diferir ou Descartar — registrada em `.discovery/{DISC-ID}/`.
 
-Só quando a decisão é **Construir** o `/spec` é acionado. Discovery não produz BDD. Spec não produz código.
+Só quando a decisão é **Construir** o `/shape` é acionado. Discovery não produz BDD. Spec não produz código.
 
 ### 2. Spec First
 
@@ -23,7 +23,7 @@ A spec BDD é produzida por **Produto & Design** em sessão colaborativa (Three 
 Engineer & QA é responsável pela segurança da implementação. Segurança não é uma fase — é uma dimensão de todo cenário BDD.
 
 - O sensor computacional (pre-commit hook) bloqueia automaticamente secrets hardcoded e arquivos `.env`.
-- O sensor inferencial (`/review`) valida OWASP Top 10 por categoria antes de qualquer merge.
+- O sensor inferencial (`/check`) valida OWASP Top 10 por categoria antes de qualquer merge.
 - Nenhum secret pertence ao código. Nenhum input externo é confiável sem validação.
 
 ### 3. Test First
@@ -44,14 +44,14 @@ Informação relevante fica em `.sdd/memory/`. O assistente consulta antes de ag
 
 ### 6. Harness First
 
-O SDD Kit é um harness para agentes de codificação. A fórmula é:
+O isabel é um harness para agentes de codificação. A fórmula é:
 
 > **Agent = Model + Harness**
 
 Todo artefato é classificado em uma de duas categorias:
 
 - **Guide (feedforward)** — lido antes da ação; aumenta a probabilidade do agente acertar na primeira tentativa. Exemplos: `CONSTITUTION.md`, `spec.bdd.md`, `PLAYBOOK.md`, `blueprint.mermaid`.
-- **Sensor (feedback)** — observa após a ação; detecta desvios e permite autocorreção. Exemplos: testes (TDD), `/review`, `/sync`, linters, type checkers.
+- **Sensor (feedback)** — observa após a ação; detecta desvios e permite autocorreção. Exemplos: testes (TDD), `/check`, `/reflect`, linters, type checkers.
 
 Sem guides, o agente não tem contexto para agir bem. Sem sensors, erros se repetem indefinidamente.
 
@@ -90,7 +90,7 @@ Todo planejamento DEVE ser persistido em `specs/`. Nada existe apenas na convers
 
 1. Leia `.sdd/memory/PROJECT.md` antes de qualquer ação.
 2. Leia esta Constituição no início de cada sessão.
-3. Consulte `.sdd/PLAYBOOK.md` durante REFACTOR e /review.
+3. Consulte `.sdd/PLAYBOOK.md` durante REFACTOR e /check.
 4. Observe o código existente para entender stack e padrões.
 5. Nunca implemente sem spec BDD.
 6. TDD é obrigatório.

@@ -1,12 +1,14 @@
 ---
-description: Auditoria SDD — sync pendente, specs órfãs, ADRs em Proposed, segurança, dead code.
+description: Auditoria manual do estado do processo — sync pendente, specs órfãs, ADRs, fundação, discovery, segurança, dead code.
 agent: agent
-model: Claude Sonnet 4
+model: Claude Sonnet 4.6
 ---
 
-# /healthcheck — Auditoria do projeto
+<!-- GERADO por tools/build.py — edite a fonte em kit/, não este arquivo -->
 
-Auditoria silenciosa do estado do projeto. Equivalente manual ao hook `Stop` `session-healthcheck.sh` do Claude Code — o Copilot não dispara automaticamente ao final da resposta, então execute este comando ao encerrar uma sessão ou antes de commits importantes.
+# /healthcheck — Auditoria do processo (Engineer & QA)
+
+Auditoria silenciosa do estado do projeto. Equivalente manual ao hook `Stop` `session-healthcheck.sh` do Claude Code — nem Copilot nem Codex CLI disparam automaticamente ao final da resposta, então execute este comando ao encerrar uma sessão ou antes de commits importantes.
 
 Reporte apenas o que **requer atenção**. Se está tudo bem, diga "✅ Tudo OK" e nada mais.
 
@@ -23,9 +25,9 @@ Leia (silenciosamente, só comente se ausente):
 
 ## Checklist (rode em ordem, agregue um único relatório no final)
 
-### 1. `/sync` pendente
+### 1. `/reflect` pendente
 
-- `.sdd/.pending-sync` existe? → reporte como ⛔ **bloqueio**: identifica que `/review` e `/feature` estão bloqueados, e diga a `{story-id}` (conteúdo do arquivo).
+- [.sdd/.pending-sync](../../.sdd/.pending-sync) existe? → reporte como ⛔ **bloqueio**: identifica que `/check` e `/feature` estão bloqueados, e diga a `{story-id}` (conteúdo do arquivo).
 
 ### 2. Stories sem spec BDD
 
@@ -43,9 +45,9 @@ Para cada `docs/adr/ADR-*.md`:
 ### 4. Fundação incompleta
 
 Reporte ⚠️ se algum destes faltar:
-- `.sdd/PROJECT-CONSTITUTION.md`
-- `.sdd/memory/PROJECT.md`
-- `.sdd/memory/DOMAIN.md`
+- [.sdd/PROJECT-CONSTITUTION.md](../../.sdd/PROJECT-CONSTITUTION.md)
+- [.sdd/memory/PROJECT.md](../../.sdd/memory/PROJECT.md)
+- [.sdd/memory/DOMAIN.md](../../.sdd/memory/DOMAIN.md)
 
 Sugira `/init` (projeto novo) ou `/onboard` (projeto existente).
 
@@ -70,6 +72,23 @@ Para cada `.discovery/*/`:
 
 Reporte ⚠️ com o comando para o usuário rodar.
 
+### 8. Documentação desatualizada (doc drift)
+
+Para cada arquivo em `docs/documenta-ai/dev/`, `business/` e `debts/`:
+
+1. Leia `source:` e `commit:` do frontmatter.
+2. `git log -1 --format=%H -- {source}` → SHA atual do arquivo documentado.
+3. SHA diferente do `commit:` do doc → o código andou desde a geração: ⚠️ **doc velho**.
+4. `git diff --quiet -- {source}` falhando → mudança não commitada na fonte: ⚠️ também.
+
+Doc sem `source:` ou `commit:` no frontmatter → ⚠️ "sem rastreabilidade — regerar com `/documenta-ai`".
+
+Agregue em uma linha só, no máximo 3 nomes: `⚠️ DOC DRIFT: N doc(s) desatualizados (X, Y, Z) — rode /documenta-ai --incremental`.
+
+Grave os alvos afetados em `.sdd/.pending-docs`, um por linha, para o `/documenta-ai` saber o que regenerar.
+
+Sempre ⚠️, nunca ⛔. Bloquear trabalho por documentação atrasada trava o time — ao contrário do `.pending-sync`, que protege o contrato da spec.
+
 ---
 
 ## Formato de saída
@@ -77,7 +96,7 @@ Reporte ⚠️ com o comando para o usuário rodar.
 Se há issues ou warnings:
 
 ```
-╔══ SDD Health Check ══════════════════════════════════════════╗
+╔══ isabel Health Check ══════════════════════════════════╗
 
   ⛔ <issue crítico 1>
   ⛔ <issue crítico 2>

@@ -1,139 +1,143 @@
-# Registro de Dor - Treino-Dor - Regras de Negocio
+# Registro de Dor - Treino-Dor - Regras de Negócio
 
-## Indice
-- [1. Resumo da Funcionalidade](#1-resumo-da-funcionalidade)
-- [2. Jornada do Usuario](#2-jornada-do-usuario)
-- [3. Regras de Negocio por Funcionalidade](#3-regras-de-negocio-por-funcionalidade)
-- [4. Validacoes e Restricoes](#4-validacoes-e-restricoes)
-- [5. Fluxos de Processo](#5-fluxos-de-processo)
-- [6. Casos de Uso e Cenarios](#6-casos-de-uso-e-cenarios)
+## Índice
 
+- [1. Resumo da Funcionalidade](#resumo)
+- [2. Jornada do Usuário](#jornada)
+- [3. Regras de Negócio por Funcionalidade](#regras)
+- [4. Validações e Restrições](#validacoes)
+- [5. Fluxos de Processo](#fluxos)
+- [6. Casos de Uso e Cenários](#casos)
+
+<a id="resumo"></a>
 ## 1. Resumo da Funcionalidade
 
-**Proposito**: Permitir que o corredor registre dor ou desconforto sentido apos o treino, informando a regiao do corpo afetada, mesmo que o registro aconteca dias depois do treino que a originou.
+**Propósito**: Registrar região e data de dor de forma idempotente, sem diagnóstico ou reabertura de revisão publicada.
 
-**Usuarios**: Corredor amador autenticado que sentiu dor/desconforto pos-treino.
+**Usuários**: corredor autenticado; personal autenticado nas ações de acompanhamento que exigem esse papel.
 
-**Valor de Negocio**: E o sinal que originou a criacao do Steady - o corredor que validou o produto relatou dor recorrente que "migra" de local no corpo. O registro de dor serve como fonte de calibracao futura da regra de deteccao de sobrecarga.
+**Valor de Negócio**: manter registros e decisões acessíveis somente a quem tem autorização, com resultado consistente entre consultas e sincronização.
 
-**Frequencia de Uso**: Baixa a media - depende da ocorrencia real de dor, nao de toda sessao de treino.
+**Frequência de Uso**: conforme registros e consultas do usuário, sem frequência obrigatória imposta por estas rotas.
 
-**Impacto Operacional**: Hoje o registro de dor e apenas armazenado - nao alimenta nenhum calculo automatico do sistema (nem a avaliacao de sobrecarga, nem o historico consolidado de treinos).
+**Impacto Operacional**: o servidor mantém o estado persistido; a disponibilidade de rede e da persistência determina quando o resultado pode ser confirmado.
 
-## 2. Jornada do Usuario
+**Fontes da verdade**: [STORY-001](../../../specs/STORY-001/spec.bdd.md), [STORY-002](../../../specs/STORY-002/spec.bdd.md), [STORY-014](../../../specs/STORY-014/spec.bdd.md), [ADR-002](../../../docs/adr/ADR-002-autenticacao-e-isolamento-de-dados.md), [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md). As regras abaixo distinguem comportamento observável atual e limitações identificadas no código; não criam decisão nova de produto.
 
-### Visao Geral da Jornada
+<a id="jornada"></a>
+## 2. Jornada do Usuário
+
+### Visão Geral da Jornada
+
 ```mermaid
 journey
-    title Jornada do Corredor - Registro de Dor
+    title Jornada da funcionalidade
     section Preparacao
-      Sente dor ou desconforto apos o treino: 2: Corredor
-      Lembra de registrar no app (as vezes dias depois): 3: Corredor
-    section Execucao Principal
-      Informa a data em que sentiu dor: 4: Corredor
-      Informa a regiao do corpo: 4: Corredor
-      Envia o registro: 5: Corredor
-    section Finalizacao
-      Recebe confirmacao do registro salvo: 5: Corredor
+      Entrar na conta: 5: Usuario
+      Escolher operacao: 4: Usuario
+    section Operacao
+      Informar dados ou consultar: 4: Usuario
+      Validar acesso e dados: 4: Sistema
+    section Resultado
+      Ver confirmacao ou ausencia: 5: Usuario
 ```
 
 ### Pontos de Contato
-- **Registro tardio**: o corredor pode registrar a dor a qualquer momento, nao precisa ser logo apos o treino.
-- **Sem vinculo obrigatorio a uma sessao**: nao e necessario escolher "qual treino causou a dor" - apenas data e regiao.
-- **Confirmacao imediata**: o sistema responde com o registro criado.
 
-## 3. Regras de Negocio por Funcionalidade
+- **Conta**: a identidade vem do login Google; nome e e-mail não determinam quem é dono dos registros.
+- **Operação**: o usuário acessa as ações descritas abaixo no aplicativo; este documento descreve o serviço que as sustenta.
+- **Retorno**: confirmação, dados ou erro explícito; indisponibilidade técnica não representa histórico vazio.
 
-### 3.1. Registro de Dor Pos-Treino
+<a id="regras"></a>
+## 3. Regras de Negócio por Funcionalidade
 
-**O que faz**: Recebe data e regiao do corpo onde o corredor sentiu dor/desconforto, e salva permanentemente associado ao corredor.
+### 3.1. Registrar dor
 
-**Regras Aplicadas** (fonte: `specs/STORY-001/spec.bdd.md`, regra de negocio #7, `specs/STORY-002/spec.bdd.md`, regras #1-#5, e `specs/STORY-003/spec.bdd.md` para a idempotencia, fundamentada em [ADR-003](../../../docs/adr/ADR-003-chave-de-idempotencia-para-sincronizacao-offline.md)):
-- **Autenticacao obrigatoria**: mesmo requisito de qualquer outro registro.
-- **Reenvio da fila offline nao cria registro duplicado**: mesma protecao aplicada aos registros de treino - a chave gerada quando o item entra na fila local garante que reenviar apos falha de rede devolve o registro ja salvo, sem duplicar.
-- **Regiao do corpo obrigatoria**: nao e possivel registrar dor sem informar onde ela ocorreu.
-  - *Exemplo*: enviar o registro sem regiao (ou so com espacos em branco) e rejeitado com "A região do corpo é obrigatória para registrar dor."
-- **Independente de sessao especifica**: o registro de dor nao exige vinculo com uma Sessao de Treino de corrida ou musculacao especifica - e um registro autonomo (data + regiao).
-- **Pode ser tardio**: o corredor pode registrar a dor dias depois de te-la sentido, sem restricao de prazo.
-- **Modelo binario**: no MVP, a existencia do registro ja representa "doeu" - nao ha escala de intensidade de dor (ex.: leve/moderada/forte).
+**O que faz**: Registrar dor para o usuário autorizado.
 
-**Cenarios de Uso**:
-- **Cenario Principal**: corredor treinou ha alguns dias, sentiu dor na canela, e registra data + regiao a qualquer momento depois.
-- **Cenario Alternativo**: corredor registra dor sem associar a nenhuma sessao de treino especifica.
-- **Cenario de Excecao**: corredor tenta registrar sem informar a regiao do corpo - sistema rejeita e explica o motivo.
+**Regras Aplicadas**:
 
-**Resultado Esperado**: o registro de dor fica salvo, associado ao corredor, disponivel para consulta futura por quem tiver acesso direto ao banco de dados ou por uma futura funcionalidade de consulta (nao existe endpoint de leitura hoje - ver [Observacao Importante](#4-validacoes-e-restricoes)).
+- **Acesso**: usa a conta autenticada e as restrições específicas da operação. Dados próprios não podem ser solicitados com um dono escolhido no corpo.
+- **Execução atual**: Exige chave; PainLog.Create rejeita região nula, vazia ou em branco; preserva texto e data recebidos; salva apenas no escopo autenticado.
+- **Resposta observável**: 201 novo; 200 reenvio; 400 sem chave ou região.
 
-## 4. Validacoes e Restricoes
+**Cenários de Uso**:
+
+- **Principal**: pessoa autorizada envia os dados válidos e recebe confirmação.
+- **Alternativo**: reenvio segue as regras explícitas da operação; ações sem chave não ganham idempotência por suposição.
+- **Exceção**: token inválido impede a operação; papel/vínculo/dono são conferidos quando exigidos.
+
+**Resultado Esperado**: PainLogResponse.
+
+<a id="validacoes"></a>
+## 4. Validações e Restrições
 
 ### Controle de Acesso
-- **Permissoes**: qualquer corredor autenticado pode registrar sua propria dor.
-- **Hierarquia**: nao ha niveis de acesso diferentes no MVP.
+
+- Todas as ações requerem sessão válida. Papel Personal é necessário somente nas rotas explicitamente descritas acima.
+- O acesso do personal a histórico/revisão depende de vínculo ativo; encerrá-lo remove esse acesso nas consultas protegidas.
 
 ### Dados e Entrada
-- **Dados Obrigatorios**: data e regiao do corpo (texto livre), alem da chave de idempotencia (gerada pelo app, nao digitada pelo corredor).
-- **Formatos Aceitos**: `region` e texto livre, sem lista fechada de opcoes (diferente do grupo muscular de musculacao). Data no formato `AAAA-MM-DD`.
-- **Limitacoes de Volume**: nenhuma restricao de quantidade de registros por dia/semana.
 
-### Restricoes do Sistema
-- **Horarios de Funcionamento**: sem restricao.
-- **Dependencias**: exige o servico de login do Google disponivel.
-- **Limitacoes Tecnicas Importantes para o Negocio**: hoje **nao existe** nenhuma forma de o corredor consultar seus proprios registros de dor pelo app (nao ha rota de leitura). O dado e coletado, mas ainda nao ha nenhuma tela ou API de consulta, nem uso automatizado no calculo de sobrecarga.
+PainLog.Create(Date, Region) usa IsNullOrWhiteSpace; não remove espaços nem valida catálogo de regiões ou data. A operação não chama política de segurança e não cria outbox.
 
+- Tipos e campos completos estão na [especificação técnica](../DevDocs/PainLogEndpoints-Treino-Dor-DevDocs.md).
+- Registro que exige chave de sincronização sem essa chave é recusado. Reenvio não significa edição do dado original.
+
+### Restrições do Sistema
+
+Location /api/pain-logs/{id} não tem MapGet correspondente neste arquivo nem nos demais endpoints. Dor avulsa posterior não reclassifica revisão, conforme STORY-014. Autenticação agora também atualiza o cache de nome/e-mail do provedor.
+
+Não há janela de horário de funcionamento codificada nestes endpoints. O serviço depende de token válido, configuração do provedor de login e persistência.
+
+<a id="fluxos"></a>
 ## 5. Fluxos de Processo
 
 ### Fluxo Principal
+
 ```mermaid
 flowchart TD
-    A[Corredor sente dor pos-treino] --> B[Abre o app, as vezes dias depois]
-    B --> C{Esta autenticado?}
-    C -->|Nao| D[Recusa - 401]
-    C -->|Sim| E{Regiao do corpo informada?}
-    E -->|Nao| F[Recusa - 400 regiao obrigatoria]
-    E -->|Sim| G[Salva o registro associado ao corredor]
-    G --> H[Retorna registro criado - 201]
+    A[Usuario escolhe operacao] --> B{Sessao valida?}
+    B -->|Nao| C[Recusar acesso]
+    B -->|Sim| D{Autorizado para a operacao?}
+    D -->|Nao| E[Recusar ou ocultar recurso]
+    D -->|Sim| F[Validar dados e executar operacao]
+    F --> G[Mostrar resultado conforme a rota]
 ```
 
-### Integracoes com Outros Processos
+### Integrações com Outros Processos
+
 ```mermaid
 graph LR
-    A[Registro de Dor] --> B[Persistido no banco - sem consulta hoje]
-    C[Login via Google] --> A
-    D[Avaliacao de Sobrecarga] -.nao usa.-> A
+    Conta[Conta autenticada] --> Funcionalidade[Operacao solicitada]
+    Funcionalidade --> Persistencia[Dados do corredor]
+    Persistencia --> Consulta[Consulta posterior autorizada]
 ```
 
-## 6. Casos de Uso e Cenarios
+<a id="casos"></a>
+## 6. Casos de Uso e Cenários
 
-### Caso de Uso 1: Registrar dor alguns dias apos o treino
-**Ator Principal**: Corredor autenticado
-**Objetivo**: Registrar que sentiu dor, mesmo sem lembrar exatamente qual treino a causou
-**Pre-condicoes**: Corredor logado no app; sentiu dor em algum momento recente
+### Caso de Uso 1: Registrar dor
 
-**Fluxo Principal**:
-1. Corredor abre o app dias depois do treino
-2. Informa a data em que sentiu a dor
-3. Informa a regiao do corpo (ex.: "Canela")
-4. Confirma o envio
+**Ator Principal**: usuário autorizado para esta ação.
 
-**Pos-condicoes**: Registro salvo, associado ao corredor, com data e regiao.
+**Objetivo**: Registrar dor.
 
-### Caso de Uso 2: Tentativa de registro sem informar a regiao
-**Ator Principal**: Corredor autenticado
-**Objetivo**: Registrar dor, mas esquece de preencher a regiao do corpo
-**Pre-condicoes**: Corredor logado no app
+**Pré-condições**: sessão válida; papel, vínculo e recurso quando exigidos pela regra acima.
 
 **Fluxo Principal**:
-1. Corredor envia o registro com regiao vazia
-2. Sistema recusa e explica que a regiao e obrigatoria
-3. Corredor corrige e reenvia
 
-**Pos-condicoes**: Nenhum registro invalido e salvo.
+1. Usuário escolhe a ação e informa PainLogRequest; Idempotency-Key obrigatório.
+2. Sistema executa as validações de acesso e dados descritas para esta ação.
+3. Sistema devolve PainLogResponse.
 
-### Matriz de Cenarios
-| Cenario | Entrada | Acao do Sistema | Resultado Esperado |
-|---------|---------|-----------------|-------------------|
-| Registro valido | Data ha 2 dias, regiao "Canela" | Salva e associa ao corredor | 201 - registro criado |
-| Sem autenticacao | Requisicao sem token | Recusa antes de processar | 401 |
-| Regiao ausente/vazia | `region: ""` ou `null` | Rejeita com mensagem de dominio | 400 - "A região do corpo é obrigatória para registrar dor." |
-| Registro tardio | Data de dias atras, sem sessao vinculada | Salva normalmente | 201 - registro criado |
-| Reenvio do mesmo item da fila offline | Mesma chave de idempotencia de um envio ja processado | Devolve o registro ja existente, sem criar outro | 200 - registro ja existente (nao um novo 201) |
+**Pós-condições**: 201 novo; 200 reenvio; 400 sem chave ou região. Uma resposta de erro não deve ser exibida pelo app como confirmação.
+
+### Matriz de Cenários
+
+| Cenário | Entrada | Ação do Sistema | Resultado Esperado |
+|---|---|---|---|
+| Registrar dor | PainLogRequest; Idempotency-Key obrigatório | Validar acesso e executar regras acima | 201 novo; 200 reenvio; 400 sem chave ou região |
+| Sessão inválida | Token ausente/expirado | Recusar antes da lógica do handler | 401 |
+
+**Navegação**: [Técnica](../DevDocs/PainLogEndpoints-Treino-Dor-DevDocs.md), [Débitos](../TechnicalDebtsDocs/PainLogEndpoints-Treino-Dor-Debts.md), [Índice](README.md).

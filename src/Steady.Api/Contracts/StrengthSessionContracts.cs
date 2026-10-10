@@ -6,7 +6,8 @@ public sealed record StrengthSessionRequest(
     DateOnly Date,
     MuscleGroup? MuscleGroup,
     Intensity? Intensity,
-    int DurationMinutes);
+    int DurationMinutes,
+    bool PainReported = false);
 
 public sealed record StrengthSessionResponse(
     Guid Id,

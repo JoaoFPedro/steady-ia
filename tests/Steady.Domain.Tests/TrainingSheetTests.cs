@@ -4,6 +4,27 @@ namespace Steady.Domain.Tests;
 
 public sealed class TrainingSheetTests
 {
+    [Fact]
+    public void Prescricao_separa_id_da_identidade_historica()
+    {
+        var id = Guid.NewGuid();
+        var key = Guid.NewGuid();
+
+        var exercise = ExercisePrescription.Create(id, "Agachamento", 4, 6, exerciseKey: key);
+
+        Assert.Equal(id, exercise.Id);
+        Assert.Equal(key, exercise.ExerciseKey);
+    }
+
+    [Fact]
+    public void Prescricao_legada_usa_o_proprio_id_como_identidade_inicial()
+    {
+        var id = Guid.NewGuid();
+
+        var exercise = ExercisePrescription.Create(id, "Agachamento", 4, 6);
+
+        Assert.Equal(id, exercise.ExerciseKey);
+    }
     private static ExercisePrescription Exercise(
         string name = "Agachamento livre", int sets = 4, int repetitions = 6) =>
         ExercisePrescription.Create(Guid.NewGuid(), name, sets, repetitions);

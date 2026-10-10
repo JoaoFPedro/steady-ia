@@ -1,19 +1,18 @@
-# BusinessRulesDocs - Steady.Infrastructure
+# Steady.Infrastructure - BusinessRulesDocs
 
-Indice das regras de negocio da camada `src/Steady.Infrastructure`, em linguagem acessivel a stakeholders de negocio.
+12/12 unidades documentadas. Atualização: 2026-09-27.
 
-| Arquivo | Descricao |
+| Documento | Descrição |
 |---|---|
-| [Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md](./Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md) | Regra de negocio central da camada: nenhum corredor pode acessar dados de outro corredor; cobre identificacao do corredor (login/provisionamento) e o filtro por `corredor_id` aplicado em toda consulta. |
-| [Registro-e-Historico-de-Corrida-Persistencia-Treino-Rules.md](./Registro-e-Historico-de-Corrida-Persistencia-Treino-Rules.md) | Como uma sessao de corrida e registrada e consultada, e como alimenta a deteccao de sobrecarga. |
-| [Registro-e-Historico-de-Musculacao-Persistencia-Treino-Rules.md](./Registro-e-Historico-de-Musculacao-Persistencia-Treino-Rules.md) | Como uma sessao de musculacao e registrada e consultada, com destaque para o gatilho de "perna pesada" usado na regra de sobrecarga. |
-| [Registro-de-Dor-Pos-Treino-Persistencia-Treino-Rules.md](./Registro-de-Dor-Pos-Treino-Persistencia-Treino-Rules.md) | Como o registro de dor funciona -- independente de sessao de treino, sem consulta de historico implementada ainda no MVP. |
-| [Modelagem-e-Conexao-com-o-Banco-de-Dados-Persistencia-Configuracao-Rules.md](./Modelagem-e-Conexao-com-o-Banco-de-Dados-Persistencia-Configuracao-Rules.md) | Como a aplicacao se conecta ao banco por ambiente e como o schema de dados e organizado -- base estrutural para todas as demais regras. |
-
-## Cobertura
-
-5/5 unidades documentadas, uma BusinessRulesDocs por unidade de `Steady.Infrastructure`.
-
-## Nota
-
-A regra de **isolamento de dados por corredor** e a mais critica desta camada (dados de saude e localizacao de treino) e e tratada como o tema central de `Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md`; os demais documentos referenciam essa regra quando aplicavel, em vez de repeti-la integralmente.
+| [Consulta e Feedback da Revisao - Persistencia-Revisao - Regras de Negócio](Consulta-e-Feedback-da-Revisao-Persistencia-Revisao-Rules.md) | Consulta própria ou por vínculo e feedback sem mudar ação. |
+| [Ficha Ativa e Execucao Registrada - Persistencia-Coaching - Regras de Negócio](Ficha-Ativa-e-Execucao-Registrada-Persistencia-Coaching-Rules.md) | Ficha ativa, compatibilidade de documentos e execução combinada atômica. |
+| [Isolamento de Dados por Corredor - Persistencia-Autenticacao - Regras de Negócio](Isolamento-de-Dados-por-Corredor-Persistencia-Autenticacao-Rules.md) | Provisionamento por sub, perfil sincronizado e plano fixo da conta. |
+| [Modelagem e conexão com o banco de dados - Persistencia-Configuracao - Regras de Negócio](Modelagem-e-Conexao-com-o-Banco-de-Dados-Persistencia-Configuracao-Rules.md) | Doze tabelas, índices e relações, seed de política e serviços Scoped. |
+| [Nova Tentativa de Explicacao - Persistencia-Revisao - Regras de Negócio](Nova-Tentativa-de-Explicacao-Persistencia-Revisao-Rules.md) | Retry de explicação congelada com validação e fallback indisponível. |
+| [Pedido de Plano e Historico - Persistencia-Planejamento - Regras de Negócio](Pedido-de-Plano-e-Historico-Persistencia-Planejamento-Rules.md) | Input completo e imutável do pedido, reenvio e histórico isolado. |
+| [Plano do Steady Versionado - Persistencia-Planejamento - Regras de Negócio](Plano-do-Steady-Versionado-Persistencia-Planejamento-Rules.md) | Plano fixo versionado, documento completo e seed descritivo. |
+| [Registro de Dor Pos Treino - Persistencia-Treino - Regras de Negócio](Registro-de-Dor-Pos-Treino-Persistencia-Treino-Rules.md) | Dor idempotente por corredor e distinção da dor congelada na outbox. |
+| [Registro e Historico de Corrida - Persistencia-Treino - Regras de Negócio](Registro-e-Historico-de-Corrida-Persistencia-Treino-Rules.md) | Corrida idempotente com outbox e dor confirmadas juntas. |
+| [Registro e Historico de Musculacao - Persistencia-Treino - Regras de Negócio](Registro-e-Historico-de-Musculacao-Persistencia-Treino-Rules.md) | Musculação resumida e dor; consultas próprias sem revisão por exercício. |
+| [Revisao Assincrona e Coerencia - Persistencia-Revisao - Regras de Negócio](Revisao-Assincrona-e-Coerencia-Persistencia-Revisao-Rules.md) | Lease, comparação determinística, explicação validada e coerência. |
+| [Vinculo e Consentimento do Corredor - Persistencia-Coaching - Regras de Negócio](Vinculo-e-Consentimento-do-Corredor-Persistencia-Coaching-Rules.md) | Solicitação, aceite, encerramento e consultas de vínculos autorizados. |
