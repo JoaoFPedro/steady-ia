@@ -2,7 +2,7 @@
 
 > **Story**: [story.md](./story.md)
 > **Discovery**: [../../.discovery/DISC-005-revisao-de-aderencia-pos-treino/](../../.discovery/DISC-005-revisao-de-aderencia-pos-treino/)
-> **Status**: Approved — aprovado por Produto em 2026-08-30 via `/implement`
+> **Status**: Implemented — todos os cenários GREEN em [mapping.md](./mapping.md) (2026-08-30) · aprovado por Produto em 2026-08-30 via `/implement`
 > **Autor**: Jefferson com Codex
 > **Data**: 2026-08-28
 

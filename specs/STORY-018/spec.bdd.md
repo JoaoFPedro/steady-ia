@@ -133,3 +133,25 @@ Scenario: Histórico continua isolado por corredor
   When o corredor consulta o próprio histórico
   Then as execuções do outro não aparecem
 ```
+
+---
+
+## Mapping: Cenário → Teste
+
+> Gerado pelo `/reflect` em 2026-10-10 a partir dos testes do commit `9e5d70b`. 🟡 = sem teste automatizado identificado.
+
+| Cenário | Teste | Status |
+|---|---|---|
+| Dia cumprido fecha o botão | `registerAvailability.test.ts` · dia já cumprido não aceita novo registro | 🟢 |
+| Dia ainda vazio aceita o registro | `registerAvailability.test.ts` · dia previsto e ainda sem registro aceita o registro | 🟢 |
+| Dia parcial continua aceitando o registro | `registerAvailability.test.ts` · dia parcial ainda aceita | 🟢 |
+| Fechar um dia não fecha os outros | `registerAvailability.test.ts` · registro de outra data não fecha hoje | 🟢 |
+| Dia cumprido fecha mesmo fora da janela do plano | `registerAvailability.test.ts` · dia cumprido fecha o botão mesmo fora da janela do plano | 🟢 |
+| Histórico ilegível nunca bloqueia o registro | `registerAvailability.test.ts` · histórico ilegível nunca bloqueia + `loggedSessions.test.ts` · histórico ilegível é "não consegui ler" | 🟢 |
+| Musculação pela ficha fecha o dia | `loggedSessions.test.ts` · musculação registrada pela ficha conta como treino do dia | 🟢 |
+| Registro combinado fecha as duas modalidades | `loggedSessions.test.ts` · registro combinado conta as duas modalidades do dia | 🟢 |
+| Registro na fila fecha o dia antes do sync | `loggedSessions.test.ts` · junta o que veio do servidor com o que ainda está na fila | 🟢 |
+| O dia não reabre depois do sync | nenhum teste dedicado identificado | 🟡 |
+| Plano e dor não fecham dia de treino | `loggedSessions.test.ts` · ignora o que na fila não é treino + plano e dor continuam sem cumprir dia | 🟢 |
+| Musculação da ficha aparece no histórico | `trainingHistory.test.ts` · execução da ficha aparece pelo nome do treino + `CoachingEndpointTests.Execucao_pela_ficha_aparece_no_historico_do_corredor` | 🟢 |
+| Histórico continua isolado por corredor | `CoachingEndpointTests.Historico_do_corredor_nao_traz_execucao_de_outro_corredor` | 🟢 |

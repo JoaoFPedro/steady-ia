@@ -4,7 +4,7 @@
 > **Análise**: [analysis.md](./analysis.md)
 > **Discovery**: nenhum — ajuste sobre a ficha já entregue (STORY-013/015)
 > **ADR**: ADR-012 · ADR-017 (proposto)
-> **Status**: Draft
+> **Status**: Implemented — 22 cenários 🟢 e 9 🟡 em [Mapping](#mapping-cenário--teste) (commit `56068c2`)
 > **Data**: 2026-08-29
 
 ---
@@ -318,3 +318,44 @@ Scenario: Observação do personal não é interpretada como marcação
   When o corredor abre o detalhamento do dia
   Then o texto é exibido literalmente, sem interpretação
 ```
+
+---
+
+## Mapping: Cenário → Teste
+
+> Gerado pelo `/reflect` em 2026-10-10 a partir dos testes do commit `56068c2`. Legenda: 🟢 teste automatizado · 🟡 sem teste automatizado identificado (UI sem harness de renderização no Expo SDK 57) ou regressão preexistente não reverificada.
+> Abreviações: **SCH** `trainingSheetSchema.test.ts` · **FS** `trainingSheetFormState.test.ts` · **EP** `exercisePrescription.test.ts` · **DOM** `TrainingSheetTests.cs` · **API** `CoachingEndpointTests.cs`.
+
+| Cenário | Teste | Status |
+|---|---|---|
+| Publicar ficha com exercício em branco realça o campo | SCH · nome em branco endereça o erro ao campo do exercício | 🟢 |
+| Vários campos inválidos são realçados de uma vez | SCH · campos inválidos em exercícios diferentes aparecem juntos | 🟢 |
+| Erro de preenchimento não usa o aviso do topo | tela do formulário | 🟡 |
+| Corrigir o campo apaga o erro daquele campo | FS · corrigir um campo apaga só o erro daquele campo | 🟢 |
+| Erro só aparece depois de tentar publicar | tela do formulário | 🟡 |
+| Corrida sem descrição é realçada no próprio campo | SCH · descrição de corrida em branco endereça o dia certo | 🟢 |
+| Faixa de corrida invertida é realçada no campo do máximo | SCH · faixa de duração invertida é erro do campo do máximo | 🟢 |
+| Máximo sem mínimo é realçado | SCH · máximo sem mínimo é erro do campo do mínimo | 🟢 |
+| Ficha completa é publicada sem realce | SCH · ficha completa vira draft sem erro | 🟢 |
+| Limite de domínio rejeitado pelo backend aparece no topo | SCH · não replica os limites do domínio + API · Observacao_acima_do_limite_e_recusada; exibição no topo é tela | 🟢 backend · 🟡 tela |
+| Falha de rede não realça campo algum | tela do formulário | 🟡 |
+| Personal remove um exercício que sobrou | FS · remove o exercício pedido e preserva os demais | 🟢 |
+| O último exercício do treino não é removível | FS · o último exercício do treino não é removível | 🟢 |
+| Remover o exercício remove o erro dele junto | FS · remover exercício descarta os erros dele e reindexa os seguintes | 🟢 |
+| Remoção não pede confirmação | tela do formulário | 🟡 |
+| Personal prescreve exercício com tempo | SCH · tempo preenchido vira número em segundos + DOM · Exercicio_aceita_tempo_em_segundos + API · Ficha_publicada_devolve_tempo_e_observacao_do_exercicio | 🟢 |
+| Tempo em branco fica ausente, não zero | SCH · tempo em branco vira ausência, nunca zero + DOM · Exercicio_sem_tempo_e_sem_observacao_fica_ausente | 🟢 |
+| Tempo não dispensa séries nem repetições | SCH · tempo não dispensa séries nem repetições + DOM · Tempo_nao_dispensa_series_nem_repeticoes | 🟢 |
+| Tempo inválido é realçado no campo | SCH · tempo não numérico é erro do campo de tempo + tempo fracionado | 🟢 |
+| Tempo zero ou negativo é rejeitado | DOM · Tempo_zero_ou_negativo_e_recusado + API · Tempo_zero_ou_negativo_e_recusado | 🟢 |
+| Corredor vê o tempo prescrito | EP · acrescenta o tempo prescrito quando existe | 🟢 |
+| Exercício sem tempo não mostra campo vazio ao corredor | EP · exercício sem tempo não ganha sufixo vazio | 🟢 |
+| Personal anota observação num exercício | DOM · Exercicio_aceita_observacao_do_personal + SCH · observação é aparada antes de virar draft | 🟢 |
+| Observação em branco fica ausente | SCH · observação em branco vira ausência + DOM · Observacao_em_branco_fica_ausente | 🟢 |
+| Observação longa demais é realçada no campo | SCH · observação acima de 200 caracteres é erro do campo + DOM · Observacao_acima_de_200_caracteres_e_recusada | 🟢 |
+| Corredor lê a observação do personal ao registrar o treino | tela de registro | 🟡 |
+| Ficha legada continua legível | API · Exercicio_sem_tempo_nem_observacao_volta_ausente | 🟢 |
+| Publicar não altera a ficha anterior | regressão da STORY-013 (ADR-009), não reverificada neste sync | 🟡 |
+| Publicar continua exigindo role de personal | regressão da STORY-013 (ADR-008), não reverificada neste sync | 🟡 |
+| Publicar continua exigindo vínculo ativo | regressão da STORY-013 (ADR-008), não reverificada neste sync | 🟡 |
+| Observação do personal não é interpretada como marcação | tela de registro | 🟡 |

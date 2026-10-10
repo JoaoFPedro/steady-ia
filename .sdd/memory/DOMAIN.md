@@ -5,6 +5,7 @@
 > Atualizado manualmente ao fechar a STORY-016 (2026-08-29) — `SteadyTrainingPlan` sai de "previsto" para implementado.
 > Atualizado manualmente ao fechar a STORY-017 (2026-08-29) — `ExercisePrescription` ganha tempo e observação opcionais.
 > Atualizado manualmente ao fechar a STORY-018 (2026-08-29) — o histórico de treino do corredor passa a incluir `StrengthWorkoutExecution`.
+> Sincronizado por `/reflect` em 2026-10-10 — revisão de aderência (STORY-014, ADR-014/015/016/018/019) e banco gerenciado.
 > Assistentes de IA: consulte para entender o domínio.
 
 ## Entidades — implementadas
@@ -29,8 +30,19 @@ espelha cada uma em `src/Steady.Infrastructure/Persistence` com dois campos que
 | **NumericRange\<T\>** | `Min`, `Max?` | Value object genérico em `Steady.Domain.Common`. `Max` ausente = alvo exato; presente = faixa, sempre maior que `Min`. Reaproveitado por `RunPrescription` |
 | **StrengthWorkoutExecution** | ficha, tipo, data, exercícios com carga/nota/pulado | Snapshot imutável e idempotente da execução real da ficha, sincronizado como uma unidade |
 | **SteadyTrainingPlan** | `Version`, `WeekPlan` (7 dias, `RunPrescription?` opcional), `Content` (título, fases, mobilidade, regras de ouro, etc.) | Plano do Steady persistido, versionado e imutável (ADR-013). Cada corredor aponta para a versão vigente no provisionamento; publicar versão nova não realoca quem já aponta para uma. Seed da v1 é transcrição literal de `trainingPlanDocument.ts` — os três dias de corrida do `weekPlan` nascem só com descrição, porque a fonte só declara número por fase (`LongRunProgression`), nunca por dia |
+| **WorkoutReview** | `ExecutionId`, `ExecutionKind`, `Status`, `Action?`, `PolicyVersion`, `PlanVersion?`, `TrainingSheetId?`, `ComparisonJson`, `ExplanationStatus`, `Explanation?`, `UnderstoodAt?`, `Contested`, `Coherence` | Revisão de aderência de uma execução (STORY-014). `Status`, `Action` e a comparação são **determinísticos**; só a explicação vem da IA e nunca altera a ação (ADR-014). Guarda os **números** da política e do plano aplicados, então versão nova não reclassifica revisão antiga (ADR-015). `TrySetExplanation` rejeita explicação com ação divergente, termo clínico ou número fora dos fatos |
+| **AdherencePolicyVersion** | `Version`, `RunningDistancePercent`, `RunningDurationPercent`, `PerceivedEffortPoints`, `SetsAbsolute`, `RepetitionsPercent`, `LoadPercent` | Tolerâncias versionadas e imutáveis que definem "aderente". A v1 é semeada pela migration (10% distância/duração, 2 pontos de esforço, 1 série, 20% repetições, 10% carga) (ADR-015) |
+| **WorkoutAdherenceComparer / SafetyPolicy** | prescrito × executado → `FieldComparison` por campo; `Authorize(...)` → `AuthorizedAction?` | Serviços de domínio puros. Cada campo é `Adherent`, `Divergent` ou `NotComparable` (nunca inventado). `SafetyPolicy` escolhe a ação e dor reportada força `PrioritizeRecovery` |
+| **ExplanationContext** | `Modality`, `Facts`, `Action`, `PainReported` | Lista positiva do que sai do servidor para a IA — sem id, nome, e-mail, região da dor ou texto livre (ADR-016) |
 
-**Enums**: `RaceDistance` = `FiveK · TenK · HalfMarathon · Marathon · Ultra` ·
+**Enums**: `WorkoutAdherenceStatus` = `Adherent · Divergent · PrescriptionConflict · InsufficientData` ·
+`AuthorizedAction` = `Maintain · ReduceLoad · PrioritizeRecovery` ·
+`WorkoutExecutionKind` = `Running · Strength · Combined` ·
+`ExplanationStatus` = `Pending · Available · Unavailable` ·
+`CoherenceStatus` = `Unknown · Coherent · NotCoherent` ·
+`CoachingLinkStatus` = `Pending · Active · Ended · Expired` ·
+`WorkoutType` = `Push · Pull · Lower · Run` ·
+`RaceDistance` = `FiveK · TenK · HalfMarathon · Marathon · Ultra` ·
 `EquipmentAccess` = `AcademiaCompleta · HalteresCasa · PesoCorporal` ·
 `PainArea` = `Canela · Joelho · ItBand · Lombar · Tornozelo · Panturrilha · Nenhuma` ·
 `MuscleGroup` = `PeitoTriceps · Ombro · PernaFrontal · PernaPosterior · BicepsCostas` ·
@@ -86,13 +98,23 @@ não sejam reinventadas com outro nome quando chegarem.
    musculação em terça, quinta ou sábado, o corredor decide se também registra
    a corrida. Concluindo ambos, um item `combinedWorkout` usa uma chave e uma
    transação; cancelando a corrida, a musculação segue isolada (ADR-011).
+9. **Revisão de aderência** (STORY-014) — registrar corrida, execução da ficha
+   ou registro combinado grava, **na mesma transação**, a execução e uma linha em
+   `review_outbox` (ADR-018). O `ReviewOutboxWorker` (a cada 2 s) reserva a
+   tarefa com lease, compara prescrito × executado pela política vigente e grava
+   `workout_reviews`; treino aderente não gera revisão. A explicação é pedida ao
+   `IExplanationProvider` (Claude, ou `UnavailableExplanationProvider` sem
+   `Anthropic:ApiKey`); falha da IA deixa a revisão `Unavailable` e o corredor
+   repete por `/retry`. A coerência do próximo treino é recalculada pela data
+   real, inclusive em sincronização tardia. O personal só lê com vínculo `Active`.
 
 ## Fronteiras externas
 
 | Tipo | Nome | Situação |
 |------|------|----------|
 | Identity Provider (OAuth) | Google Sign-In | **Integrado.** `@react-native-google-signin` no app; `Google.Apis.Auth` na API |
-| Banco de dados | PostgreSQL | **Integrado.** EF Core; migrations em `src/Steady.Infrastructure/Migrations` |
+| Banco de dados | PostgreSQL (Supabase gerenciado) | **Integrado.** EF Core; migrations em `src/Steady.Infrastructure/Migrations`. Tabelas fechadas para `anon`/`authenticated` com RLS; o `dev.sh` confere isso. Esquema completo em `docs/ARQUITETURA.md` |
+| Explicação por IA | Claude API | **Integrado, opcional.** `ClaudeExplanationProvider` só redige texto a partir de fatos já calculados e de uma ação já autorizada (ADR-014/016). Sem `Anthropic:ApiKey` a revisão existe sem explicação |
 | Armazenamento local | AsyncStorage | **Integrado.** Fila offline (`@steady/fila-de-registros`) e rascunho temporário do registro combinado |
 | Conectividade | NetInfo | **Integrado.** Dispara o auto-sync na volta da conexão |
 | API nativa do device | GPS (Expo Location) | **Não integrado.** Não há `expo-location` no projeto. Rastreamento de rota é intenção da Constituição, não código — distância hoje é digitada pelo corredor |

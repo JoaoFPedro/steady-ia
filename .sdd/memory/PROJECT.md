@@ -28,7 +28,25 @@ Steady ajuda corredores amadores que já correm 21km (meia maratona) a treinar c
 | Registro de Desempenho | Dados reais de uma Sessão de Treino realizada (ritmo, distância, rota GPS) — imutável após criado |
 | Regra dos 10% | Princípio de treino: volume semanal não deve aumentar mais que 10% em relação à semana anterior, para prevenir lesão por overtraining |
 
-## Estado Atual — 2026-08-25
+## Estado Atual — 2026-10-10
+
+Sincronizado por `/reflect`. Depois da STORY-013 entraram, já commitadas:
+
+- **STORY-014** — revisão de aderência pós-treino com IA: comparação e ação
+  determinísticas, explicação pela Claude API, outbox transacional e políticas
+  versionadas (ADR-014, 015, 016, 018, 019). `mapping.md` marca todos os
+  cenários GREEN.
+- **STORY-015** — prescrição de corrida estruturada na ficha (ADR-012).
+- **STORY-016** — plano do Steady persistido e versionado no servidor (ADR-013).
+- **STORY-017** a **021** — validação por campo, tempo e observação do
+  exercício; botão de registro fecha no dia cumprido; nome do corredor e
+  histórico cronológico para o personal; mobilidade na aba Semana; menu da conta
+  também em Planejamento. Os contadores de testes da seção abaixo são de
+  2026-08-25 e não foram reexecutados neste sync.
+- **Banco** passou a ser Supabase gerenciado, com RLS e tabelas fechadas para
+  `anon`/`authenticated`. O esquema está em `docs/ARQUITETURA.md`.
+
+## Estado em 2026-08-25
 
 **STORY-013 implementada e revisada**: roles `Corredor`/`Personal`, vínculo com
 aceite, ficha ativa de quatro tipos, carga/nota por exercício, pulados com
@@ -49,7 +67,7 @@ Ambiente de execução local (WSL2, port proxy, dev build) documentado em `CLAUD
 
 | # | Pendência | Por quê importa |
 |---|-----------|-----------------|
-| 1 | **Commit da STORY-003** — implementação, ADR-004, docs, `docker-compose.yml`, `CLAUDE.md` seguem no working tree | O repo tem 1 commit só (scaffold); todo o trabalho está sem histórico |
+| 1 | ~~Commit da STORY-003~~ — resolvido: o trabalho está commitado | — |
 | 2 | **Validar login do Google no aparelho** | Nunca foi executado ponta a ponta. Build, client IDs e port proxy prontos; falta abrir o app |
 | 3 | **Testar a fila offline no aparelho** (registrar → Wi-Fi off → registrar → Wi-Fi on) | Único caminho sem cobertura automatizada e o maior risco da story — a suposição crítica #2 do DISC-001 depende dela |
 | 4 | **Telas sem teste de renderização** | `@testing-library/react-native` não instala: exige `react-dom@19.2.8`, incompatível com o `react@19.2.3` do Expo SDK 57. Revisitar quando o SDK avançar |

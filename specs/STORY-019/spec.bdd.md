@@ -69,3 +69,18 @@ Scenario: Quilometragem em branco fica ausente
   When publica a ficha sem informar a quilometragem
   Then o dia fica sem distância prescrita
 ```
+
+---
+
+## Mapping: Cenário → Teste
+
+> Gerado pelo `/reflect` em 2026-10-10 a partir dos testes do commit `42a5b6c` e `trainingSheetSchema.test.ts`.
+
+| Cenário | Teste | Status |
+|---|---|---|
+| Personal vê o nome do corredor vinculado | `CoachingEndpointTests.Personal_ve_o_nome_do_corredor_vinculado` + `runnerLabel.test.ts` · mostra o nome quando o corredor tem um | 🟢 |
+| Corredor sem nome continua identificado pelo e-mail | `CoachingEndpointTests.Corredor_sem_claim_de_nome_fica_sem_nome` + `runnerLabel.test.ts` · cai no e-mail | 🟢 |
+| Nome chega no acesso seguinte | `CoachingEndpointTests.Nome_e_atualizado_quando_o_corredor_volta_a_entrar` | 🟢 |
+| Personal prescreve 5,4 km | `trainingSheetSchema.test.ts` · km aceita decimal com vírgula | 🟢 |
+| Quilometragem não numérica é realçada no campo | `trainingSheetSchema.test.ts` · km não numérico é erro do campo | 🟢 |
+| Quilometragem em branco fica ausente | `trainingSheetSchema.test.ts` · km em branco continua ausente | 🟢 |
