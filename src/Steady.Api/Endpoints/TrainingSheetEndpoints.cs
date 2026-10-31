@@ -282,17 +282,7 @@ public static class TrainingSheetEndpoints
         entity.TrainingSheetId,
         TrainingSheetMapping.Write(entity.WorkoutType),
         entity.Date,
-        TrainingSheetDocuments.DeserializeExecution(entity.DetailsJson)
-            .Select(item => new ExerciseExecutionResponse(
-                item.ExerciseId,
-                item.Name,
-                item.Sets,
-                item.Repetitions,
-                item.LoadKg,
-                item.Note,
-                item.Skipped,
-                item.ExerciseKey,
-                item.DurationSeconds)).ToArray(),
+        TrainingSheetMapping.RespondExercises(entity.DetailsJson),
         entity.CreatedAt);
 
     private static RunningSessionResponse Respond(RunningSessionEntity entity) => new(

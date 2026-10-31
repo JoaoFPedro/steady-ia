@@ -46,6 +46,7 @@ public static class TrainingHistoryEndpoints
             Guid id,
             IRunningSessionRepository runningRepository,
             IStrengthSessionRepository strengthRepository,
+            ITrainingSheetRepository sheetRepository,
             CurrentCorredor currentCorredor,
             CancellationToken cancellationToken) =>
         {
@@ -62,6 +63,15 @@ public static class TrainingHistoryEndpoints
                     strength.Id, "Musculacao", strength.Date, strength.DurationMinutes,
                     null, null, null, strength.MuscleGroup.ToString(), strength.Intensity.ToString(),
                     RegisteredAt: strength.RegisteredAt));
+
+            var execution = await sheetRepository.GetExecutionForRunnerAsync(
+                currentCorredor.Id, id, cancellationToken);
+            if (execution is not null)
+                return Results.Ok(new TrainingSessionResponse(
+                    execution.Id, "Musculacao", DateOnly.ParseExact(execution.Date, "yyyy-MM-dd"),
+                    null, null, null, null, null, null,
+                    execution.WorkoutType.ToString().ToLowerInvariant(),
+                    Exercises: TrainingSheetMapping.RespondExercises(execution.DetailsJson)));
 
             return Results.NotFound();
         });

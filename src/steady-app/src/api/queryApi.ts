@@ -42,6 +42,27 @@ export type TrainingSessionSummary = {
   pending?: boolean;
 };
 
+/** Um exercício da execução da ficha, como o detalhe do treino o mostra (ADR-021). */
+export type ExerciseDetail = {
+  name: string;
+  sets: number;
+  repetitions: number;
+  loadKg: number | null;
+  note: string | null;
+  skipped: boolean;
+  /** Exercício por tempo: a série mostra a duração em vez de repetições. */
+  durationSeconds: number | null;
+};
+
+/**
+ * O treino aberto na tela de detalhes. `exercises` só existe para a execução da
+ * ficha; `null` na corrida e na musculação avulsa — o dado não existe, e a tela
+ * não o inventa.
+ */
+export type TrainingSessionDetail = TrainingSessionSummary & {
+  exercises: ExerciseDetail[] | null;
+};
+
 export type QueryResult<T> =
   | { status: 'ok'; data: T }
   /** 401 mesmo depois de tentar renovar o token — o login é inevitável. */
@@ -49,7 +70,14 @@ export type QueryResult<T> =
   /** Sem rede, timeout ou erro do servidor: a tela mostra que não conseguiu ler. */
   | { status: 'failure' };
 
+/**
+ * O detalhe por id distingue "não existe" de "não consegui ler": a primeira
+ * resposta é definitiva, a segunda é só uma falha de rede ou de servidor.
+ */
+export type DetailResult<T> = QueryResult<T> | { status: 'notFound' };
+
 export interface QueryApi {
   overloadAssessment(): Promise<QueryResult<OverloadView>>;
   trainingHistory(): Promise<QueryResult<TrainingSessionSummary[]>>;
+  trainingSession(id: string): Promise<DetailResult<TrainingSessionDetail>>;
 }

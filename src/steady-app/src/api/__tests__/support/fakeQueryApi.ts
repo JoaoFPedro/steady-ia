@@ -1,4 +1,11 @@
-import type { OverloadView, QueryApi, QueryResult, TrainingSessionSummary } from '../../queryApi';
+import type {
+  DetailResult,
+  OverloadView,
+  QueryApi,
+  QueryResult,
+  TrainingSessionDetail,
+  TrainingSessionSummary,
+} from '../../queryApi';
 
 /**
  * Leitura falsa da API para os testes de tela.
@@ -13,6 +20,8 @@ export class FakeQueryApi implements QueryApi {
   };
   private history: QueryResult<TrainingSessionSummary[]> = { status: 'ok', data: [] };
 
+  private detail: DetailResult<TrainingSessionDetail> = { status: 'notFound' };
+
   /** Quantas vezes a home consultou a avaliação — prova que ela não foi cacheada. */
   assessmentCalls = 0;
 
@@ -26,6 +35,11 @@ export class FakeQueryApi implements QueryApi {
     return this;
   }
 
+  willShowDetail(result: DetailResult<TrainingSessionDetail>): this {
+    this.detail = result;
+    return this;
+  }
+
   async overloadAssessment(): Promise<QueryResult<OverloadView>> {
     this.assessmentCalls += 1;
     return this.assessment;
@@ -33,5 +47,9 @@ export class FakeQueryApi implements QueryApi {
 
   async trainingHistory(): Promise<QueryResult<TrainingSessionSummary[]>> {
     return this.history;
+  }
+
+  async trainingSession(): Promise<DetailResult<TrainingSessionDetail>> {
+    return this.detail;
   }
 }

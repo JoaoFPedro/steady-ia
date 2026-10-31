@@ -189,6 +189,13 @@ public sealed class TrainingSheetRepository(
             .ThenByDescending(item => item.CreatedAt)
             .ToListAsync(cancellationToken);
 
+    public async Task<StrengthWorkoutExecutionEntity?> GetExecutionForRunnerAsync(
+        Guid corredorId, Guid executionId, CancellationToken cancellationToken) =>
+        // Dono e id na mesma query: de outro corredor é indistinguível de inexistente (ADR-002).
+        await dbContext.StrengthWorkoutExecutions
+            .FirstOrDefaultAsync(
+                item => item.CorredorId == corredorId && item.Id == executionId, cancellationToken);
+
     private void AddReviewOutbox(
         Guid corredorId,
         Guid executionId,

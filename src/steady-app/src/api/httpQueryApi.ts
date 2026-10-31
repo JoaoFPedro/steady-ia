@@ -1,5 +1,13 @@
 import type { TokenSource } from '../auth/googleSession';
-import type { OverloadView, QueryApi, QueryResult, TrainingSessionSummary } from './queryApi';
+import type {
+  DetailResult,
+  ExerciseDetail,
+  OverloadView,
+  QueryApi,
+  QueryResult,
+  TrainingSessionDetail,
+  TrainingSessionSummary,
+} from './queryApi';
 import type { PlanRequestSummary } from '../planning/planRequest';
 import type { PlanRequestReader } from '../planning/planListState';
 
@@ -29,6 +37,7 @@ type SessionBody = {
   intensity?: unknown;
   workoutType?: unknown;
   registeredAt?: unknown;
+  exercises?: unknown;
 };
 
 /**
@@ -55,12 +64,23 @@ export class HttpQueryApi implements QueryApi, PlanRequestReader {
     return result.status === 'ok' ? { status: 'ok', data: toSessions(result.data) } : result;
   }
 
+  async trainingSession(id: string): Promise<DetailResult<TrainingSessionDetail>> {
+    const result = await this.getOrNotFound(`/api/training-sessions/${encodeURIComponent(id)}`);
+    return result.status === 'ok' ? { status: 'ok', data: toSessionDetail(result.data) } : result;
+  }
+
   async planRequests(): Promise<QueryResult<PlanRequestSummary[]>> {
     const result = await this.get('/api/plan-requests');
     return result.status === 'ok' ? { status: 'ok', data: toPlanRequests(result.data) } : result;
   }
 
+  /** Leituras em lista: um 404 aqui não tem significado próprio, é só falha. */
   private async get(path: string): Promise<QueryResult<unknown>> {
+    const result = await this.getOrNotFound(path);
+    return result.status === 'notFound' ? { status: 'failure' } : result;
+  }
+
+  private async getOrNotFound(path: string): Promise<DetailResult<unknown>> {
     // `null` aqui significa "o módulo nativo não devolveu o token agora", não
     // "não há sessão" — desistir sem tentar renovar mandava o corredor ao login
     // com sessão válida (regressão da STORY-010).
@@ -84,7 +104,7 @@ export class HttpQueryApi implements QueryApi, PlanRequestReader {
   private async send(
     path: string,
     token: string,
-  ): Promise<{ status: number; result: QueryResult<unknown> }> {
+  ): Promise<{ status: number; result: DetailResult<unknown> }> {
     try {
       const response = await this.fetchFn(`${this.baseUrl}${path}`, {
         method: 'GET',
@@ -95,16 +115,18 @@ export class HttpQueryApi implements QueryApi, PlanRequestReader {
         return { status: 200, result: { status: 'ok', data: await response.json() } };
       }
 
-      return {
-        status: response.status,
-        result: response.status === 401 ? { status: 'unauthenticated' } : { status: 'failure' },
-      };
+      return { status: response.status, result: failureFor(response.status) };
     } catch {
       // Nem chegou ao servidor. Para uma leitura isso é só falha: não há nada
       // para guardar nem para reenviar depois.
       return { status: 0, result: { status: 'failure' } };
     }
   }
+}
+
+function failureFor(status: number): DetailResult<never> {
+  if (status === 401) return { status: 'unauthenticated' };
+  return status === 404 ? { status: 'notFound' } : { status: 'failure' };
 }
 
 function toOverloadView(body: unknown): OverloadView {
@@ -125,7 +147,31 @@ function toOverloadView(body: unknown): OverloadView {
 function toSessions(body: unknown): TrainingSessionSummary[] {
   if (!Array.isArray(body)) return [];
 
-  return body.map((item: SessionBody) => ({
+  return body.map(toSession);
+}
+
+function toSessionDetail(body: unknown): TrainingSessionDetail {
+  const item = (body ?? {}) as SessionBody;
+  return { ...toSession(item), exercises: toExercises(item.exercises) };
+}
+
+/** Sem lista, `null`: ausência de exercícios registrados, nunca uma lista vazia presumida. */
+function toExercises(value: unknown): ExerciseDetail[] | null {
+  if (!Array.isArray(value)) return null;
+
+  return value.map((exercise: Record<string, unknown>) => ({
+    name: String(exercise.name),
+    sets: Number(exercise.sets),
+    repetitions: Number(exercise.repetitions),
+    loadKg: numberOrNull(exercise.loadKg),
+    note: stringOrNull(exercise.note),
+    skipped: exercise.skipped === true,
+    durationSeconds: numberOrNull(exercise.durationSeconds),
+  }));
+}
+
+function toSession(item: SessionBody): TrainingSessionSummary {
+  return {
     id: String(item.id),
     kind: item.type === 'Corrida' ? 'running' : 'strength',
     date: String(item.date),
@@ -138,7 +184,7 @@ function toSessions(body: unknown): TrainingSessionSummary[] {
     intensity: stringOrNull(item.intensity),
     workoutType: stringOrNull(item.workoutType),
     registeredAt: stringOrNull(item.registeredAt),
-  }));
+  };
 }
 
 const numberOrNull = (value: unknown): number | null =>

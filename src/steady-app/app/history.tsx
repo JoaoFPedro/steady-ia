@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Card, Kicker, Muted } from '../src/ui/Nocturne';
 import { color, space, textAlpha, type } from '../src/theme/nocturne';
@@ -76,12 +76,19 @@ export default function HistoryScreen() {
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       {view.items.map((item) => (
-        <Card key={item.id} style={s.item}>
-          <Kicker accent>{item.kicker}</Kicker>
-          <Text style={s.itemTitle}>{item.title}</Text>
-          <Text style={s.itemDate}>{item.date}</Text>
-          {reviews[item.id] !== undefined && <HistoryReview review={reviews[item.id]} />}
-        </Card>
+        <Pressable
+          key={item.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver detalhes: ${item.kicker}, ${item.title}, ${item.date}`}
+          onPress={() => router.push({ pathname: '/workout/[id]', params: { id: item.id } })}
+        >
+          <Card style={s.item}>
+            <Kicker accent>{item.kicker}</Kicker>
+            <Text style={s.itemTitle}>{item.title}</Text>
+            <Text style={s.itemDate}>{item.date}</Text>
+            {reviews[item.id] !== undefined && <HistoryReview review={reviews[item.id]} />}
+          </Card>
+        </Pressable>
       ))}
     </ScrollView>
   );

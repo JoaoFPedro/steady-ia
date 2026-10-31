@@ -1,5 +1,5 @@
 import type { QueryApi, TrainingSessionSummary } from '../api/queryApi';
-import { intensityLabel, muscleGroupLabel } from './labels';
+import { intensityLabel, muscleGroupLabel, WORKOUT_LABELS } from './labels';
 
 /** Uma linha do histórico, já pronta para a tela — sem lógica sobrando lá. */
 export type HistoryItem = {
@@ -39,13 +39,6 @@ function toItem(session: TrainingSessionSummary): HistoryItem {
     date: formatDate(session.date),
   };
 }
-
-/** Nomes dos treinos da ficha do personal, para a execução que não tem grupo muscular. */
-const WORKOUT_LABELS: Record<string, string> = {
-  push: 'Empurrada',
-  pull: 'Puxada',
-  lower: 'Inferiores',
-};
 
 function describe(session: TrainingSessionSummary): string {
   // A execução da ficha não registra duração: "0 min" seria mentira, então a

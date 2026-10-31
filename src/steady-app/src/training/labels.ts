@@ -30,6 +30,13 @@ export const INTENSITIES: { value: Intensity; label: string }[] = [
   { value: 'Pesado', label: 'Pesado' },
 ];
 
+/** Nomes dos treinos da ficha do personal, para a execução que não tem grupo muscular. */
+export const WORKOUT_LABELS: Record<string, string> = {
+  push: 'Empurrada',
+  pull: 'Puxada',
+  lower: 'Inferiores',
+};
+
 const byValue = (options: { value: string; label: string }[], value: string | null): string | null =>
   options.find((option) => option.value === value)?.label ?? value;
 

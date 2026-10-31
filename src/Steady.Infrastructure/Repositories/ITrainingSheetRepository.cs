@@ -41,4 +41,7 @@ public interface ITrainingSheetRepository
     /// </summary>
     Task<IReadOnlyList<StrengthWorkoutExecutionEntity>> GetExecutionsForRunnerAsync(
         Guid corredorId, CancellationToken cancellationToken);
+    /// <summary>Uma execução do próprio corredor; <c>null</c> se não existe ou é de outro corredor.</summary>
+    Task<StrengthWorkoutExecutionEntity?> GetExecutionForRunnerAsync(
+        Guid corredorId, Guid executionId, CancellationToken cancellationToken);
 }

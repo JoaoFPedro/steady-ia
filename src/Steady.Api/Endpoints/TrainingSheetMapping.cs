@@ -21,6 +21,19 @@ internal static class TrainingSheetMapping
             item.DurationSeconds, item.Observation,
             ResolveExerciseKey(item.ExerciseKey, allowedExerciseKeys))).ToArray();
 
+    public static ExerciseExecutionResponse[] RespondExercises(string detailsJson) =>
+        TrainingSheetDocuments.DeserializeExecution(detailsJson)
+            .Select(item => new ExerciseExecutionResponse(
+                item.ExerciseId,
+                item.Name,
+                item.Sets,
+                item.Repetitions,
+                item.LoadKg,
+                item.Note,
+                item.Skipped,
+                item.ExerciseKey,
+                item.DurationSeconds)).ToArray();
+
     public static RunPrescription CreateRunPrescription(RunPrescriptionBody body) => RunPrescription.Create(
         body.Description,
         body.DistanceKm?.Min, body.DistanceKm?.Max,

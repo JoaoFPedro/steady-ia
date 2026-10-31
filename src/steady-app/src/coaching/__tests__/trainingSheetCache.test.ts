@@ -68,4 +68,21 @@ describe('cache da ficha ativa', () => {
     await expect(new TrainingSheetCache(local, api).load())
       .resolves.toEqual({ status: 'unauthenticated' });
   });
+
+  it('lê só o cache, sem consultar a API', async () => {
+    const local = storage(sheet('old-sheet'));
+    const activeTrainingSheet = jest.fn();
+    const api = { activeTrainingSheet } as unknown as CoachingApi;
+
+    expect(await new TrainingSheetCache(local, api).cached()).toEqual(sheet('old-sheet'));
+    expect(activeTrainingSheet).not.toHaveBeenCalled();
+  });
+
+  it('devolve null sem cache ou quando a leitura do armazenamento falha', async () => {
+    const api = {} as unknown as CoachingApi;
+    const broken = { ...storage(null), read: async () => { throw new Error('disco'); } };
+
+    expect(await new TrainingSheetCache(storage(null), api).cached()).toBeNull();
+    expect(await new TrainingSheetCache(broken, api).cached()).toBeNull();
+  });
 });

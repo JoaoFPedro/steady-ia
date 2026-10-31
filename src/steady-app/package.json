@@ -18,9 +18,11 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
+    "react-native-body-highlighter": "^3.2.0",
     "react-native-drawer-layout": "^4.2.10",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
     "zod": "^4.5.2"
   },
   "devDependencies": {
