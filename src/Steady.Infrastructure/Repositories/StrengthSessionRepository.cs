@@ -11,6 +11,7 @@ public sealed class StrengthSessionRepository(SteadyDbContext dbContext) : IStre
         StrengthSession session,
         Guid idempotencyKey,
         bool painReported,
+        DateTime? registeredAt,
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.StrengthSessions
@@ -24,6 +25,7 @@ public sealed class StrengthSessionRepository(SteadyDbContext dbContext) : IStre
             Id = Guid.NewGuid(),
             CorredorId = corredorId,
             IdempotencyKey = idempotencyKey,
+            RegisteredAt = registeredAt,
             Date = session.Date,
             MuscleGroup = session.MuscleGroup,
             Intensity = session.Intensity,

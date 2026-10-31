@@ -19,6 +19,7 @@ describe('Sessões que contam para o plano', () => {
     muscleGroup: kind === 'strength' ? 'PernaFrontal' : null,
     intensity: kind === 'strength' ? 'Pesado' : null,
     workoutType: null,
+    registeredAt: null,
   });
 
   const naFila = (date: string, kind: string) => ({

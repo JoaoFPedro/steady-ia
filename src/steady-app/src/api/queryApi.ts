@@ -26,11 +26,20 @@ export type TrainingSessionSummary = {
   /** Ausente na execução da ficha, que não registra duração. */
   durationMinutes: number | null;
   distanceKm: number | null;
+  /** Ritmo médio da corrida em minutos por quilômetro, quando disponível. */
+  averagePaceMinPerKm?: number | null;
   perceivedEffort: number | null;
   muscleGroup: string | null;
   intensity: string | null;
   /** Presente só na execução da ficha: `push`, `pull` ou `lower`. */
   workoutType: string | null;
+  /**
+   * Momento original do registro, em UTC. `null` nos registros anteriores à
+   * STORY-024 e na execução da ficha: não se inventa horário (spec.bdd.md).
+   */
+  registeredAt: string | null;
+  /** Verdadeiro apenas enquanto o registro ainda está na fila local. */
+  pending?: boolean;
 };
 
 export type QueryResult<T> =

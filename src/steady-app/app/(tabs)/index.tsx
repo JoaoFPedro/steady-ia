@@ -31,6 +31,8 @@ import type { LoggedSession } from '../../src/planning/dayCompletion';
 import type { PlanRequestSummary } from '../../src/planning/planRequest';
 import type { WorkoutReview } from '../../src/coaching/types';
 import { workoutReviewView } from '../../src/coaching/workoutReviewView';
+import { loadLatestWorkoutState, type LatestWorkoutState } from '../../src/home/latestWorkoutState';
+import { LatestWorkoutCard } from '../../src/home/LatestWorkoutCard';
 
 /**
  * Home — a tela que carrega a única linha que o app nunca esconde.
@@ -62,6 +64,7 @@ export default function HomeScreen() {
   const [weekPlan, setWeekPlan] = useState<readonly WeekPlanDay[] | null>(null);
   const [weekPlanFailed, setWeekPlanFailed] = useState(false);
   const [latestReview, setLatestReview] = useState<WorkoutReview | null>(null);
+  const [latestWorkouts, setLatestWorkouts] = useState<LatestWorkoutState | null>(null);
   const menu = useAccountMenu();
   // Sem a barra do Stack, o topo da tela é a barra de status: o recuo é nosso.
   const insets = useSafeAreaInsets();
@@ -84,6 +87,12 @@ export default function HomeScreen() {
       loadPlanList(recordQueue, queryApi).then((lista) => {
         if (!active) return;
         setPlans(lista.plans);
+      });
+
+      loadLatestWorkoutState(queryApi, recordQueue).then((loaded) => {
+        if (!active) return;
+        if (loaded.status === 'sessionLost') return goToLogin(router);
+        setLatestWorkouts(loaded);
       });
 
       // Tolerante a falha de rede — o avanço some da tela e o resto da home
@@ -188,6 +197,24 @@ export default function HomeScreen() {
                 : `${state.pendingCount} registros ainda não foram enviados. A avaliação acima ainda não considera eles.`}
             </Text>
           </NoticeStrip>
+        )}
+
+        {latestWorkouts?.status === 'unavailable' && (
+          <NoticeStrip><Text style={s.noticeText}>Não foi possível carregar seus últimos treinos.</Text></NoticeStrip>
+        )}
+        {latestWorkouts?.status === 'loaded' && latestWorkouts.workouts.running !== null && (
+          <LatestWorkoutCard
+            session={latestWorkouts.workouts.running}
+            orderUnknown={latestWorkouts.workouts.orderUnknown.running}
+            onPress={() => router.push({ pathname: '/workout/[id]', params: { id: latestWorkouts.workouts.running!.id } })}
+          />
+        )}
+        {latestWorkouts?.status === 'loaded' && latestWorkouts.workouts.strength !== null && (
+          <LatestWorkoutCard
+            session={latestWorkouts.workouts.strength}
+            orderUnknown={latestWorkouts.workouts.orderUnknown.strength}
+            onPress={() => router.push({ pathname: '/workout/[id]', params: { id: latestWorkouts.workouts.strength!.id } })}
+          />
         )}
 
         <Card style={s.spaced}>

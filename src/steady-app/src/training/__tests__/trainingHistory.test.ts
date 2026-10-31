@@ -20,6 +20,7 @@ const corrida: TrainingSessionSummary = {
   muscleGroup: null,
   intensity: null,
   workoutType: null,
+  registeredAt: null,
 };
 
 const musculacao: TrainingSessionSummary = {
@@ -32,6 +33,7 @@ const musculacao: TrainingSessionSummary = {
   muscleGroup: 'PernaPosterior',
   intensity: 'Pesado',
   workoutType: null,
+  registeredAt: null,
 };
 
 describe('histórico de treinos', () => {
@@ -111,6 +113,7 @@ describe('histórico de treinos', () => {
       muscleGroup: null,
       intensity: null,
       workoutType: 'push',
+      registeredAt: null,
     }] });
 
     const view = await loadTrainingHistory(api);

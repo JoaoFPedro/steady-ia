@@ -133,10 +133,12 @@ describe('histórico de treinos', () => {
           date: '2026-08-15',
           durationMinutes: 45,
           distanceKm: 8.2,
+          averagePaceMinPerKm: 5.5,
           perceivedEffort: 7,
           muscleGroup: null,
           intensity: null,
           workoutType: null,
+          registeredAt: null,
         },
         {
           id: 'b2',
@@ -148,9 +150,31 @@ describe('histórico de treinos', () => {
           muscleGroup: 'PernaPosterior',
           intensity: 'Pesado',
           workoutType: null,
+          registeredAt: null,
         },
       ],
     });
+  });
+
+  it('devolve o momento original do registro quando a API o informa e nulo nos registros antigos', async () => {
+    const api = new HttpQueryApi(
+      BASE,
+      sessionWith('token'),
+      fakeFetch({
+        status: 200,
+        body: [
+          { id: 'n1', type: 'Corrida', date: '2026-10-10', registeredAt: '2026-10-10T12:34:56Z' },
+          { id: 'o1', type: 'Musculacao', date: '2026-10-10', registeredAt: null },
+        ],
+      }),
+    );
+
+    const result = await api.trainingHistory();
+
+    expect(result.status === 'ok' && result.data.map((s) => s.registeredAt)).toEqual([
+      '2026-10-10T12:34:56Z',
+      null,
+    ]);
   });
 
   it('devolve lista vazia quando o corredor ainda não registrou nada', async () => {

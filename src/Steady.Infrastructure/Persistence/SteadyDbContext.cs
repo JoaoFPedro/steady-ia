@@ -151,6 +151,7 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
         {
             entity.ToTable("running_sessions");
             entity.HasKey(s => s.Id);
+            entity.Property(s => s.RegisteredAt).HasColumnName("registered_at");
             entity.Property(s => s.CorredorId).HasColumnName("corredor_id");
             entity.Property(s => s.Date).HasColumnName("date");
             entity.Property(s => s.DistanceKm).HasColumnName("distance_km");
@@ -173,6 +174,7 @@ public sealed class SteadyDbContext(DbContextOptions<SteadyDbContext> options) :
         {
             entity.ToTable("strength_sessions");
             entity.HasKey(s => s.Id);
+            entity.Property(s => s.RegisteredAt).HasColumnName("registered_at");
             entity.Property(s => s.CorredorId).HasColumnName("corredor_id");
             entity.Property(s => s.Date).HasColumnName("date");
             entity.Property(s => s.MuscleGroup).HasColumnName("muscle_group").HasConversion<string>();

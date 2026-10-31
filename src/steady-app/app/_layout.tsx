@@ -69,6 +69,7 @@ export default function RootLayout() {
         <Stack.Screen name="log/strength" options={{ title: 'Registrar musculação' }} />
         <Stack.Screen name="log/pain" options={{ title: 'Registrar dor' }} />
         <Stack.Screen name="history" options={{ title: 'Histórico' }} />
+        <Stack.Screen name="workout/[id]" options={{ title: 'Detalhes do treino' }} />
         <Stack.Screen name="planning/new" options={{ title: 'Criar planejamento' }} />
         {/* `PlanningDocument` desenha o próprio cabeçalho — mesmo motivo do `(tabs)` acima. */}
         <Stack.Screen name="planning/plan" options={{ headerShown: false }} />

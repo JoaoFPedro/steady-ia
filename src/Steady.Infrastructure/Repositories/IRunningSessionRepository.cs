@@ -10,6 +10,7 @@ public interface IRunningSessionRepository
         RunningSession session,
         Guid idempotencyKey,
         bool painReportedAtCompletion,
+        DateTime? registeredAt,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RunningSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken);

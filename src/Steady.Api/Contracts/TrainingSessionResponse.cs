@@ -16,4 +16,5 @@ public sealed record TrainingSessionResponse(
     int? PerceivedEffort,
     string? MuscleGroup,
     string? Intensity,
-    string? WorkoutType = null);
+    string? WorkoutType = null,
+    DateTime? RegisteredAt = null);

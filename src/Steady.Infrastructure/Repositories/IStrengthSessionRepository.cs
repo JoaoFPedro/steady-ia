@@ -10,6 +10,7 @@ public interface IStrengthSessionRepository
         StrengthSession session,
         Guid idempotencyKey,
         bool painReported,
+        DateTime? registeredAt,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<StrengthSessionEntity>> GetByCorredorIdAsync(Guid corredorId, CancellationToken cancellationToken);

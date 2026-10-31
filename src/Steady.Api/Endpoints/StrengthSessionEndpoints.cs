@@ -31,7 +31,7 @@ public static class StrengthSessionEndpoints
 
             var (entity, created) = await repository.AddAsync(
                 currentCorredor.Id, session!, idempotencyKey.Value,
-                request.PainReported, cancellationToken);
+                request.PainReported, request.RegisteredAt?.UtcDateTime, cancellationToken);
 
             var response = new StrengthSessionResponse(
                 entity.Id,

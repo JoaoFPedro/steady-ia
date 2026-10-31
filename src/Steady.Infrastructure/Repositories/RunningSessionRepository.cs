@@ -12,6 +12,7 @@ public sealed class RunningSessionRepository(SteadyDbContext dbContext) : IRunni
         RunningSession session,
         Guid idempotencyKey,
         bool painReportedAtCompletion,
+        DateTime? registeredAt,
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.RunningSessions
@@ -25,6 +26,7 @@ public sealed class RunningSessionRepository(SteadyDbContext dbContext) : IRunni
             Id = Guid.NewGuid(),
             CorredorId = corredorId,
             IdempotencyKey = idempotencyKey,
+            RegisteredAt = registeredAt,
             Date = session.Date,
             DistanceKm = session.DistanceKm,
             DurationMinutes = session.DurationMinutes,

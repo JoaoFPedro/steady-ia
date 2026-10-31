@@ -1,8 +1,32 @@
 import type { TokenSource } from '../auth/googleSession';
 import type { ApiResponse, RecordApi } from '../sync/recordApi';
 import { ENDPOINT_BY_KIND, type RecordKind } from '../sync/types';
+import type { Intensity, MuscleGroup } from '../training/labels';
 
 const IDEMPOTENCY_HEADER = 'Idempotency-Key';
+
+// A API .NET aceita estes enums como números; a fila continua guardando os
+// valores nomeados para o histórico e para o funcionamento offline.
+const MUSCLE_GROUP_WIRE: Record<MuscleGroup, number> = {
+  PeitoTriceps: 0, Ombro: 1, PernaFrontal: 2, PernaPosterior: 3, BicepsCostas: 4,
+};
+const INTENSITY_WIRE: Record<Intensity, number> = { Leve: 0, Moderado: 1, Pesado: 2 };
+
+function wireEnum(value: unknown, values: Record<string, number>): unknown {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(values, value) ? values[value] : value;
+}
+
+function requestPayload(kind: RecordKind, payload: unknown): unknown {
+  if (kind !== 'strength' || typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return payload;
+  }
+  const input = payload as Record<string, unknown>;
+  return {
+    ...input,
+    muscleGroup: wireEnum(input.muscleGroup, MUSCLE_GROUP_WIRE),
+    intensity: wireEnum(input.intensity, INTENSITY_WIRE),
+  };
+}
 
 /** Só o suficiente de `fetch` para o que este cliente usa — mantém o teste simples. */
 type FetchLike = (
@@ -60,7 +84,7 @@ export class HttpRecordApi implements RecordApi {
           Authorization: `Bearer ${token}`,
           [IDEMPOTENCY_HEADER]: idempotencyKey,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestPayload(kind, payload)),
       });
 
       return {

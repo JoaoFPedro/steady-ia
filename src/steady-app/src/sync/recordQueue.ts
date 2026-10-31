@@ -1,5 +1,19 @@
 import type { PendingRecord, QueueStorage, RecordKind } from './types';
 
+/** Modalidades cujo histórico desempata pelo momento do registro (STORY-024). */
+const STAMPED_KINDS: readonly RecordKind[] = ['running', 'strength'];
+
+/**
+ * Grava no corpo o momento em que o corredor registrou — não o do envio. Um
+ * registro feito sem sinal e enviado horas depois continua sendo o mais antigo.
+ */
+function stampRegistration(kind: RecordKind, payload: unknown, queuedAt: string): unknown {
+  if (!STAMPED_KINDS.includes(kind) || typeof payload !== 'object' || payload === null) {
+    return payload;
+  }
+  return { ...payload, registeredAt: queuedAt };
+}
+
 /**
  * Fila local de registros aguardando envio.
  *
@@ -22,11 +36,12 @@ export class RecordQueue {
    * anularia a proteção contra duplicata.
    */
   async enqueue(kind: RecordKind, payload: unknown): Promise<PendingRecord> {
+    const queuedAt = new Date().toISOString();
     const record: PendingRecord = {
       idempotencyKey: this.newIdempotencyKey(),
       kind,
-      payload,
-      queuedAt: new Date().toISOString(),
+      payload: stampRegistration(kind, payload, queuedAt),
+      queuedAt,
     };
 
     const records = await this.storage.read();

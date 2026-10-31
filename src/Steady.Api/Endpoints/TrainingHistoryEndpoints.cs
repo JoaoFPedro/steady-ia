@@ -26,10 +26,12 @@ public static class TrainingHistoryEndpoints
             var sessions = runningEntities
                 .Select(e => new TrainingSessionResponse(
                     e.Id, "Corrida", e.Date, e.DurationMinutes,
-                    e.DistanceKm, e.AveragePaceMinPerKm, e.PerceivedEffort, null, null))
+                    e.DistanceKm, e.AveragePaceMinPerKm, e.PerceivedEffort, null, null,
+                    RegisteredAt: e.RegisteredAt))
                 .Concat(strengthEntities.Select(e => new TrainingSessionResponse(
                     e.Id, "Musculacao", e.Date, e.DurationMinutes,
-                    null, null, null, e.MuscleGroup.ToString(), e.Intensity.ToString())))
+                    null, null, null, e.MuscleGroup.ToString(), e.Intensity.ToString(),
+                    RegisteredAt: e.RegisteredAt)))
                 .Concat(executionEntities.Select(e => new TrainingSessionResponse(
                     e.Id, "Musculacao", DateOnly.ParseExact(e.Date, "yyyy-MM-dd"),
                     null, null, null, null, null, null,
@@ -51,13 +53,15 @@ public static class TrainingHistoryEndpoints
             if (running is not null)
                 return Results.Ok(new TrainingSessionResponse(
                     running.Id, "Corrida", running.Date, running.DurationMinutes,
-                    running.DistanceKm, running.AveragePaceMinPerKm, running.PerceivedEffort, null, null));
+                    running.DistanceKm, running.AveragePaceMinPerKm, running.PerceivedEffort, null, null,
+                    RegisteredAt: running.RegisteredAt));
 
             var strength = await strengthRepository.GetByIdAsync(currentCorredor.Id, id, cancellationToken);
             if (strength is not null)
                 return Results.Ok(new TrainingSessionResponse(
                     strength.Id, "Musculacao", strength.Date, strength.DurationMinutes,
-                    null, null, null, strength.MuscleGroup.ToString(), strength.Intensity.ToString()));
+                    null, null, null, strength.MuscleGroup.ToString(), strength.Intensity.ToString(),
+                    RegisteredAt: strength.RegisteredAt));
 
             return Results.NotFound();
         });

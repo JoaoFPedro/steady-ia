@@ -400,6 +400,10 @@ namespace Steady.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("perceived_effort");
 
+                    b.Property<DateTime?>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registered_at");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CorredorId");
@@ -441,6 +445,10 @@ namespace Steady.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("muscle_group");
+
+                    b.Property<DateTime?>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registered_at");
 
                     b.HasKey("Id");
 

@@ -23,10 +23,12 @@ type SessionBody = {
   date?: unknown;
   durationMinutes?: unknown;
   distanceKm?: unknown;
+  averagePaceMinPerKm?: unknown;
   perceivedEffort?: unknown;
   muscleGroup?: unknown;
   intensity?: unknown;
   workoutType?: unknown;
+  registeredAt?: unknown;
 };
 
 /**
@@ -129,10 +131,13 @@ function toSessions(body: unknown): TrainingSessionSummary[] {
     date: String(item.date),
     durationMinutes: numberOrNull(item.durationMinutes),
     distanceKm: numberOrNull(item.distanceKm),
+    ...(typeof item.averagePaceMinPerKm === 'number'
+      ? { averagePaceMinPerKm: item.averagePaceMinPerKm } : {}),
     perceivedEffort: numberOrNull(item.perceivedEffort),
     muscleGroup: stringOrNull(item.muscleGroup),
     intensity: stringOrNull(item.intensity),
     workoutType: stringOrNull(item.workoutType),
+    registeredAt: stringOrNull(item.registeredAt),
   }));
 }
 

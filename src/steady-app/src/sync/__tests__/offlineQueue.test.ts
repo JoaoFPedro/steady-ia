@@ -16,7 +16,32 @@ describe('Fila de registros', () => {
     const pending = await queue.pending();
     expect(pending).toHaveLength(1);
     expect(pending[0].kind).toBe('running');
-    expect(pending[0].payload).toEqual({ distanceKm: 8 });
+    expect(pending[0].payload).toEqual({ distanceKm: 8, registeredAt: pending[0].queuedAt });
+  });
+
+  describe('momento original do registro (STORY-024)', () => {
+    it.each(['running', 'strength'] as const)(
+      'carimba %s com o momento em que entrou na fila, não o do envio',
+      async (kind) => {
+        const queue = new RecordQueue(new InMemoryQueueStorage(), () => 'chave');
+
+        const record = await queue.enqueue(kind, { date: '2026-10-10' });
+
+        expect(record.payload).toEqual({ date: '2026-10-10', registeredAt: record.queuedAt });
+        expect(new Date(record.queuedAt).toISOString()).toBe(record.queuedAt);
+      },
+    );
+
+    it.each(['pain', 'plan', 'strengthWorkout', 'combinedWorkout'] as const)(
+      'não altera o corpo de %s',
+      async (kind) => {
+        const queue = new RecordQueue(new InMemoryQueueStorage(), () => 'chave');
+
+        const record = await queue.enqueue(kind, { a: 1 });
+
+        expect(record.payload).toEqual({ a: 1 });
+      },
+    );
   });
 
   it('mantém todos os exercícios da execução detalhada juntos em um item', async () => {
