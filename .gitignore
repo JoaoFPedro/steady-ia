@@ -84,3 +84,6 @@ ehthumbs.db
 
 # Claude Code worktrees (não commitar)
 .claude/worktrees/
+
+# PIDs dos processos do scripts/dev.ps1
+.dev-pids.json
