@@ -87,3 +87,15 @@ ehthumbs.db
 
 # PIDs dos processos do scripts/dev.ps1
 .dev-pids.json
+
+# ── Só local: documentação gerada pela Isabel e scripts de ambiente ─────────
+# Não são versionados. O que já estava rastreado continua no histórico; as
+# mudanças locais nesses arquivos ficam fora do `git status` via skip-worktree.
+*.md
+.sdd/
+.discovery/
+specs/
+docs/adr/
+docs/documenta-ai/
+scripts/dev.ps1
+scripts/dev.sh
